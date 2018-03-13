@@ -3,6 +3,7 @@
 import asyncio
 import datetime
 
+import uvloop
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 
@@ -36,6 +37,7 @@ async def fetch_page(loop, url, tag):
 
 
 def main():
+    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     loop = asyncio.get_event_loop()
 
     url_a = 'http://www.jurn.org/#gsc.tab=0&gsc.q=Austin%2C%20TX%20intitle%3Ahomelessness&gsc.sort='
