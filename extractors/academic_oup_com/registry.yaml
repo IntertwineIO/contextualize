@@ -1,0 +1,45 @@
+%YAML 1.2
+---
+page_type: REGISTRY
+# Include {geo} and/or {problem} tags to include encoded values
+page_url: "https://academic.oup.com/journals/search-results?page=1&qb={\
+            %22Keywords1%22:%22{problem}%22,\
+            %22FullText2%22:%22{geo}%22}"
+max_wait_seconds: 10
+
+content:
+  search_results:
+    - is_multiple: True
+      class_name: widget-ArticleAbstract
+      click: True  # Show all abstracts up front
+    - scope: page
+      is_multiple: True
+      class_name: al-article-box
+  source_url:
+    class_name: article-link
+    attribute: href
+    parse: "{keep}?{}"
+  title:
+    class_name: article-link
+    attribute: text
+  author_names:
+    is_multiple: True
+    class_name: author-link
+    attribute: text
+  publication:
+    xpath: './/div[4]/a'
+    attribute: text
+  published_timestamp:
+    class_name: sri-date
+    attribute: text
+    strptime: 'Published: %d %B %Y'
+  granularity_published: DAY
+  tzinfo_published: UTC
+  publisher: Oxford University Press
+  summary:
+    # Could use class_name: abstract to avoid parsing
+    # Or these elements could be cached via memoization
+    class_name: widget-ArticleAbstract
+    attribute: text
+    parse: "Abstract\n{keep}"
+  full_text:
