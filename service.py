@@ -5,11 +5,8 @@ import os
 
 from pprint import PrettyPrinter
 from ruamel.yaml.scanner import ScannerError
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 
 from extractor import RegistryExtractor
-from utils.async import run_in_executor
 
 
 class Service:
