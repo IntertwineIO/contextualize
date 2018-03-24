@@ -3,7 +3,6 @@
 import asyncio
 import os
 from collections import OrderedDict, namedtuple
-from enum import Enum
 from datetime import datetime
 from functools import lru_cache, partial
 
@@ -13,7 +12,8 @@ from selenium import webdriver
 from selenium.webdriver.remote.webelement import WebElement
 
 from utils.async import run_in_executor
-from utils.tools import delist, enlist, get_enum_names, one, one_max
+from utils.structures import FlexEnum
+from utils.tools import delist, enlist, one, one_max
 
 
 class BaseExtractor:
@@ -38,7 +38,7 @@ class BaseExtractor:
         'published_timestamp', 'granularity_published', 'tzinfo_published',
         'publisher', 'summary', 'full_text']
 
-    WebDriverType = Enum('WebDriverType', 'CHROME FIREFOX')
+    WebDriverType = FlexEnum('WebDriverType', 'CHROME FIREFOX')
     DEFAULT_WEB_DRIVER_TYPE = WebDriverType.CHROME
     DEFAULT_MAX_WAIT_SECONDS = 10
 
@@ -51,14 +51,14 @@ class BaseExtractor:
     CLICK_TAG = 'click'
     ATTRIBUTE_TAG = 'attribute'
 
-    OperationScope = Enum('OperationScope', 'PAGE PARENT PRIOR LATEST')
+    OperationScope = FlexEnum('OperationScope', 'PAGE PARENT PRIOR LATEST')
     DEFAULT_OPERATION_SCOPE = OperationScope.LATEST
 
-    FindMethod = Enum('FindMethod',
-                      'CLASS_NAME CSS_SELECTOR ID LINK_TEXT NAME '
-                      'PARTIAL_LINK_TEXT TAG_NAME XPATH')
+    FindMethod = FlexEnum('FindMethod',
+                          'CLASS_NAME CSS_SELECTOR ID LINK_TEXT NAME '
+                          'PARTIAL_LINK_TEXT TAG_NAME XPATH')
 
-    ParseMethod = Enum('ParseMethod', 'PARSE STRPTIME')
+    ParseMethod = FlexEnum('ParseMethod', 'PARSE STRPTIME')
 
     ExtractOperation = namedtuple('ExtractOperation',
                                   'is_multiple find_method find_term click '
@@ -245,7 +245,7 @@ class RegistryExtractor(BaseExtractor):
 
     @staticmethod
     def _configure_action(config, action_enum):
-        action_keys = get_enum_names(action_enum, str.lower)
+        action_keys = action_enum.set(str.lower)
         action_key = one_max(k for k in config if k in action_keys)
         if not action_key:
             return None, None

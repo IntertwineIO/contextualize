@@ -18,13 +18,6 @@ def enlist(obj):
     return obj if isinstance(obj, list) else [obj]
 
 
-@lru_cache(maxsize=None, typed=False)
-def get_enum_names(enumeration, transform=None):
-    if transform:
-        return {transform(en.name) for en in enumeration}
-    return {en.name for en in enumeration}
-
-
 def one(generator):
     first = next(generator)
     try:
