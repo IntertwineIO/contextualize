@@ -267,8 +267,8 @@ class RegistryExtractor(BaseExtractor):
         return os.path.join(self.FILE_PATH_BASE, directory, self.FILE_NAME)
 
     @lru_cache(maxsize=None, typed=False)
-    def _marshall_configuration(self):
-        with open(self.file_path) as stream:
+    def _marshall_configuration(self, file_path):
+        with open(file_path) as stream:
             return yaml.safe_load(stream)
 
     def _form_page_url(self, configuration, problem_name, org_name, geo_name):
@@ -296,7 +296,7 @@ class RegistryExtractor(BaseExtractor):
 
         self.directory = directory
         self.file_path = self._form_file_path(self.directory)
-        self.configuration = self._marshall_configuration()
+        self.configuration = self._marshall_configuration(self.file_path)
         self.problem_name = problem_name
         self.org_name = org_name
         self.geo_name = geo_name
