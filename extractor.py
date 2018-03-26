@@ -12,6 +12,7 @@ from selenium import webdriver
 from selenium.webdriver.remote.webelement import WebElement
 
 from utils.async import run_in_executor
+from utils.debug import async_debug
 from utils.structures import FlexEnum
 from utils.tools import delist, enlist, one, one_max
 
@@ -84,6 +85,7 @@ class RegistryExtractor(BaseExtractor):
         finally:
             await self._dispose_web_driver()
 
+    @async_debug()
     async def _provision_web_driver(self):
         future_web_driver = self._execute_in_future(self.web_driver_class,
                                                     **self.web_driver_kwargs)
@@ -93,10 +95,12 @@ class RegistryExtractor(BaseExtractor):
         # Configure web driver to allow waiting on each operation
         self.web_driver.implicitly_wait(wait_seconds)
 
+    @async_debug()
     async def _fetch_page(self):
         future_page = self._execute_in_future(self.web_driver.get, self.page_url)
         await future_page
 
+    @async_debug()
     async def _extract_search_results(self):
         content_config = self.configuration[self.CONTENT_TAG]
         search_results_config = content_config[self.SEARCH_RESULTS_TAG]
@@ -114,11 +118,13 @@ class RegistryExtractor(BaseExtractor):
 
         return search_results
 
+    @async_debug()
     async def _dispose_web_driver(self):
         if self.web_driver:
             future_web_driver_quit = self._execute_in_future(self.web_driver.quit)
             await future_web_driver_quit
 
+    @async_debug(offset=4)
     async def _extract_content(self, config, element):
         content = OrderedDict()
         for field in self.CONTENT_FIELDS:
@@ -290,10 +296,19 @@ class RegistryExtractor(BaseExtractor):
         elif web_driver_type is self.WebDriverType.FIREFOX:
             raise NotImplementedError('Firefox not yet supported')
 
+    def __repr__(self):
+        class_name = self.__class__.__name__
+        org_clause = f' at {self.org_name}' if self.org_name else ''
+        geo_clause = f' in {self.geo_name}' if self.geo_name else ''
+        community_name = f'{self.problem_name}{org_clause}{geo_clause}'
+        return (f'<{class_name}: {self.directory}, {community_name}, '
+                f'{self.created_timestamp}>')
+
     def __init__(self, directory, problem_name, org_name=None, geo_name=None,
                  web_driver_type=None, loop=None):
         self.loop = loop or asyncio.get_event_loop()
 
+        self.created_timestamp = self.loop.time()
         self.directory = directory
         self.file_path = self._form_file_path(self.directory)
         self.configuration = self._marshall_configuration(self.file_path)
