@@ -77,6 +77,7 @@ class RegistryExtractor(BaseExtractor):
 
     FILE_NAME = 'registry.yaml'
 
+    @async_debug()
     async def extract(self):
         try:
             await self._provision_web_driver()
@@ -85,7 +86,7 @@ class RegistryExtractor(BaseExtractor):
         finally:
             await self._dispose_web_driver()
 
-    @async_debug()
+    @async_debug(offset=4)
     async def _provision_web_driver(self):
         future_web_driver = self._execute_in_future(self.web_driver_class,
                                                     **self.web_driver_kwargs)
@@ -95,12 +96,12 @@ class RegistryExtractor(BaseExtractor):
         # Configure web driver to allow waiting on each operation
         self.web_driver.implicitly_wait(wait_seconds)
 
-    @async_debug()
+    @async_debug(offset=4)
     async def _fetch_page(self):
         future_page = self._execute_in_future(self.web_driver.get, self.page_url)
         await future_page
 
-    @async_debug()
+    @async_debug(offset=4)
     async def _extract_search_results(self):
         content_config = self.configuration[self.CONTENT_TAG]
         search_results_config = content_config[self.SEARCH_RESULTS_TAG]
@@ -118,13 +119,12 @@ class RegistryExtractor(BaseExtractor):
 
         return search_results
 
-    @async_debug()
+    @async_debug(offset=4)
     async def _dispose_web_driver(self):
         if self.web_driver:
             future_web_driver_quit = self._execute_in_future(self.web_driver.quit)
             await future_web_driver_quit
 
-    @async_debug(offset=4)
     async def _extract_content(self, config, element):
         content = OrderedDict()
         for field in self.CONTENT_FIELDS:

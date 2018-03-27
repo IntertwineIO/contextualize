@@ -28,7 +28,6 @@ def format_text(label, text, offset, indent):
         print(f'{offset_}{label}: {text}')
 
 
-# TODO: add attributes to report from instance
 def async_debug(offset=0, indent=4):
     @wrapt.decorator
     async def wrapper(wrapped, instance, args, kwargs):
