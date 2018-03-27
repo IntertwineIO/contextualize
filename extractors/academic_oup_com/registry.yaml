@@ -5,7 +5,7 @@ page_type: REGISTRY
 page_url: "https://academic.oup.com/journals/search-results?page=1&qb={\
             %22Keywords1%22:%22{problem}%22,\
             %22FullText2%22:%22{geo}%22}"
-max_wait_seconds: 10
+wait: 0
 
 content:
   search_results:
@@ -41,6 +41,7 @@ content:
     # Could use class_name: abstract to avoid parsing
     # Or these elements could be cached via memoization
     class_name: widget-ArticleAbstract
+    wait: 10
     attribute: text
     parse: "Abstract\n{keep}"
   full_text:

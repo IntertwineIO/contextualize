@@ -9,7 +9,11 @@ from functools import lru_cache, partial
 from parse import parse
 from ruamel import yaml
 from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 from utils.async import run_in_executor
 from utils.debug import async_debug
@@ -22,7 +26,6 @@ class BaseExtractor:
     FILE_PATH_BASE = 'extractors'
 
     OPTIONS_TAG = 'options'
-    MAX_WAIT_SECONDS_TAG = 'max_wait_seconds'
 
     CONTENT_TAG = 'content'
     PAGE_URL_TAG = 'page_url'
@@ -41,7 +44,7 @@ class BaseExtractor:
 
     WebDriverType = FlexEnum('WebDriverType', 'CHROME FIREFOX')
     DEFAULT_WEB_DRIVER_TYPE = WebDriverType.CHROME
-    DEFAULT_MAX_WAIT_SECONDS = 10
+    DEFAULT_MAX_WAIT_SECONDS = 0
 
     ####################################################################
     # TODO: Make ExtractOperation a class & encapsulate relevant methods
@@ -49,6 +52,7 @@ class BaseExtractor:
 
     SCOPE_TAG = 'scope'
     IS_MULTIPLE_TAG = 'is_multiple'
+    WAIT_TAG = 'wait'
     CLICK_TAG = 'click'
     ATTRIBUTE_TAG = 'attribute'
 
@@ -62,8 +66,9 @@ class BaseExtractor:
     ParseMethod = FlexEnum('ParseMethod', 'PARSE STRPTIME')
 
     ExtractOperation = namedtuple('ExtractOperation',
-                                  'is_multiple find_method find_term click '
-                                  'attribute parse_method parse_template')
+                                  'is_multiple find_method find_term '
+                                  'wait click attribute '
+                                  'parse_method parse_template')
 
     ####################################################################
 
@@ -91,7 +96,7 @@ class RegistryExtractor(BaseExtractor):
         future_web_driver = self._execute_in_future(self.web_driver_class,
                                                     **self.web_driver_kwargs)
         self.web_driver = await future_web_driver
-        wait_seconds = self.configuration.get(self.MAX_WAIT_SECONDS_TAG,
+        wait_seconds = self.configuration.get(self.WAIT_TAG,
                                               self.DEFAULT_MAX_WAIT_SECONDS)
         # Configure web driver to allow waiting on each operation
         self.web_driver.implicitly_wait(wait_seconds)
@@ -133,7 +138,12 @@ class RegistryExtractor(BaseExtractor):
                 content[field] = field_config
                 continue
 
-            content[field] = await self._perform_operation(field_config, element)
+            try:
+                content[field] = await self._perform_operation(field_config, element)
+            except NoSuchElementException as e:
+                print(dict(msg='Extractor Operation Failure',
+                           type='extractor_operation_failure',
+                           extractor=repr(self), field=field, error=str(e)))
 
         return content
 
@@ -151,12 +161,22 @@ class RegistryExtractor(BaseExtractor):
         if isinstance(config, dict):
             operation = self._configure_operation(config)
 
+            max_wait_seconds = operation.wait
+
             if operation.find_method:
-                find_method = self._derive_find_method(operation, element)
-                future_elements = self._execute_in_future(find_method, operation.find_term)
+                find_method, find_by = self._derive_find_method(operation, element)
+                if max_wait_seconds:
+                    wait = WebDriverWait(self.web_driver, max_wait_seconds)
+                    wait_condition = EC.presence_of_element_located((find_by, operation.find_term))
+                    future_elements = wait.until(wait_condition)
+                    future_elements = self._execute_in_future(wait.until, wait_condition)
+                else:
+                    future_elements = self._execute_in_future(find_method, operation.find_term)
                 new_elements = enlist(await future_elements)
             else:
                 new_elements = enlist(element)
+                if max_wait_seconds:
+                    self.loop.sleep(max_wait_seconds)
 
             if operation.click:
                 await self._perform_clicks(new_elements)
@@ -242,12 +262,14 @@ class RegistryExtractor(BaseExtractor):
     def _configure_operation(self, config):
         is_multiple = config.get(self.IS_MULTIPLE_TAG, False)
         find_method, find_term = self._configure_action(config, self.FindMethod)
+        wait = config.get(self.WAIT_TAG, 0)
         click = config.get(self.CLICK_TAG, False)
         attribute = config.get(self.ATTRIBUTE_TAG)
         parse_method, parse_template = self._configure_action(config,
                                                               self.ParseMethod)
-        return self.ExtractOperation(is_multiple, find_method, find_term, click,
-                                     attribute, parse_method, parse_template)
+        return self.ExtractOperation(is_multiple, find_method, find_term,
+                                     wait, click, attribute,
+                                     parse_method, parse_template)
 
     @staticmethod
     def _configure_action(config, action_enum):
@@ -264,7 +286,9 @@ class RegistryExtractor(BaseExtractor):
                        else self.ELEMENT_TAG)
         method_tag = operation.find_method.name.lower()
         find_method_name = f'find_{element_tag}_by_{method_tag}'
-        return getattr(element, find_method_name)
+        find_method = getattr(element, find_method_name)
+        find_by = getattr(By, operation.find_method.name)
+        return find_method, find_by
 
     def _execute_in_future(self, func, *args, **kwds):
         return run_in_executor(self.loop, None, func, *args, **kwds)
