@@ -27,7 +27,8 @@ content:
     class_name: author-link
     attribute: text
   publication:
-    xpath: './/div[4]/a'
+    xpath: "//*[contains(concat(' ', @class, ' '), ' al-authors-list ')]/\
+            following-sibling::div/a"
     attribute: text
   published_timestamp:
     class_name: sri-date
