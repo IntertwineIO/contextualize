@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import os
+import urllib
 from collections import OrderedDict, namedtuple
 from datetime import datetime
 from functools import lru_cache, partial
@@ -27,6 +28,7 @@ class BaseExtractor:
 
     OPTIONS_TAG = 'options'
 
+    IS_ENABLED_TAG = 'is_enabled'
     CONTENT_TAG = 'content'
     PAGE_URL_TAG = 'page_url'
     SEARCH_RESULTS_TAG = 'search_results'
@@ -84,6 +86,9 @@ class RegistryExtractor(BaseExtractor):
 
     @async_debug()
     async def extract(self):
+        if not self.is_enabled:
+            print(dict(msg='Extractor disabled warning',
+                       type='extract_disabled_warning', extractor=repr(self)))
         try:
             await self._provision_web_driver()
             await self._fetch_page()
@@ -91,7 +96,7 @@ class RegistryExtractor(BaseExtractor):
         finally:
             await self._dispose_web_driver()
 
-    @async_debug(offset=4)
+    @async_debug(offset=2)
     async def _provision_web_driver(self):
         future_web_driver = self._execute_in_future(self.web_driver_class,
                                                     **self.web_driver_kwargs)
@@ -101,36 +106,45 @@ class RegistryExtractor(BaseExtractor):
         # Configure web driver to allow waiting on each operation
         self.web_driver.implicitly_wait(wait_seconds)
 
-    @async_debug(offset=4)
+    @async_debug(offset=2)
     async def _fetch_page(self):
         future_page = self._execute_in_future(self.web_driver.get, self.page_url)
         await future_page
 
-    @async_debug(offset=4)
+    @async_debug(offset=2)
     async def _extract_search_results(self):
         content_config = self.configuration[self.CONTENT_TAG]
         search_results_config = content_config[self.SEARCH_RESULTS_TAG]
 
         elements = await self._perform_operation(search_results_config,
                                                  self.web_driver)
+
         search_results = []
-        for element in elements:
-            try:
-                content = await self._extract_content(content_config, element)
-                if content:
-                    search_results.append(content)
-            except Exception as e:
-                print(e)
+
+        if elements is not None:
+            for index, element in enumerate(elements, start=1):
+                try:
+                    content = await self._extract_content(content_config,
+                                                          element, index)
+                    if content:
+                        search_results.append(content)
+                except Exception as e:
+                    print(e)
+        else:
+            print(dict(msg='Extract search results failure',
+                       type='extract_search_results_failure',
+                       extractor=repr(self), config=search_results_config))
 
         return search_results
 
-    @async_debug(offset=4)
+    @async_debug(offset=2)
     async def _dispose_web_driver(self):
         if self.web_driver:
             future_web_driver_quit = self._execute_in_future(self.web_driver.quit)
             await future_web_driver_quit
 
-    async def _extract_content(self, config, element):
+    @async_debug(offset=4)
+    async def _extract_content(self, config, element, index):
         content = OrderedDict()
         for field in self.CONTENT_FIELDS:
             field_config = config[field]
@@ -139,15 +153,20 @@ class RegistryExtractor(BaseExtractor):
                 continue
 
             try:
-                content[field] = await self._perform_operation(field_config, element)
+                # if field == 'summary':
+                #     import ipdb; ipdb.set_trace()
+
+                content[field] = await self._perform_operation(field_config,
+                                                               element, index)
             except NoSuchElementException as e:
-                print(dict(msg='Extractor Operation Failure',
+                print(dict(msg='Extractor operation failure',
                            type='extractor_operation_failure',
                            extractor=repr(self), field=field, error=str(e)))
 
         return content
 
-    async def _perform_operation(self, config, element):
+    @async_debug(offset=6)
+    async def _perform_operation(self, config, element, index=1):
         if isinstance(config, list):
             latest = prior = parent = element
             for operation_config in config:
@@ -155,7 +174,7 @@ class RegistryExtractor(BaseExtractor):
                 targets = self._select_targets(operation_config, latest, prior, parent)
                 prior = latest
                 for target in targets:
-                    latest = await self._perform_operation(operation_config, target)
+                    latest = await self._perform_operation(operation_config, target, index)
             return latest
 
         if isinstance(config, dict):
@@ -165,13 +184,14 @@ class RegistryExtractor(BaseExtractor):
 
             if operation.find_method:
                 find_method, find_by = self._derive_find_method(operation, element)
+                find_term = operation.find_term.replace('{n}', str(index))
                 if max_wait_seconds:
                     wait = WebDriverWait(self.web_driver, max_wait_seconds)
-                    wait_condition = EC.presence_of_element_located((find_by, operation.find_term))
+                    wait_condition = EC.presence_of_element_located((find_by, find_term))
                     future_elements = wait.until(wait_condition)
                     future_elements = self._execute_in_future(wait.until, wait_condition)
                 else:
-                    future_elements = self._execute_in_future(find_method, operation.find_term)
+                    future_elements = self._execute_in_future(find_method, find_term)
                 new_elements = enlist(await future_elements)
             else:
                 new_elements = enlist(element)
@@ -189,10 +209,11 @@ class RegistryExtractor(BaseExtractor):
             if not operation.parse_method:
                 return delist(values)
 
-            parsed_values = self._parse_values(operation, values)
+            parsed_values = await self._parse_values(operation, values)
 
             return delist(parsed_values)
 
+    @async_debug(offset=8)
     async def _perform_clicks(self, elements):
         """
         Perform clicks on given elements (one click on each)
@@ -203,7 +224,9 @@ class RegistryExtractor(BaseExtractor):
         for element in elements:
             future_dom = self._execute_in_future(element.click)
             await future_dom
+            # await asyncio.sleep(1) # TODO: replace once explicit waits work
 
+    @async_debug(offset=8)
     async def _extract_attributes(self, operation, elements):
         values = []
         for element in elements:
@@ -216,7 +239,8 @@ class RegistryExtractor(BaseExtractor):
 
         return values
 
-    def _parse_values(self, operation, values):
+    @async_debug(offset=8)
+    async def _parse_values(self, operation, values):
         parsed_values = []
         if operation.parse_method is self.ParseMethod.PARSE:
             for value in values:
@@ -224,7 +248,7 @@ class RegistryExtractor(BaseExtractor):
                 if parsed and parsed.named and self.KEEP_TAG in parsed.named:
                     parsed_values.append(parsed.named[self.KEEP_TAG])
                 else:
-                    print(dict(msg='Extractor Parse Failure',
+                    print(dict(msg='Extractor parse failure',
                                type='extractor_parse_failure',
                                template=operation.parse_template,
                                value=value, parsed=parsed))
@@ -302,11 +326,15 @@ class RegistryExtractor(BaseExtractor):
             return yaml.safe_load(stream)
 
     def _form_page_url(self, configuration, problem_name, org_name, geo_name):
+        encoded_problem_name = urllib.parse.quote(problem_name) if problem_name else ''
+        encoded_org_name = urllib.parse.quote(org_name) if org_name else ''
+        encoded_geo_name = urllib.parse.quote(geo_name) if geo_name else ''
+
         url_template = self.configuration[self.PAGE_URL_TAG]
-        url_template = url_template.replace('{problem}', problem_name)
+        url_template = url_template.replace('{problem}', encoded_problem_name)
         # TODO: Add support for optional org/geo names
-        url_template = url_template.replace('{org}', org_name or '')
-        url_template = url_template.replace('{geo}', geo_name or '')
+        url_template = url_template.replace('{org}', encoded_org_name)
+        url_template = url_template.replace('{geo}', encoded_geo_name)
         return url_template
 
     def _derive_web_driver_class(self, web_driver_type):
@@ -336,6 +364,9 @@ class RegistryExtractor(BaseExtractor):
         self.directory = directory
         self.file_path = self._form_file_path(self.directory)
         self.configuration = self._marshall_configuration(self.file_path)
+
+        self.is_enabled = self.configuration.get(self.IS_ENABLED_TAG, True)
+
         self.problem_name = problem_name
         self.org_name = org_name
         self.geo_name = geo_name

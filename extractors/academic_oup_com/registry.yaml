@@ -5,16 +5,13 @@ page_type: REGISTRY
 page_url: "https://academic.oup.com/journals/search-results?page=1&qb={\
             %22Keywords1%22:%22{problem}%22,\
             %22FullText2%22:%22{geo}%22}"
+is_enabled: True
 wait: 0
 
 content:
   search_results:
-    - is_multiple: True
-      class_name: widget-ArticleAbstract
-      click: True  # Show all abstracts up front
-    - scope: page
-      is_multiple: True
-      class_name: al-article-box
+    is_multiple: True
+    class_name: al-article-box
   source_url:
     class_name: article-link
     attribute: href
@@ -27,7 +24,7 @@ content:
     class_name: author-link
     attribute: text
   publication:
-    xpath: "//*[contains(concat(' ', @class, ' '), ' al-authors-list ')]/\
+    xpath: ".//div[contains(concat(' ', @class, ' '), ' al-authors-list ')]/\
             following-sibling::div/a"
     attribute: text
   published_timestamp:
@@ -38,10 +35,9 @@ content:
   tzinfo_published: UTC
   publisher: Oxford University Press
   summary:
-    # Could use class_name: abstract to avoid parsing
-    # Or these elements could be cached via memoization
-    class_name: widget-ArticleAbstract
-    wait: 10
-    attribute: text
-    parse: "Abstract\n{keep}"
+    - class_name: widget-ArticleAbstract
+      click: True
+    - wait: 10  # All wait operations are absolute, hence this xpath:
+      xpath: "(//section[contains(concat(' ', @class, ' '), ' abstract ')])[{n}]"
+      attribute: text
   full_text:

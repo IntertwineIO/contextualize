@@ -29,7 +29,8 @@ class Service:
             try:
                 extractor = RegistryExtractor(
                     directory, self.problem_name, self.org_name, self.geo_name)
-                extractors.add(extractor)
+                if extractor.is_enabled:
+                    extractors.add(extractor)
             except FileNotFoundError as e:
                 print(e)  # TODO: Replace with logging
             except ScannerError as e:

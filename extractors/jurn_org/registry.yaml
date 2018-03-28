@@ -5,6 +5,7 @@ page_type: REGISTRY
 page_url: "http://www.jurn.org/#gsc.tab=0\
             &gsc.q={geo}%20\
             intitle%3A{problem}&gsc.sort="
+is_enabled: False
 
 content:
   search_results:
