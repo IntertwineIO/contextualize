@@ -10,20 +10,17 @@ WIDTH = 160
 SEPARATOR = DELIMITER * WIDTH
 
 
-def offset_text(text, offset):
-    offset_ = ' ' * offset
+def offset_text(text, offset_):
     lines = text.split('\n')
     offset_lines = (offset_ + line for line in lines)
     offset_text = '\n'.join(offset_lines)
     return offset_text
 
 
-def format_text(label, text, offset, indent):
-    offset_ = ' ' * offset
-    indent_ = ' ' * indent
+def format_text(label, text, offset_):
     if '\n' in text:
         print(f'{offset_}{label}:')
-        print(f'{offset_text(text, offset + indent)}')
+        print(f'{offset_text(text, offset_)}')
     else:
         print(f'{offset_}{label}: {text}')
 
@@ -34,17 +31,16 @@ def async_debug(offset=0, indent=4):
         pp = PrettyPrinter(indent=indent, width=WIDTH)
         print(SEPARATOR)
         offset_ = ' ' * offset
-        indent_ = ' ' * indent
         print(f'{offset_}Awaiting {wrapped.__name__}')
         if instance is not None:
-            format_text('instance', repr(instance), offset + indent, indent)
+            format_text('instance', repr(instance), offset_)
 
-        format_text('args', pp.pformat(args), offset + indent, indent)
-        format_text('kwargs', pp.pformat(kwargs), offset + indent, indent)
+        format_text('args', pp.pformat(args), offset_)
+        format_text('kwargs', pp.pformat(kwargs), offset_)
 
         loop = asyncio.get_event_loop()
         start_time = loop.time()
-        format_text('start', str(start_time), offset + indent, indent)
+        format_text('start', str(start_time), offset_)
         print(SEPARATOR)
 
         result = await wrapped(*args, **kwargs)
@@ -55,14 +51,14 @@ def async_debug(offset=0, indent=4):
 
         print(f'{offset_}Result returned from {wrapped.__name__}')
         if instance is not None:
-            format_text('instance', repr(instance), offset + indent, indent)
+            format_text('instance', repr(instance), offset_)
 
-        format_text('end', str(end_time), offset + indent, indent)
-        format_text('elapsed', str(elapsed), offset + indent, indent)
+        format_text('end', str(end_time), offset_)
+        format_text('elapsed', str(elapsed), offset_)
 
-        format_text('args', pp.pformat(args), offset + indent, indent)
-        format_text('kwargs', pp.pformat(kwargs), offset + indent, indent)
-        format_text('result', pp.pformat(result), offset + indent, indent)
+        format_text('args', pp.pformat(args), offset_)
+        format_text('kwargs', pp.pformat(kwargs), offset_)
+        format_text('result', pp.pformat(result), offset_)
         print(SEPARATOR)
 
         return result
