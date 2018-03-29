@@ -46,7 +46,8 @@ class BaseExtractor:
 
     WebDriverType = FlexEnum('WebDriverType', 'CHROME FIREFOX')
     DEFAULT_WEB_DRIVER_TYPE = WebDriverType.CHROME
-    DEFAULT_MAX_WAIT_SECONDS = 0
+    DEFAULT_MAX_WAIT = 10
+    WAIT_POLL_INTERVAL = 0.2
 
     ####################################################################
     # TODO: Make ExtractOperation a class & encapsulate relevant methods
@@ -101,10 +102,9 @@ class RegistryExtractor(BaseExtractor):
         future_web_driver = self._execute_in_future(self.web_driver_class,
                                                     **self.web_driver_kwargs)
         self.web_driver = await future_web_driver
-        wait_seconds = self.configuration.get(self.WAIT_TAG,
-                                              self.DEFAULT_MAX_WAIT_SECONDS)
+        max_wait = self.configuration.get(self.WAIT_TAG, self.DEFAULT_MAX_WAIT)
         # Configure web driver to allow waiting on each operation
-        self.web_driver.implicitly_wait(wait_seconds)
+        self.web_driver.implicitly_wait(max_wait)
 
     @async_debug(offset=2)
     async def _fetch_page(self):
@@ -184,9 +184,11 @@ class RegistryExtractor(BaseExtractor):
 
             if operation.find_method:
                 find_method, find_by = self._derive_find_method(operation, element)
-                find_term = operation.find_term.replace('{n}', str(index))
+                find_term = operation.find_term.format(index=index)
                 if max_wait_seconds:
-                    wait = WebDriverWait(self.web_driver, max_wait_seconds)
+                    wait = WebDriverWait(self.web_driver, max_wait_seconds,
+                                         poll_frequency=self.WAIT_POLL_INTERVAL)
+                    # TODO: Make wait condition configurable rather than max wait
                     wait_condition = EC.presence_of_element_located((find_by, find_term))
                     future_elements = wait.until(wait_condition)
                     future_elements = self._execute_in_future(wait.until, wait_condition)
@@ -224,7 +226,7 @@ class RegistryExtractor(BaseExtractor):
         for element in elements:
             future_dom = self._execute_in_future(element.click)
             await future_dom
-            # await asyncio.sleep(1) # TODO: replace once explicit waits work
+            # await asyncio.sleep(0.2) # TODO: replace once explicit waits work
 
     @async_debug(offset=8)
     async def _extract_attributes(self, operation, elements):

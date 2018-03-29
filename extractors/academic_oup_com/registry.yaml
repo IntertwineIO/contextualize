@@ -38,6 +38,6 @@ content:
     - class_name: widget-ArticleAbstract
       click: True
     - wait: 10  # All wait operations are absolute, hence this xpath:
-      xpath: "(//section[contains(concat(' ', @class, ' '), ' abstract ')])[{n}]"
+      xpath: "(//section[contains(concat(' ', @class, ' '), ' abstract ')])[{index}]"
       attribute: text
   full_text:
