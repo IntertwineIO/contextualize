@@ -97,7 +97,7 @@ class RegistryExtractor(BaseExtractor):
         finally:
             await self._dispose_web_driver()
 
-    @async_debug(offset=2)
+    @async_debug(offset=1)
     async def _provision_web_driver(self):
         future_web_driver = self._execute_in_future(self.web_driver_class,
                                                     **self.web_driver_kwargs)
@@ -106,12 +106,12 @@ class RegistryExtractor(BaseExtractor):
         # Configure web driver to allow waiting on each operation
         self.web_driver.implicitly_wait(max_wait)
 
-    @async_debug(offset=2)
+    @async_debug(offset=1)
     async def _fetch_page(self):
         future_page = self._execute_in_future(self.web_driver.get, self.page_url)
         await future_page
 
-    @async_debug(offset=2)
+    @async_debug(offset=1)
     async def _extract_search_results(self):
         content_config = self.configuration[self.CONTENT_TAG]
         search_results_config = content_config[self.SEARCH_RESULTS_TAG]
@@ -137,13 +137,13 @@ class RegistryExtractor(BaseExtractor):
 
         return search_results
 
-    @async_debug(offset=2)
+    @async_debug(offset=1)
     async def _dispose_web_driver(self):
         if self.web_driver:
             future_web_driver_quit = self._execute_in_future(self.web_driver.quit)
             await future_web_driver_quit
 
-    @async_debug(offset=4)
+    @async_debug(offset=2)
     async def _extract_content(self, config, element, index):
         content = OrderedDict()
         for field in self.CONTENT_FIELDS:
@@ -165,7 +165,7 @@ class RegistryExtractor(BaseExtractor):
 
         return content
 
-    @async_debug(offset=6)
+    @async_debug(offset=3)
     async def _perform_operation(self, config, element, index=1):
         if isinstance(config, list):
             latest = prior = parent = element
@@ -215,7 +215,7 @@ class RegistryExtractor(BaseExtractor):
 
             return delist(parsed_values)
 
-    @async_debug(offset=8)
+    @async_debug(offset=4)
     async def _perform_clicks(self, elements):
         """
         Perform clicks on given elements (one click on each)
@@ -228,7 +228,7 @@ class RegistryExtractor(BaseExtractor):
             await future_dom
             # await asyncio.sleep(0.2) # TODO: replace once explicit waits work
 
-    @async_debug(offset=8)
+    @async_debug(offset=4)
     async def _extract_attributes(self, operation, elements):
         values = []
         for element in elements:
@@ -241,7 +241,7 @@ class RegistryExtractor(BaseExtractor):
 
         return values
 
-    @async_debug(offset=8)
+    @async_debug(offset=4)
     async def _parse_values(self, operation, values):
         parsed_values = []
         if operation.parse_method is self.ParseMethod.PARSE:
