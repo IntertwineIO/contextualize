@@ -31,6 +31,7 @@ class BaseExtractor:
     IS_ENABLED_TAG = 'is_enabled'
     CONTENT_TAG = 'content'
     PAGE_URL_TAG = 'page_url'
+    CLAUSE_DELIMITER_TAG = 'clause_delimiter'
     SEARCH_RESULTS_TAG = 'search_results'
 
     ELEMENT_TAG = 'element'
@@ -43,6 +44,14 @@ class BaseExtractor:
         'source_url', 'title', 'author_names', 'publication',
         'published_timestamp', 'granularity_published', 'tzinfo_published',
         'publisher', 'summary', 'full_text']
+
+    INDEX_TOKEN = '{index}'
+    SEARCH_TERM_TOKENS = OrderedDict((
+        ('problem', '{problem}'), ('org', '{org}'), ('geo', '{geo}')))
+    SEARCH_CLAUSE_TOKENS = OrderedDict((
+        ('problem_clause', '{problem_clause}'),
+        ('org_clause', '{org_clause}'),
+        ('geo_clause', '{geo_clause}')))
 
     WebDriverType = FlexEnum('WebDriverType', 'CHROME FIREFOX')
     DEFAULT_WEB_DRIVER_TYPE = WebDriverType.CHROME
@@ -328,16 +337,39 @@ class RegistryExtractor(BaseExtractor):
             return yaml.safe_load(stream)
 
     def _form_page_url(self, configuration, problem_name, org_name, geo_name):
-        encoded_problem_name = urllib.parse.quote(problem_name) if problem_name else ''
-        encoded_org_name = urllib.parse.quote(org_name) if org_name else ''
-        encoded_geo_name = urllib.parse.quote(geo_name) if geo_name else ''
+        page_url = self.configuration[self.PAGE_URL_TAG]
+        clause_delimiter = self.configuration.get(self.CLAUSE_DELIMITER_TAG) or ''
+        clause_count = 0
 
-        url_template = self.configuration[self.PAGE_URL_TAG]
-        url_template = url_template.replace('{problem}', encoded_problem_name)
-        # TODO: Add support for optional org/geo names
-        url_template = url_template.replace('{org}', encoded_org_name)
-        url_template = url_template.replace('{geo}', encoded_geo_name)
-        return url_template
+        local_dict = locals()
+        search_terms = ((component, local_dict[f'{component}_name'])
+                        for component in self.SEARCH_TERM_TOKENS)
+
+        for index, (component, search_term) in enumerate(search_terms, start=1):
+            clause_tag = f'{component}_clause'
+            clause_token = self.SEARCH_CLAUSE_TOKENS[clause_tag]
+            clause_template = self.configuration.get(clause_tag)
+
+            rendered_clause = self._form_url_clause(
+                clause_template, component, search_term, index)
+            if rendered_clause:
+                if clause_delimiter and clause_count:
+                    rendered_clause = f'{clause_delimiter}{rendered_clause}'
+                clause_count += 1
+            page_url = page_url.replace(clause_token, rendered_clause)
+
+        if not clause_count:
+            raise ValueError('At least one search term is required')
+
+        return page_url
+
+    def _form_url_clause(self, clause_template, component, search_term, index):
+        if not clause_template or not search_term:
+            return ''
+        search_term_token = self.SEARCH_TERM_TOKENS[component]
+        encoded_search_term = urllib.parse.quote(search_term)
+        return (clause_template.replace(search_term_token, encoded_search_term)
+                               .replace(self.INDEX_TOKEN, str(index)))
 
     def _derive_web_driver_class(self, web_driver_type):
         return getattr(webdriver, web_driver_type.name.capitalize())

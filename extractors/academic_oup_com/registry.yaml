@@ -1,10 +1,14 @@
 %YAML 1.2
 ---
 page_type: REGISTRY
-# Include {geo} and/or {problem} tags to include encoded values
+# https://academic.oup.com/journals/search-results?page=1&fl_SiteID=5567&qb={
+# %22Keywords1%22:%22Homelessness%22,%22FullText2%22:%22Texas%22,%22FullText3%22:%22Veteran%20Affairs%22}
 page_url: "https://academic.oup.com/journals/search-results?page=1&qb={\
-            %22Keywords1%22:%22{problem}%22,\
-            %22FullText2%22:%22{geo}%22}"
+            {problem_clause}{org_clause}{geo_clause}}"
+problem_clause: '%22Keywords{index}%22:%22{problem}%22'
+org_clause: '%22FullText{index}%22:%22{org}%22'
+geo_clause: '%22FullText{index}%22:%22{geo}%22'
+clause_delimiter: ','
 is_enabled: True
 wait: 0
 
