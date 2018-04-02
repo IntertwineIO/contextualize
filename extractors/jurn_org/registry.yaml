@@ -1,5 +1,6 @@
 %YAML 1.2
 ---
+is_enabled: True
 page_type: REGISTRY
 # http://www.jurn.org/#gsc.tab=0&gsc.q=university%20of%20texas%20austin%2C%20texas%20intitle%3A%22substance%20abuse%22&gsc.sort=
 page_url: "http://www.jurn.org/#gsc.tab=0\
@@ -9,7 +10,6 @@ problem_clause: 'intitle%3A%22{problem}%22'
 org_clause: '{org}'
 geo_clause: '{geo}'
 clause_delimiter: '%20'
-is_enabled: True
 
 content:
   search_results:

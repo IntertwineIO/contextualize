@@ -1,5 +1,6 @@
 %YAML 1.2
 ---
+is_enabled: True
 page_type: REGISTRY
 # https://academic.oup.com/journals/search-results?page=1&fl_SiteID=5567&qb={
 # %22Keywords1%22:%22Homelessness%22,%22FullText2%22:%22Texas%22,%22FullText3%22:%22Veteran%20Affairs%22}
@@ -9,7 +10,6 @@ problem_clause: '%22Keywords{index}%22:%22{problem}%22'
 org_clause: '%22FullText{index}%22:%22{org}%22'
 geo_clause: '%22FullText{index}%22:%22{geo}%22'
 clause_delimiter: ','
-is_enabled: True
 wait: 0
 
 content:
@@ -41,7 +41,10 @@ content:
   summary:
     - class_name: widget-ArticleAbstract
       click: True
-    - wait: 10  # All wait operations are absolute, hence this xpath:
-      xpath: "(//section[contains(concat(' ', @class, ' '), ' abstract ')])[{index}]"
+    - wait: 10  # All wait operations use absolute paths
+      xpath: "(//div[contains(concat(' ', @class, ' '), ' abstract-response-placeholder ')])[{index}]/section |\
+              (//div[contains(concat(' ', @class, ' '), ' abstract-response-placeholder ')])[{index}]/p"
+    - scope: parent
+      class_name: abstract-response-placeholder
       attribute: text
   full_text:
