@@ -28,11 +28,34 @@ content:
     class_name: author-link
     attribute: text
   publication:
-    xpath: ".//div[contains(concat(' ', @class, ' '), ' al-authors-list ')]/\
-            following-sibling::div/a"
+    # xpath: ".//div[contains(concat(' ', @class, ' '), ' al-authors-list ')]/\
+    #         following-sibling::div/a"
+    xpath: ".//div[contains(concat(' ', @class, ' '), ' al-citation-list ')]/span/em"
     attribute: text
+  volume:
+    class_name: al-citation-list
+    attribute: text
+    parse: "{} Volume {keep}, {}"
+  issue:
+    class_name: al-citation-list
+    attribute: text
+    parse: "{} Issue {keep}, {}"
+  issue_date:
+    - class_name: al-citation-list
+      attribute: text
+      parse: '{} Issue {}, {keep},{}'
+    - strptime: '%d %B %Y'
+  pages:
+    class_name: al-citation-list
+    attribute: text
+    parse: "{} Pages {keep}, {}"
+  doi:
+    class_name: al-citation-list
+    attribute: text
+    parse: "{}https://doi.org{keep}"
+    # format: "https://doi.org{doi}"
   published_timestamp:
-    class_name: sri-date
+    class_name: al-pub-date
     attribute: text
     strptime: 'Published: %d %B %Y'
   granularity_published: DAY

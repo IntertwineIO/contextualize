@@ -46,6 +46,7 @@ class BaseExtractor:
     # TODO: Make Content a class/model
     CONTENT_FIELDS = [
         'source_url', 'title', 'author_names', 'publication',
+        'volume', 'issue', 'issue_date', 'pages', 'doi',
         'published_timestamp', 'granularity_published', 'tzinfo_published',
         'publisher', 'summary', 'full_text']
 
@@ -170,35 +171,34 @@ class RegistryExtractor(BaseExtractor):
             try:
                 content[field] = await self._perform_operation(field_config,
                                                                element, index)
-            # NoSuchElementException
+            # e.g. NoSuchElementException
             except Exception as e:
                 self.pp.pprint(dict(
-                    msg='Extractor operation failure',
-                    type='extractor_operation_failure',
+                    msg='Extract field failure',
+                    type='extract_field_failure',
                     error=str(e), field=field, content=content,
                     extractor=repr(self)))
 
         return content
 
     @async_debug(offset=3)
-    async def _perform_operation(self, config, element, index=1):
+    async def _perform_operation(self, config, target, index=1):
         if isinstance(config, list):
-            latest = prior = parent = element
+            latest = prior = parent = target
             for operation_config in config:
-                self._validate_element(latest)
-                targets = self._select_targets(operation_config, latest, prior, parent)
+                # self._validate_element(latest)
+                new_targets = self._select_targets(operation_config, latest, prior, parent)
                 prior = latest
-                for target in targets:
-                    latest = await self._perform_operation(operation_config, target, index)
+                for new_target in new_targets:
+                    latest = await self._perform_operation(operation_config, new_target, index)
             return latest
 
         if isinstance(config, dict):
             operation = self._configure_operation(config)
-
             max_wait_seconds = operation.wait
 
             if operation.find_method:
-                find_method, find_by = self._derive_find_method(operation, element)
+                find_method, find_by = self._derive_find_method(operation, target)
                 find_term = operation.find_term.format(index=index)
                 if max_wait_seconds:
                     wait = WebDriverWait(self.web_driver, max_wait_seconds,
@@ -209,19 +209,19 @@ class RegistryExtractor(BaseExtractor):
                     future_elements = self._execute_in_future(wait.until, wait_condition)
                 else:
                     future_elements = self._execute_in_future(find_method, find_term)
-                new_elements = enlist(await future_elements)
+                new_targets = enlist(await future_elements)
             else:
-                new_elements = enlist(element)
+                new_targets = enlist(target)
                 if max_wait_seconds:
                     self.loop.sleep(max_wait_seconds)
 
             if operation.click:
-                await self._perform_clicks(new_elements)
+                await self._perform_clicks(new_targets)
 
-            if not operation.attribute:
-                return delist(new_elements)
-
-            values = await self._extract_attributes(operation, new_elements)
+            if operation.attribute:
+                values = await self._extract_attributes(operation, new_targets)
+            else:
+                values = new_targets
 
             if not operation.parse_method:
                 return delist(values)
