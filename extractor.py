@@ -8,6 +8,7 @@ from datetime import datetime
 from functools import lru_cache, partial
 
 from parse import parse
+from pprint import PrettyPrinter
 from ruamel import yaml
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
@@ -20,6 +21,9 @@ from utils.async import run_in_executor
 from utils.debug import async_debug
 from utils.structures import FlexEnum
 from utils.tools import delist, enlist, one, one_max
+
+INDENT = 4
+WIDTH = 160
 
 
 class BaseExtractor:
@@ -45,13 +49,8 @@ class BaseExtractor:
         'published_timestamp', 'granularity_published', 'tzinfo_published',
         'publisher', 'summary', 'full_text']
 
-    INDEX_TOKEN = '{index}'
-    SEARCH_TERM_TOKENS = OrderedDict((
-        ('problem', '{problem}'), ('org', '{org}'), ('geo', '{geo}')))
-    SEARCH_CLAUSE_TOKENS = OrderedDict((
-        ('problem_clause', '{problem_clause}'),
-        ('org_clause', '{org_clause}'),
-        ('geo_clause', '{geo_clause}')))
+    INDEX_TAG = 'index'
+    SearchComponent = FlexEnum('SearchComponent', 'PROBLEM ORG GEO')
 
     WebDriverType = FlexEnum('WebDriverType', 'CHROME FIREFOX')
     DEFAULT_WEB_DRIVER_TYPE = WebDriverType.CHROME
@@ -97,8 +96,9 @@ class RegistryExtractor(BaseExtractor):
     @async_debug()
     async def extract(self):
         if not self.is_enabled:
-            print(dict(msg='Extractor disabled warning',
-                       type='extract_disabled_warning', extractor=repr(self)))
+            self.pp.pprint(dict(
+                msg='Extractor disabled warning',
+                type='extract_disabled_warning', extractor=repr(self)))
         try:
             await self._provision_web_driver()
             await self._fetch_page()
@@ -135,14 +135,20 @@ class RegistryExtractor(BaseExtractor):
                 try:
                     content = await self._extract_content(content_config,
                                                           element, index)
-                    if content:
-                        search_results.append(content)
+                    if not content:
+                        raise ValueError('No content extracted')
+                    search_results.append(content)
+
                 except Exception as e:
-                    print(e)
+                    self.pp.pprint(dict(
+                        msg='Extract content failure',
+                        type='extract_content_failure', error=str(e),
+                        extractor=repr(self), config=content_config))
         else:
-            print(dict(msg='Extract search results failure',
-                       type='extract_search_results_failure',
-                       extractor=repr(self), config=search_results_config))
+            self.pp.pprint(dict(
+                msg='Extract search results failure',
+                type='extract_search_results_failure',
+                extractor=repr(self), config=search_results_config))
 
         return search_results
 
@@ -162,15 +168,15 @@ class RegistryExtractor(BaseExtractor):
                 continue
 
             try:
-                # if field == 'summary':
-                #     import ipdb; ipdb.set_trace()
-
                 content[field] = await self._perform_operation(field_config,
                                                                element, index)
-            except NoSuchElementException as e:
-                print(dict(msg='Extractor operation failure',
-                           type='extractor_operation_failure',
-                           extractor=repr(self), field=field, error=str(e)))
+            # NoSuchElementException
+            except Exception as e:
+                self.pp.pprint(dict(
+                    msg='Extractor operation failure',
+                    type='extractor_operation_failure',
+                    error=str(e), field=field, content=content,
+                    extractor=repr(self)))
 
         return content
 
@@ -259,10 +265,11 @@ class RegistryExtractor(BaseExtractor):
                 if parsed and parsed.named and self.KEEP_TAG in parsed.named:
                     parsed_values.append(parsed.named[self.KEEP_TAG])
                 else:
-                    print(dict(msg='Extractor parse failure',
-                               type='extractor_parse_failure',
-                               template=operation.parse_template,
-                               value=value, parsed=parsed))
+                    self.pp.pprint(dict(
+                        msg='Extractor parse failure',
+                        type='extractor_parse_failure',
+                        template=operation.parse_template, value=value,
+                        parsed=parsed, extractor=repr(self)))
 
         elif operation.parse_method is self.ParseMethod.STRPTIME:
             for value in values:
@@ -338,25 +345,23 @@ class RegistryExtractor(BaseExtractor):
 
     def _form_page_url(self, configuration, problem_name, org_name, geo_name):
         page_url = self.configuration[self.PAGE_URL_TAG]
-        clause_delimiter = self.configuration.get(self.CLAUSE_DELIMITER_TAG) or ''
+        clause_delimiter = self.configuration.get(self.CLAUSE_DELIMITER_TAG)
         clause_count = 0
 
         local_dict = locals()
         search_terms = ((component, local_dict[f'{component}_name'])
-                        for component in self.SEARCH_TERM_TOKENS)
+                        for component in self.SearchComponent.names(str.lower))
 
         for index, (component, search_term) in enumerate(search_terms, start=1):
             clause_tag = f'{component}_clause'
-            clause_token = self.SEARCH_CLAUSE_TOKENS[clause_tag]
             clause_template = self.configuration.get(clause_tag)
-
             rendered_clause = self._form_url_clause(
                 clause_template, component, search_term, index)
             if rendered_clause:
                 if clause_delimiter and clause_count:
                     rendered_clause = f'{clause_delimiter}{rendered_clause}'
                 clause_count += 1
-            page_url = page_url.replace(clause_token, rendered_clause)
+            page_url = page_url.replace(f'{{{clause_tag}}}', rendered_clause)
 
         if not clause_count:
             raise ValueError('At least one search term is required')
@@ -366,10 +371,9 @@ class RegistryExtractor(BaseExtractor):
     def _form_url_clause(self, clause_template, component, search_term, index):
         if not clause_template or not search_term:
             return ''
-        search_term_token = self.SEARCH_TERM_TOKENS[component]
-        encoded_search_term = urllib.parse.quote(search_term)
-        return (clause_template.replace(search_term_token, encoded_search_term)
-                               .replace(self.INDEX_TOKEN, str(index)))
+        encoded_term = urllib.parse.quote(search_term)
+        return (clause_template.replace(f'{{{component}}}', encoded_term)
+                               .replace(f'{{{self.INDEX_TAG}}}', str(index)))
 
     def _derive_web_driver_class(self, web_driver_type):
         return getattr(webdriver, web_driver_type.name.capitalize())
@@ -393,8 +397,9 @@ class RegistryExtractor(BaseExtractor):
     def __init__(self, directory, problem_name, org_name=None, geo_name=None,
                  web_driver_type=None, loop=None):
         self.loop = loop or asyncio.get_event_loop()
-
         self.created_timestamp = self.loop.time()
+        self.pp = PrettyPrinter(indent=INDENT, width=WIDTH)
+
         self.directory = directory
         self.file_path = self._form_file_path(self.directory)
         self.configuration = self._marshall_configuration(self.file_path)
