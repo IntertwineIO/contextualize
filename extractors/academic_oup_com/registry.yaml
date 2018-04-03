@@ -27,7 +27,7 @@ content:
     is_multiple: True
     class_name: author-link
     attribute: text
-    join: ';'
+    join: '; '
   publication:
     # xpath: ".//div[contains(concat(' ', @class, ' '), ' al-authors-list ')]/\
     #         following-sibling::div/a"
