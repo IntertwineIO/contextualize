@@ -41,7 +41,7 @@ class BaseExtractor:
     ELEMENT_TAG = 'element'
     ELEMENTS_TAG = 'elements'
     TEXT_TAG = 'text'
-    KEEP_TAG = 'keep'
+    VALUE_TAG = 'value'
 
     # TODO: Make Content a class/model
     CONTENT_FIELDS = [
@@ -77,10 +77,16 @@ class BaseExtractor:
 
     ParseMethod = FlexEnum('ParseMethod', 'PARSE STRPTIME')
 
+    FormatMethod = FlexEnum('FormatMethod', 'FORMAT STRFTIME')
+
+    TransformMethod = FlexEnum('TransformMethod', 'JOIN')
+
     ExtractOperation = namedtuple('ExtractOperation',
                                   'is_multiple find_method find_term '
                                   'wait click attribute '
-                                  'parse_method parse_template')
+                                  'parse_method parse_template '
+                                  'format_method format_template '
+                                  'transform_method transform_term')
 
     ####################################################################
 
@@ -129,7 +135,7 @@ class RegistryExtractor(BaseExtractor):
         elements = await self._perform_operation(search_results_config,
                                                  self.web_driver)
 
-        search_results = []
+        self.search_results = []
 
         if elements is not None:
             for index, element in enumerate(elements, start=1):
@@ -138,7 +144,7 @@ class RegistryExtractor(BaseExtractor):
                                                           element, index)
                     if not content:
                         raise ValueError('No content extracted')
-                    search_results.append(content)
+                    self.search_results.append(content)
 
                 except Exception as e:
                     self.pp.pprint(dict(
@@ -151,7 +157,7 @@ class RegistryExtractor(BaseExtractor):
                 type='extract_search_results_failure',
                 extractor=repr(self), config=search_results_config))
 
-        return search_results
+        return self.search_results
 
     @async_debug(offset=1)
     async def _dispose_web_driver(self):
@@ -161,7 +167,7 @@ class RegistryExtractor(BaseExtractor):
 
     @async_debug(offset=2)
     async def _extract_content(self, config, element, index):
-        content = OrderedDict()
+        self.content = content = OrderedDict()
         for field in self.CONTENT_FIELDS:
             field_config = config[field]
             if not isinstance(field_config, (list, dict)):
@@ -169,8 +175,8 @@ class RegistryExtractor(BaseExtractor):
                 continue
 
             try:
-                content[field] = await self._perform_operation(field_config,
-                                                               element, index)
+                content[field] = await self._perform_operation(
+                    field_config, element, index)
             # e.g. NoSuchElementException
             except Exception as e:
                 self.pp.pprint(dict(
@@ -179,6 +185,7 @@ class RegistryExtractor(BaseExtractor):
                     error=str(e), field=field, content=content,
                     extractor=repr(self)))
 
+        self.content = None
         return content
 
     @async_debug(offset=3)
@@ -223,12 +230,16 @@ class RegistryExtractor(BaseExtractor):
             else:
                 values = new_targets
 
-            if not operation.parse_method:
-                return delist(values)
+            if operation.parse_method:
+                values = await self._parse_values(operation, values)
 
-            parsed_values = await self._parse_values(operation, values)
+            if operation.format_method:
+                values = await self._format_values(operation, values)
 
-            return delist(parsed_values)
+            if operation.transform_method:
+                values = await self._transform_values(operation, values)
+
+            return delist(values)
 
     @async_debug(offset=4)
     async def _perform_clicks(self, elements):
@@ -241,7 +252,6 @@ class RegistryExtractor(BaseExtractor):
         for element in elements:
             future_dom = self._execute_in_future(element.click)
             await future_dom
-            # await asyncio.sleep(0.2) # TODO: replace once explicit waits work
 
     @async_debug(offset=4)
     async def _extract_attributes(self, operation, elements):
@@ -262,8 +272,8 @@ class RegistryExtractor(BaseExtractor):
         if operation.parse_method is self.ParseMethod.PARSE:
             for value in values:
                 parsed = parse(operation.parse_template, value)
-                if parsed and parsed.named and self.KEEP_TAG in parsed.named:
-                    parsed_values.append(parsed.named[self.KEEP_TAG])
+                if parsed and parsed.named and self.VALUE_TAG in parsed.named:
+                    parsed_values.append(parsed.named[self.VALUE_TAG])
                 else:
                     self.pp.pprint(dict(
                         msg='Extractor parse failure',
@@ -277,6 +287,37 @@ class RegistryExtractor(BaseExtractor):
                 parsed_values.append(parsed_value)
 
         return parsed_values
+
+    @async_debug(offset=4)
+    async def _format_values(self, operation, values):
+        formatted_values = []
+        if operation.format_method is self.FormatMethod.FORMAT:
+            if self.VALUE_TAG in self.content:
+                raise ValueError(
+                    "Reserved word '{self.VALUE_TAG}' may not be content field")
+            self.content[self.VALUE_TAG] = None
+            for value in values:
+                self.content[self.VALUE_TAG] = value
+                formatted = operation.format_template.format(**self.content)
+                formatted_values.append(formatted)
+            del self.content[self.VALUE_TAG]
+
+        elif operation.format_method is self.FormatMethod.STRFTIME:
+            for value in values:
+                formatted = value.strftime(operation.format_template)
+                formatted_values.append(formatted)
+
+        return formatted_values
+
+    @async_debug(offset=4)
+    async def _transform_values(self, operation, values):
+        transformed_values = []
+        if operation.transform_method is self.TransformMethod.JOIN:
+            delimiter = operation.transform_term
+            transformed = delimiter.join(values)
+            transformed_values.append(transformed)
+
+        return transformed_values
 
     def _validate_element(self, value):
         if not isinstance(value, (self.web_driver_class, WebElement, list)):
@@ -303,15 +344,22 @@ class RegistryExtractor(BaseExtractor):
 
     def _configure_operation(self, config):
         is_multiple = config.get(self.IS_MULTIPLE_TAG, False)
-        find_method, find_term = self._configure_action(config, self.FindMethod)
+        find_method, find_term = self._configure_action(
+            config, self.FindMethod)
         wait = config.get(self.WAIT_TAG, 0)
         click = config.get(self.CLICK_TAG, False)
         attribute = config.get(self.ATTRIBUTE_TAG)
-        parse_method, parse_template = self._configure_action(config,
-                                                              self.ParseMethod)
+        parse_method, parse_template = self._configure_action(
+            config, self.ParseMethod)
+        format_method, format_template = self._configure_action(
+            config, self.FormatMethod)
+        transform_method, transform_term = self._configure_action(
+            config, self.TransformMethod)
         return self.ExtractOperation(is_multiple, find_method, find_term,
                                      wait, click, attribute,
-                                     parse_method, parse_template)
+                                     parse_method, parse_template,
+                                     format_method, format_template,
+                                     transform_method, transform_term)
 
     @staticmethod
     def _configure_action(config, action_enum):
@@ -416,3 +464,6 @@ class RegistryExtractor(BaseExtractor):
         self.web_driver_class = self._derive_web_driver_class(self.web_driver_type)
         self.web_driver_kwargs = self._derive_web_driver_kwargs(self.web_driver_type)
         self.web_driver = None
+
+        self.search_results = None  # Store results after extraction
+        self.content = None  # Temporary storage for content being extracted

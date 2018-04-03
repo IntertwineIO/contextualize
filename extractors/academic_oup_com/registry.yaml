@@ -19,7 +19,7 @@ content:
   source_url:
     class_name: article-link
     attribute: href
-    parse: "{keep}?{}"
+    parse: "{value}?{}"
   title:
     class_name: article-link
     attribute: text
@@ -27,33 +27,36 @@ content:
     is_multiple: True
     class_name: author-link
     attribute: text
+    join: ';'
   publication:
     # xpath: ".//div[contains(concat(' ', @class, ' '), ' al-authors-list ')]/\
     #         following-sibling::div/a"
     xpath: ".//div[contains(concat(' ', @class, ' '), ' al-citation-list ')]/span/em"
     attribute: text
+  # <ResearchSpecific>
   volume:
     class_name: al-citation-list
     attribute: text
-    parse: "{} Volume {keep}, {}"
+    parse: "{} Volume {value}, {}"
   issue:
     class_name: al-citation-list
     attribute: text
-    parse: "{} Issue {keep}, {}"
+    parse: "{} Issue {value}, {}"
   issue_date:
     - class_name: al-citation-list
       attribute: text
-      parse: '{} Issue {}, {keep},{}'
+      parse: '{} Issue {}, {value},{}'
     - strptime: '%d %B %Y'
   pages:
     class_name: al-citation-list
     attribute: text
-    parse: "{} Pages {keep}, {}"
+    parse: "{} Pages {value}, {}"
   doi:
     class_name: al-citation-list
     attribute: text
-    parse: "{}https://doi.org{keep}"
-    # format: "https://doi.org{doi}"
+    parse: "{} https://doi.org{value}"
+    format: "https://doi.org{value}"
+  # </ResearchSpecific>
   published_timestamp:
     class_name: al-pub-date
     attribute: text
@@ -64,7 +67,7 @@ content:
   summary:
     - class_name: widget-ArticleAbstract
       click: True
-    - wait: 10  # All wait operations use absolute paths
+    - wait: 10  # All wait operations use absolute paths:
       xpath: "(//div[contains(concat(' ', @class, ' '), ' abstract-response-placeholder ')])[{index}]/section |\
               (//div[contains(concat(' ', @class, ' '), ' abstract-response-placeholder ')])[{index}]/p"
     - scope: parent

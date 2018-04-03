@@ -21,11 +21,13 @@ content:
     attribute: text
   author_names:
   publication:
+  # <ResearchSpecific>
   volume:
   issue:
   issue_date:
   pages:
   doi:
+  # </ResearchSpecific>
   published_timestamp:
   granularity_published:
   tzinfo_published:
