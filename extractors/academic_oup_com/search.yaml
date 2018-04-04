@@ -54,7 +54,7 @@ content:
   doi:
     class_name: al-citation-list
     attribute: text
-    parse: "{} https://doi.org{value}"
+    parse: "{}doi.org{value}"
     format: "https://doi.org{value}"
   # </ResearchSpecific>
   published_timestamp:
