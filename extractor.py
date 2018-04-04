@@ -90,31 +90,22 @@ class BaseExtractor:
 
     ####################################################################
 
-
-class SourceExtractor(BaseExtractor):
-
-    FILE_NAME = 'source.yaml'
-
-
-class SearchExtractor(BaseExtractor):
-
-    FILE_NAME = 'search.yaml'
-
     @async_debug()
     async def extract(self):
         if not self.is_enabled:
             self.pp.pprint(dict(
                 msg='Extractor disabled warning',
-                type='extract_disabled_warning', extractor=repr(self)))
+                type='extractor_disabled_warning', extractor=repr(self)))
         try:
             await self._provision_web_driver()
             await self._fetch_page()
-            return await self._extract_search_results()
+            return await self._extract_page()
         finally:
             await self._dispose_web_driver()
 
     @async_debug(offset=1)
     async def _provision_web_driver(self):
+        # TODO: retrieve from web driver pool
         future_web_driver = self._execute_in_future(self.web_driver_class,
                                                     **self.web_driver_kwargs)
         self.web_driver = await future_web_driver
@@ -127,37 +118,8 @@ class SearchExtractor(BaseExtractor):
         future_page = self._execute_in_future(self.web_driver.get, self.page_url)
         await future_page
 
-    @async_debug(offset=1)
-    async def _extract_search_results(self):
-        content_config = self.configuration[self.CONTENT_TAG]
-        search_results_config = content_config[self.SEARCH_RESULTS_TAG]
-
-        elements = await self._perform_operation(search_results_config,
-                                                 self.web_driver)
-
-        self.search_results = []
-
-        if elements is not None:
-            for index, element in enumerate(elements, start=1):
-                try:
-                    content = await self._extract_content(content_config,
-                                                          element, index)
-                    if not content:
-                        raise ValueError('No content extracted')
-                    self.search_results.append(content)
-
-                except Exception as e:
-                    self.pp.pprint(dict(
-                        msg='Extract content failure',
-                        type='extract_content_failure', error=str(e),
-                        extractor=repr(self), config=content_config))
-        else:
-            self.pp.pprint(dict(
-                msg='Extract search results failure',
-                type='extract_search_results_failure',
-                extractor=repr(self), config=search_results_config))
-
-        return self.search_results
+    async def _extract_page(self):
+        raise NotImplementedError
 
     @async_debug(offset=1)
     async def _dispose_web_driver(self):
@@ -391,7 +353,95 @@ class SearchExtractor(BaseExtractor):
         with open(file_path) as stream:
             return yaml.safe_load(stream)
 
-    def _form_page_url(self, configuration, problem_name, org_name, geo_name):
+    def _form_page_url(self, configuration):
+        raise NotImplementedError
+
+    def _derive_web_driver_class(self, web_driver_type):
+        return getattr(webdriver, web_driver_type.name.capitalize())
+
+    def _derive_web_driver_kwargs(self, web_driver_type):
+        if web_driver_type is self.WebDriverType.CHROME:
+            chrome_options = webdriver.ChromeOptions()
+            chrome_options.add_argument('--disable-extensions')
+            return dict(chrome_options=chrome_options)
+        elif web_driver_type is self.WebDriverType.FIREFOX:
+            raise NotImplementedError('Firefox not yet supported')
+
+    def __repr__(self):
+        class_name = self.__class__.__name__
+        return (f'<{class_name}: {self.directory}, {self.created_timestamp}>')
+
+    def __init__(self, directory, web_driver_type=None, loop=None):
+        self.loop = loop or asyncio.get_event_loop()
+        self.created_timestamp = self.loop.time()
+        self.pp = PrettyPrinter(indent=INDENT, width=WIDTH)
+
+        self.directory = directory
+        self.file_path = self._form_file_path(self.directory)
+        self.configuration = self._marshall_configuration(self.file_path)
+        self.is_enabled = self.configuration.get(self.IS_ENABLED_TAG, True)
+
+        self.page_url = self._form_page_url(self.configuration)
+
+        self.web_driver_type = web_driver_type or self.DEFAULT_WEB_DRIVER_TYPE
+        self.web_driver_class = self._derive_web_driver_class(self.web_driver_type)
+        self.web_driver_kwargs = self._derive_web_driver_kwargs(self.web_driver_type)
+        self.web_driver = None
+
+        self.content = None  # Temporary storage for content being extracted
+
+
+class SourceExtractor(BaseExtractor):
+
+    FILE_NAME = 'source.yaml'
+
+
+class SearchExtractor(BaseExtractor):
+
+    FILE_NAME = 'search.yaml'
+
+
+    async def _extract_page(self):
+        search_results = await self._extract_search_results()
+        return search_results
+
+    @async_debug(offset=1)
+    async def _extract_search_results(self):
+        content_config = self.configuration[self.CONTENT_TAG]
+        search_results_config = content_config[self.SEARCH_RESULTS_TAG]
+
+        elements = await self._perform_operation(search_results_config,
+                                                 self.web_driver)
+
+        self.search_results = []
+
+        if elements is not None:
+            for index, element in enumerate(elements, start=1):
+                try:
+                    content = await self._extract_content(content_config,
+                                                          element, index)
+                    if not content:
+                        raise ValueError('No content extracted')
+                    self.search_results.append(content)
+
+                except Exception as e:
+                    self.pp.pprint(dict(
+                        msg='Extract content failure',
+                        type='extract_content_failure', error=str(e),
+                        extractor=repr(self), config=content_config))
+        else:
+            self.pp.pprint(dict(
+                msg='Extract search results failure',
+                type='extract_search_results_failure',
+                extractor=repr(self), config=search_results_config))
+
+        return self.search_results
+
+    def _form_page_url(self, configuration):
+        problem_name = self.problem_name
+        org_name = self.org_name
+        geo_name = self.geo_name
+
         page_url = self.configuration[self.PAGE_URL_TAG]
         clause_delimiter = self.configuration.get(self.CLAUSE_DELIMITER_TAG)
         clause_count = 0
@@ -423,17 +473,6 @@ class SearchExtractor(BaseExtractor):
         return (clause_template.replace(f'{{{component}}}', encoded_term)
                                .replace(f'{{{self.INDEX_TAG}}}', str(index)))
 
-    def _derive_web_driver_class(self, web_driver_type):
-        return getattr(webdriver, web_driver_type.name.capitalize())
-
-    def _derive_web_driver_kwargs(self, web_driver_type):
-        if web_driver_type is self.WebDriverType.CHROME:
-            chrome_options = webdriver.ChromeOptions()
-            chrome_options.add_argument('--disable-extensions')
-            return dict(chrome_options=chrome_options)
-        elif web_driver_type is self.WebDriverType.FIREFOX:
-            raise NotImplementedError('Firefox not yet supported')
-
     def __repr__(self):
         class_name = self.__class__.__name__
         org_clause = f' at {self.org_name}' if self.org_name else ''
@@ -444,26 +483,10 @@ class SearchExtractor(BaseExtractor):
 
     def __init__(self, directory, problem_name, org_name=None, geo_name=None,
                  web_driver_type=None, loop=None):
-        self.loop = loop or asyncio.get_event_loop()
-        self.created_timestamp = self.loop.time()
-        self.pp = PrettyPrinter(indent=INDENT, width=WIDTH)
-
-        self.directory = directory
-        self.file_path = self._form_file_path(self.directory)
-        self.configuration = self._marshall_configuration(self.file_path)
-
-        self.is_enabled = self.configuration.get(self.IS_ENABLED_TAG, True)
-
         self.problem_name = problem_name
         self.org_name = org_name
         self.geo_name = geo_name
-        self.page_url = self._form_page_url(
-            self.configuration, self.problem_name, self.org_name, self.geo_name)
-
-        self.web_driver_type = web_driver_type or self.DEFAULT_WEB_DRIVER_TYPE
-        self.web_driver_class = self._derive_web_driver_class(self.web_driver_type)
-        self.web_driver_kwargs = self._derive_web_driver_kwargs(self.web_driver_type)
-        self.web_driver = None
 
         self.search_results = None  # Store results after extraction
-        self.content = None  # Temporary storage for content being extracted
+
+        super().__init__(directory, web_driver_type, loop)
