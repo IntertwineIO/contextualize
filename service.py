@@ -6,7 +6,7 @@ import os
 from pprint import PrettyPrinter
 from ruamel.yaml.scanner import ScannerError
 
-from extractor import RegistryExtractor
+from extractor import SearchExtractor
 
 
 class Service:
@@ -22,12 +22,12 @@ class Service:
 
     def provision_extractors(self):
 
-        extractor_directories = os.listdir(RegistryExtractor.FILE_PATH_BASE)
+        extractor_directories = os.listdir(SearchExtractor.FILE_PATH_BASE)
 
         extractors = set()
         for directory in extractor_directories:
             try:
-                extractor = RegistryExtractor(
+                extractor = SearchExtractor(
                     directory, self.problem_name, self.org_name, self.geo_name)
                 if extractor.is_enabled:
                     extractors.add(extractor)

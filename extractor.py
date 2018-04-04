@@ -96,9 +96,9 @@ class SourceExtractor(BaseExtractor):
     FILE_NAME = 'source.yaml'
 
 
-class RegistryExtractor(BaseExtractor):
+class SearchExtractor(BaseExtractor):
 
-    FILE_NAME = 'registry.yaml'
+    FILE_NAME = 'search.yaml'
 
     @async_debug()
     async def extract(self):

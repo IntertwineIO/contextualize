@@ -13,7 +13,7 @@ def main():
 
     problem_name = 'Homelessness'
     org_name = None
-    geo_name = None  # 'California'
+    geo_name = 'United States'
 
     service = Service(loop, problem_name, org_name, geo_name)
 

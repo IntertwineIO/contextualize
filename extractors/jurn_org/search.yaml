@@ -1,7 +1,7 @@
 %YAML 1.2
 ---
-is_enabled: False
-page_type: REGISTRY
+is_enabled: True
+page_type: SEARCH
 # http://www.jurn.org/#gsc.tab=0&gsc.q=university%20of%20texas%20austin%2C%20texas%20intitle%3A%22substance%20abuse%22&gsc.sort=
 page_url: "http://www.jurn.org/#gsc.tab=0\
             &gsc.q={problem_clause}{org_clause}{geo_clause}&gsc.sort="
