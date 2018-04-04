@@ -29,6 +29,7 @@ WIDTH = 160
 class BaseExtractor:
 
     FILE_PATH_BASE = 'extractors'
+    FILE_NAME = NotImplementedError
 
     OPTIONS_TAG = 'options'
 
@@ -75,15 +76,15 @@ class BaseExtractor:
                           'CLASS_NAME CSS_SELECTOR ID LINK_TEXT NAME '
                           'PARTIAL_LINK_TEXT TAG_NAME XPATH')
 
+    ExtractMethod = FlexEnum('ExtractMethod', 'ATTRIBUTE PROPERTY')
     ParseMethod = FlexEnum('ParseMethod', 'PARSE STRPTIME')
-
     FormatMethod = FlexEnum('FormatMethod', 'FORMAT STRFTIME')
-
     TransformMethod = FlexEnum('TransformMethod', 'JOIN')
 
     ExtractOperation = namedtuple('ExtractOperation',
                                   'is_multiple find_method find_term '
-                                  'wait click attribute '
+                                  'wait click '
+                                  'extract_method extract_term '
                                   'parse_method parse_template '
                                   'format_method format_template '
                                   'transform_method transform_term')
@@ -187,8 +188,8 @@ class BaseExtractor:
             if operation.click:
                 await self._perform_clicks(new_targets)
 
-            if operation.attribute:
-                values = await self._extract_attributes(operation, new_targets)
+            if operation.extract_method:
+                values = await self._extract_values(operation, new_targets)
             else:
                 values = new_targets
 
@@ -216,17 +217,26 @@ class BaseExtractor:
             await future_dom
 
     @async_debug(offset=4)
-    async def _extract_attributes(self, operation, elements):
-        values = []
+    async def _extract_values(self, operation, elements):
+        extracted_values = []
+        extract_method_name = f'get_{operation.extract_method.name.lower()}'
+
         for element in elements:
-            func = (partial(getattr, element) if operation.attribute == self.TEXT_TAG
-                    else element.get_attribute)
 
-            future_value = self._execute_in_future(func, operation.attribute)
-            value = await future_value
-            values.append(value)
+            if operation.extract_term == self.TEXT_TAG:
+                func = partial(getattr, element)
+                future_value = self._execute_in_future(func, operation.extract_term)
+                value = await future_value
+                if value:
+                    extracted_values.append(value)
+                    continue
 
-        return values
+                func = getattr(element, extract_method_name)
+                future_value = self._execute_in_future(func, operation.extract_term)
+                value = await future_value
+                extracted_values.append(value)
+
+        return extracted_values
 
     @async_debug(offset=4)
     async def _parse_values(self, operation, values):
@@ -310,7 +320,8 @@ class BaseExtractor:
             config, self.FindMethod)
         wait = config.get(self.WAIT_TAG, 0)
         click = config.get(self.CLICK_TAG, False)
-        attribute = config.get(self.ATTRIBUTE_TAG)
+        extract_method, extract_term = self._configure_action(
+            config, self.ExtractMethod)
         parse_method, parse_template = self._configure_action(
             config, self.ParseMethod)
         format_method, format_template = self._configure_action(
@@ -318,7 +329,8 @@ class BaseExtractor:
         transform_method, transform_term = self._configure_action(
             config, self.TransformMethod)
         return self.ExtractOperation(is_multiple, find_method, find_term,
-                                     wait, click, attribute,
+                                     wait, click,
+                                     extract_method, extract_term,
                                      parse_method, parse_template,
                                      format_method, format_template,
                                      transform_method, transform_term)
