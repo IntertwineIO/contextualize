@@ -46,11 +46,18 @@ content:
     - class_name: al-citation-list
       attribute: text
       parse: '{} Issue {}, {value},{}'
-    - strptime: '%d %B %Y'
-  pages:
+    - strptime: ['%d %B %Y', '%B %Y']
+  issue_date_granularity:
+    get: '<issue_date.granularity.name>'
+  # 'The Journal of Nutrition, Volume 135, Issue 8, 1 August 2005, Pages 1926–1933, https://doi.org/10.1093/jn/135.8.1926'
+  first_page:
     class_name: al-citation-list
     attribute: text
-    parse: "{} Pages {value}, {}"
+    parse: "{} Pages {value}–{}"
+  last_page:
+    class_name: al-citation-list
+    attribute: text
+    parse: "{} Pages {}–{value}, {}"
   doi:
     class_name: al-citation-list
     attribute: text
@@ -60,8 +67,9 @@ content:
   published_timestamp:
     class_name: al-pub-date
     attribute: text
-    strptime: 'Published: %d %B %Y'
-  granularity_published: DAY
+    strptime: ['Published: %d %B %Y', 'Published: %B %Y']
+  granularity_published:
+    get: '<published_timestamp.granularity.name>'
   tzinfo_published: UTC
   publisher: Oxford University Press
   summary:
