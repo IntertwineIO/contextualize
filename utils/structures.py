@@ -6,6 +6,11 @@ from functools import lru_cache
 
 
 class FlexEnum(Enum):
+    """
+    FlexEnum, the flexible enum class
+
+
+    """
 
     @classmethod
     def names(cls, transform=None):
@@ -27,7 +32,7 @@ class FlexEnum(Enum):
         I/O
         transform=None: function to be applied to each primary enum name
         labels=False: if True, values replaced with secondary enum names
-        inverse=False: if True, names and secondary values are swapped
+        inverse=False: if True, values (or secondary names) then names
         return: generator of enum name/value 2-tuples
         """
         secondary = 'name' if labels else 'value'
@@ -78,3 +83,27 @@ class FlexEnum(Enum):
         return: OrderedDict of enum name/value pairs
         """
         return OrderedDict(cls.items(transform, labels=True, inverse=inverse))
+
+
+class InfinIterator:
+    """
+    InfinIterator, the infinite iterator class
+
+    Useful for testing functions that work on iterators, since unlike
+    most other iterators, this one can be used any number of times.
+    """
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        try:
+            value = self.values[self.index]
+        except IndexError:
+            self.index = 0  # Reset to 0 so it can be used again
+            raise StopIteration()
+        self.index += 1
+        return value
+
+    def __init__(self, iterable):
+        self.values = iterable if hasattr(iterable, '__len__') else list(iterable)
+        self.index = 0
