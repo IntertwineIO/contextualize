@@ -11,7 +11,6 @@ from parse import parse
 from pprint import PrettyPrinter
 from ruamel import yaml
 from selenium import webdriver
-# from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
@@ -136,7 +135,7 @@ class BaseExtractor:
             await future_web_driver_quit
 
     @async_debug(offset=2)
-    async def _extract_content(self, config, element, index):
+    async def _extract_content(self, element, config, index):
         self.content = content = OrderedDict()
         for field in self.CONTENT_FIELDS:
             field_config = config[field]
@@ -149,7 +148,7 @@ class BaseExtractor:
 
             try:
                 content[field] = await self._perform_operation(
-                    field_config, element, index)
+                    element, field_config, index)
             # e.g. NoSuchElementException
             except Exception as e:
                 self.pp.pprint(dict(
@@ -162,14 +161,17 @@ class BaseExtractor:
         return content
 
     @async_debug(offset=3)
-    async def _perform_operation(self, config, target, index=1):
+    async def _perform_operation(self, target, config, index=1):
         if isinstance(config, list):
             latest = prior = parent = target
             for operation_config in config:
                 new_targets = self._select_targets(operation_config, latest, prior, parent)
                 prior = latest
+                if operation_config.get(self.IS_MULTIPLE_TAG, False):
+                    latest = await self._perform_operation(new_targets, operation_config, index)
+                    continue
                 for new_target in new_targets:
-                    latest = await self._perform_operation(operation_config, new_target, index)
+                    latest = await self._perform_operation(new_target, operation_config, index)
             return latest
 
         if isinstance(config, dict):
@@ -508,16 +510,17 @@ class SearchExtractor(BaseExtractor):
         content_config = self.configuration[self.CONTENT_TAG]
         search_results_config = content_config[self.SEARCH_RESULTS_TAG]
 
-        elements = await self._perform_operation(search_results_config,
-                                                 self.web_driver)
+        elements = await self._perform_operation(self.web_driver,
+                                                 search_results_config)
 
         self.search_results = []
 
         if elements is not None:
             for index, element in enumerate(elements, start=1):
                 try:
-                    content = await self._extract_content(content_config,
-                                                          element, index)
+                    content = await self._extract_content(element,
+                                                          content_config,
+                                                          index)
                     if not content:
                         raise ValueError('No content extracted')
                     self.search_results.append(content)
