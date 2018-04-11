@@ -1,0 +1,63 @@
+%YAML 1.2
+---
+is_enabled: True
+page_type: SOURCE
+# https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3865876/
+page_url: "https://www.ncbi.nlm.nih.gov"
+wait: 0
+
+content:
+  title:
+    name: citation_title
+    attribute: content
+  author_names:
+    is_multiple: True
+    name: DC.Contributor
+    attribute: content
+    join: '; '
+  publication:
+    name: citation_journal_title
+    attribute: content
+  # <ResearchSpecific>
+  volume:
+    name: citation_volume
+    attribute: content
+  issue:
+    name: citation_issue
+    attribute: content
+  issue_date:
+    name: citation_date
+    attribute: content
+    strptime: ['%B %d, %Y', '%B %Y']
+  issue_date_granularity:
+    get: '<issue_date.granularity.name>'
+  first_page:
+    name: citation_firstpage
+    attribute: content
+  last_page:
+    class_name: cit
+    attribute: text
+    parse: "{}(<issue>): <first_page>–{value}."
+  doi:
+    name: citation_doi
+    attribute: content
+    format: "https://doi.org/{value}"
+  # </ResearchSpecific>
+  published_timestamp:
+    class_name: al-pub-date
+    attribute: text
+    strptime: ['Published: %d %B %Y', 'Published: %B %Y']
+  granularity_published:
+    get: '<published_timestamp.granularity.name>'
+  tzinfo_published: UTC
+  publisher: Oxford University Press
+  summary:
+    - class_name: widget-ArticleAbstract
+      click: True
+    - wait: 10  # All wait operations use absolute paths:
+      xpath: "(//div[contains(concat(' ', @class, ' '), ' abstract-response-placeholder ')])[{index}]/section |\
+              (//div[contains(concat(' ', @class, ' '), ' abstract-response-placeholder ')])[{index}]/p"
+    - scope: parent
+      class_name: abstract-response-placeholder
+      attribute: text
+  full_text:
