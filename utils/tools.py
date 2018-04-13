@@ -71,7 +71,7 @@ def form_range_string(minimum, maximum):
 
 def form_values_string(values, iterator=None):
     """Form values string, with ellipsis if iterator has a next value"""
-    string_values = VALUE_DELIMITER.join(str(v) for v in values)
+    values_string = VALUE_DELIMITER.join(str(v) for v in values)
     has_more = False
 
     if iterator:
@@ -82,9 +82,9 @@ def form_values_string(values, iterator=None):
             pass
 
     if has_more:
-        string_values += MORE_VALUES
+        values_string += MORE_VALUES
 
-    return string_values
+    return values_string
 
 
 def constrain(iterable, exact=None, minimum=None, maximum=None):
@@ -147,7 +147,10 @@ def one(iterable):
     """
     if hasattr(iterable, '__len__'):
         if len(iterable) == 1:
-            return iterable
+            try:
+                return iterable[0]
+            except (TypeError, KeyError):  # sets, dicts, etc.
+                return next(iter(iterable))
         iterator = iter(iterable)
     else:
         iterator = iterable
@@ -158,8 +161,8 @@ def one(iterable):
         raise TooFewValuesError(expected=1, received='')
     try:
         second = next(iterator)
-        string_values = form_values_string((first, second), iterator)
-        raise TooManyValuesError(expected=1, received=string_values)
+        values_string = form_values_string((first, second), iterator)
+        raise TooManyValuesError(expected=1, received=values_string)
     except StopIteration:
         return first
 
@@ -174,7 +177,12 @@ def one_max(iterable):
     """
     if hasattr(iterable, '__len__'):
         if len(iterable) == 1:
-            return iterable
+            try:
+                return iterable[0]
+            except (TypeError, KeyError):  # sets, dicts, etc.
+                return next(iter(iterable))
+        elif not iterable:
+            return None
         iterator = iter(iterable)
     else:
         iterator = iterable
@@ -185,8 +193,8 @@ def one_max(iterable):
         return None
     try:
         second = next(iterator)
-        string_values = form_values_string((first, second), iterator)
-        raise TooManyValuesError(expected=1, received=string_values)
+        values_string = form_values_string((first, second), iterator)
+        raise TooManyValuesError(expected=1, received=values_string)
     except StopIteration:
         return first
 
