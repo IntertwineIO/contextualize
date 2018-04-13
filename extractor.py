@@ -46,6 +46,9 @@ class BaseExtractor:
     VALUE_TAG = 'value'
 
     REFERENCE_TEMPLATE = '<{}>'
+    LEFT_REFERENCE_TOKEN = REFERENCE_TEMPLATE[0]
+    RIGHT_REFERENCE_TOKEN = REFERENCE_TEMPLATE[-1]
+    REFERENCE_DELIMITER = '.'
 
     # TODO: Make Content a class/model
     CONTENT_FIELDS = [
@@ -414,8 +417,10 @@ class BaseExtractor:
         return find_method, find_by
 
     def _render_references(self, template):
-        while '<' in template and '>' in template:
-            reference = template.split('>')[0].split('<')[-1]
+        while (self.LEFT_REFERENCE_TOKEN in template and
+               self.RIGHT_REFERENCE_TOKEN in template):
+            reference = (template.split(self.RIGHT_REFERENCE_TOKEN)[0]
+                                 .split(self.LEFT_REFERENCE_TOKEN)[-1])
             if not reference:
                 return template
             reference_tag = self.REFERENCE_TEMPLATE.format(reference)
@@ -433,7 +438,7 @@ class BaseExtractor:
         return self._get_by_reference(reference)
 
     def _get_by_reference(self, reference):
-        components = reference.split('.')
+        components = reference.split(self.REFERENCE_DELIMITER)
         field_name = components[0]
         value = self.content[field_name]
         if value:
