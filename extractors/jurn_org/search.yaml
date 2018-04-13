@@ -18,7 +18,7 @@ content:
   source_url:
     attribute: href
   title:
-    attribute: text
+    getattr: text
   author_names:
   publication:
   # <ResearchSpecific>

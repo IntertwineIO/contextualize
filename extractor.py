@@ -79,7 +79,7 @@ class BaseExtractor:
                           'CLASS_NAME CSS_SELECTOR ID LINK_TEXT NAME '
                           'PARTIAL_LINK_TEXT TAG_NAME XPATH')
 
-    ExtractMethod = FlexEnum('ExtractMethod', 'ATTRIBUTE PROPERTY')
+    ExtractMethod = FlexEnum('ExtractMethod', 'GETATTR ATTRIBUTE PROPERTY')
     GetMethod = FlexEnum('GetMethod', 'GET')
     ParseMethod = FlexEnum('ParseMethod', 'PARSE STRPTIME')
     FormatMethod = FlexEnum('FormatMethod', 'FORMAT STRFTIME')
@@ -241,23 +241,25 @@ class BaseExtractor:
     @async_debug(offset=4)
     async def _extract_values(self, operation, elements):
         extracted_values = []
-        extract_method_name = f'get_{operation.extract_method.name.lower()}'
         args = (self._render_references(a) for a in operation.extract_args)
         field = one(args)
+        extract_method = operation.extract_method
 
-        for element in elements:
-            if field == self.TEXT_TAG:
+        if extract_method is self.ExtractMethod.GETATTR:
+            for element in elements:
                 func = partial(getattr, element)
                 future_value = self._execute_in_future(func, field)
                 value = await future_value
-                if value:
-                    extracted_values.append(value)
-                    continue
+                extracted_values.append(value)
 
-            func = getattr(element, extract_method_name)
-            future_value = self._execute_in_future(func, field)
-            value = await future_value
-            extracted_values.append(value)
+        elif (extract_method is self.ExtractMethod.ATTRIBUTE or
+              extract_method is self.ExtractMethod.PROPERTY):
+            extract_method_name = f'get_{extract_method.name.lower()}'
+            for element in elements:
+                func = getattr(element, extract_method_name)
+                future_value = self._execute_in_future(func, field)
+                value = await future_value
+                extracted_values.append(value)
 
         return extracted_values
 

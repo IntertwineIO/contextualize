@@ -28,7 +28,7 @@ content:
   issue_date:
     name: citation_date
     attribute: content
-    strptime: ['%B %d, %Y', '%B %Y']
+    strptime: ['%B %d, %Y', '%B %Y', '%Y']
   issue_date_granularity:
     get: '<issue_date.granularity.name>'
   first_page:
@@ -36,7 +36,7 @@ content:
     attribute: content
   last_page:
     class_name: cit
-    attribute: text
+    getattr: text
     parse: "{}(<issue>): <first_page>–{value}."
   doi:
     name: citation_doi
@@ -44,20 +44,19 @@ content:
     format: "https://doi.org/{value}"
   # </ResearchSpecific>
   published_timestamp:
-    class_name: al-pub-date
-    attribute: text
-    strptime: ['Published: %d %B %Y', 'Published: %B %Y']
+    class_name: fm-vol-iss-date
+    getattr: text
+    strptime:
+      - 'Published online %Y %b %d.'
+      - 'Published online %Y %b.'
+      - 'Published online %Y.'
   granularity_published:
     get: '<published_timestamp.granularity.name>'
-  tzinfo_published: UTC
-  publisher: Oxford University Press
+  tzinfo_published:
+  publisher:
+    name: DC.Publisher
+    attribute: content
   summary:
-    - class_name: widget-ArticleAbstract
-      click: True
-    - wait: 10  # All wait operations use absolute paths:
-      xpath: "(//div[contains(concat(' ', @class, ' '), ' abstract-response-placeholder ')])[{index}]/section |\
-              (//div[contains(concat(' ', @class, ' '), ' abstract-response-placeholder ')])[{index}]/p"
-    - scope: parent
-      class_name: abstract-response-placeholder
-      attribute: text
+    xpath: ".//div[contains(concat(' ', @class, ' '), ' tsec ')]/div[2]"
+    getattr: text
   full_text:

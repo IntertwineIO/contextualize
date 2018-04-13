@@ -26,25 +26,25 @@ content:
   author_names:
     is_multiple: True
     class_name: author-link
-    attribute: text
+    getattr: text
     join: '; '
   publication:
     # xpath: ".//div[contains(concat(' ', @class, ' '), ' al-authors-list ')]/\
     #         following-sibling::div/a"
     xpath: ".//div[contains(concat(' ', @class, ' '), ' al-citation-list ')]/span/em"
-    attribute: text
+    getattr: text
   # <ResearchSpecific>
   volume:
     class_name: al-citation-list
-    attribute: text
+    getattr: text
     parse: "{} Volume {value}, {}"
   issue:
     class_name: al-citation-list
-    attribute: text
+    getattr: text
     parse: "{} Issue {value}, {}"
   issue_date:
     - class_name: al-citation-list
-      attribute: text
+      getattr: text
       parse: '{} Issue {}, {value},{}'
     - strptime: ['%d %B %Y', '%B %Y']
   issue_date_granularity:
@@ -52,21 +52,21 @@ content:
   # 'The Journal of Nutrition, Volume 135, Issue 8, 1 August 2005, Pages 1926–1933, https://doi.org/10.1093/jn/135.8.1926'
   first_page:
     class_name: al-citation-list
-    attribute: text
+    getattr: text
     parse: "{} Pages {value}–{}"
   last_page:
     class_name: al-citation-list
-    attribute: text
+    getattr: text
     parse: "{} Pages {}–{value}, {}"
   doi:
     class_name: al-citation-list
-    attribute: text
+    getattr: text
     parse: "{}doi.org{value}"
     format: "https://doi.org{value}"
   # </ResearchSpecific>
   published_timestamp:
     class_name: al-pub-date
-    attribute: text
+    getattr: text
     strptime: ['Published: %d %B %Y', 'Published: %B %Y']
   granularity_published:
     get: '<published_timestamp.granularity.name>'
@@ -80,5 +80,5 @@ content:
               (//div[contains(concat(' ', @class, ' '), ' abstract-response-placeholder ')])[{index}]/p"
     - scope: parent
       class_name: abstract-response-placeholder
-      attribute: text
+      getattr: text
   full_text:

@@ -19,21 +19,21 @@ content:
     attribute: href
   title:
     class_name: title
-    attribute: text
+    getattr: text
   author_names:
     - class_name: desc
-      attribute: text
+      getattr: text
       split: ', '
     - is_multiple: True
       join: '; '
   publication:
     class_name: details
-    attribute: text
+    getattr: text
     parse: '{value}. {}; {}'
   # <ResearchSpecific>
   volume:
     class_name: details
-    attribute: text
+    getattr: text
     parse:
       - '{}Published in final edited form as: {}. {}; {value}({}):{}'
       - '{}Published in final edited form as: {}. {}; {value}({}).'
@@ -43,7 +43,7 @@ content:
       - '{}; {value}:{}'
   issue:
     class_name: details
-    attribute: text
+    getattr: text
     parse:
       - '{}Published in final edited form as: {}. {}; {}({value}):{}'
       - '{}Published in final edited form as: {}. {}; {}({value}).'
@@ -52,7 +52,7 @@ content:
       # - '{}; {}: {value}. {}'
   issue_date:
     - class_name: details
-      attribute: text
+      getattr: text
       # Violence Vict. Author manuscript; available in PMC 2013 Apr 18.\nPublished in final edited form as: Violence Vict. 2012; 27(5): 793–810.
       # Am J Public Health. 1995 Dec; 85(12): 1642–1649.
       parse:
@@ -64,7 +64,7 @@ content:
     get: '<issue_date.granularity.name>'
   first_page:
     class_name: details
-    attribute: text
+    getattr: text
     parse:
       - '{}Published in final edited form as: {}; {}({}): {value}–{}.'
       - '{}Published in final edited form as: {}; {}: {value}–{}.'
@@ -74,7 +74,7 @@ content:
       - '{}; {}: {value}.'
   last_page:
     class_name: details
-    attribute: text
+    getattr: text
     parse:
       - '{}Published in final edited form as: {}; {}({}): {}–{value}.'
       - '{}Published in final edited form as: {}; {}: {}–{value}.'
@@ -82,13 +82,13 @@ content:
       - '{}; {}: {}–{value}.'
   doi:
     class_name: details
-    attribute: text
+    getattr: text
     parse: '{}doi: {value}'
     format: "https://doi.org/{value}"
   # </ResearchSpecific>
   published_timestamp:
     - class_name: details
-      attribute: text
+      getattr: text
       parse:
         - '{}Published online {value}.{}'
         - '{}available in PMC {}.{}'
