@@ -91,7 +91,7 @@ content:
       getattr: text
       parse:
         - '{}Published online {value}.{}'
-        - '{}available in PMC {}.{}'
+        - '{}available in PMC {value}.{}'
         - '{}. {value};{}'
     - strptime: ['%Y %b %d', '%Y %b']
   granularity_published:
