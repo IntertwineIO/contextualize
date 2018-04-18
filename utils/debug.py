@@ -36,9 +36,9 @@ def async_debug(offset=None, indent=4):
             offset = sum(1 for f in frame_records
                          if f.function == 'async_debug_wrapper') - 1
 
+        offset_space = ' ' * offset * indent
         pp = PrettyPrinter(indent=indent, width=WIDTH)
         print(SEPARATOR)
-        offset_space = ' ' * offset * indent
         print(f'{offset_space}Awaiting {wrapped.__name__}')
         if instance is not None:
             format_text('instance', repr(instance), offset_space)
