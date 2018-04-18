@@ -51,12 +51,12 @@ def async_debug(offset=None, indent=4):
         format_text('start', str(start_time), offset_space)
         print(SEPARATOR)
 
+        true_start_time = loop.time()
         result = await wrapped(*args, **kwargs)
+        end_time = loop.time()
+        elapsed_time = end_time - true_start_time
 
         print(SEPARATOR)
-        end_time = loop.time()
-        elapsed = end_time - start_time
-
         print(f'{offset_space}Result returned from {wrapped.__name__}')
         if instance is not None:
             format_text('instance', repr(instance), offset_space)
