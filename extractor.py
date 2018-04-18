@@ -475,6 +475,7 @@ class BaseExtractor:
     def _derive_web_driver_kwargs(self, web_driver_type):
         if web_driver_type is self.WebDriverType.CHROME:
             chrome_options = webdriver.ChromeOptions()
+            chrome_options.add_argument('--headless')
             chrome_options.add_argument('--disable-extensions')
             return dict(chrome_options=chrome_options)
         elif web_driver_type is self.WebDriverType.FIREFOX:
