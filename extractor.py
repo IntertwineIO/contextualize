@@ -2,10 +2,12 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import os
+import random
 import urllib
 from collections import OrderedDict, namedtuple
 from datetime import datetime
 from functools import lru_cache, partial
+from pathlib import Path
 
 from parse import parse
 from pprint import PrettyPrinter
@@ -15,15 +17,19 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+from url_normalize import url_normalize
 
 from utils.async import run_in_executor
 from utils.debug import async_debug
 from utils.structures import FlexEnum
 from utils.time import flex_strptime
-from utils.tools import delist, enlist, multi_parse, one, one_max, one_min
+from utils.tools import (
+    delist, enlist, human_selection_shuffle, multi_parse, one, one_max, one_min
+)
 
 INDENT = 4
 WIDTH = 160
+PP = PrettyPrinter(indent=INDENT, width=WIDTH)
 
 
 class BaseExtractor:
@@ -57,6 +63,7 @@ class BaseExtractor:
         'first_page', 'last_page', 'doi',
         'published_timestamp', 'granularity_published', 'tzinfo_published',
         'publisher', 'summary', 'full_text']
+    SOURCE_URL_TAG = 'source_url'
 
     SearchComponent = FlexEnum('SearchComponent', 'PROBLEM ORG GEO')
 
@@ -103,7 +110,7 @@ class BaseExtractor:
     @async_debug()
     async def extract(self):
         if not self.is_enabled:
-            self.pp.pprint(dict(
+            PP.pprint(dict(
                 msg='Extractor disabled warning',
                 type='extractor_disabled_warning', extractor=repr(self)))
         try:
@@ -128,6 +135,7 @@ class BaseExtractor:
         future_page = self._execute_in_future(self.web_driver.get, self.page_url)
         await future_page
 
+    @async_debug(offset=1)
     async def _extract_page(self):
         raise NotImplementedError
 
@@ -137,11 +145,11 @@ class BaseExtractor:
             future_web_driver_quit = self._execute_in_future(self.web_driver.quit)
             await future_web_driver_quit
 
-    @async_debug(offset=2)
-    async def _extract_content(self, element, config, index):
+    @async_debug(offset=3)
+    async def _extract_content(self, element, config, index=1):
         self.content = content = OrderedDict()
         for field in self.CONTENT_FIELDS:
-            field_config = config[field]
+            field_config = config.get(field)
             # Allow field to be set by other field without overwriting
             if field_config is None and content.get(field):
                 continue
@@ -154,7 +162,7 @@ class BaseExtractor:
                     element, field_config, index)
             # e.g. NoSuchElementException
             except Exception as e:
-                self.pp.pprint(dict(
+                PP.pprint(dict(
                     msg='Extract field failure',
                     type='extract_field_failure',
                     error=str(e), field=field, content=content,
@@ -163,7 +171,7 @@ class BaseExtractor:
         self.content = None
         return content
 
-    @async_debug(offset=3)
+    @async_debug(offset=4)
     async def _perform_operation(self, target, config, index=1):
         if isinstance(config, list):
             latest = prior = parent = target
@@ -185,7 +193,7 @@ class BaseExtractor:
             else:
                 new_targets = enlist(target)
                 if operation.wait:
-                    self.loop.sleep(operation.wait)
+                    await asyncio.sleep(operation.wait)
 
             if operation.click:
                 await self._click_elements(new_targets)
@@ -209,7 +217,7 @@ class BaseExtractor:
 
             return delist(values)
 
-    @async_debug(offset=4)
+    @async_debug(offset=5)
     async def _find_elements(self, operation, element, index=1):
         self._validate_element(element)
         find_method, find_by = self._derive_find_method(operation, element)
@@ -229,7 +237,7 @@ class BaseExtractor:
         new_elements = await future_elements
         return enlist(new_elements)
 
-    @async_debug(offset=4)
+    @async_debug(offset=5)
     async def _click_elements(self, elements):
         """
         Click elements sequentially
@@ -241,7 +249,7 @@ class BaseExtractor:
             future_dom = self._execute_in_future(element.click)
             await future_dom
 
-    @async_debug(offset=4)
+    @async_debug(offset=5)
     async def _extract_values(self, operation, elements):
         extracted_values = []
         args = (self._render_references(a) for a in operation.extract_args)
@@ -266,7 +274,7 @@ class BaseExtractor:
 
         return extracted_values
 
-    @async_debug(offset=4)
+    @async_debug(offset=5)
     async def _get_values(self, operation, values):
         retrieved_values = []
         args = operation.get_args
@@ -278,7 +286,7 @@ class BaseExtractor:
 
         return retrieved_values
 
-    @async_debug(offset=4)
+    @async_debug(offset=5)
     async def _parse_values(self, operation, values):
         parsed_values = []
         args = (self._render_references(a) for a in operation.parse_args)
@@ -295,7 +303,7 @@ class BaseExtractor:
                     parsed_values.append(parsed.named[self.VALUE_TAG])
 
                 except (ValueError, AttributeError, KeyError) as e:
-                    self.pp.pprint(dict(
+                    PP.pprint(dict(
                         msg='Extractor parse failure',
                         type='extractor_parse_failure',
                         templates=templates, value=value, parsed=parsed,
@@ -312,7 +320,7 @@ class BaseExtractor:
 
         return parsed_values
 
-    @async_debug(offset=4)
+    @async_debug(offset=5)
     async def _format_values(self, operation, values):
         formatted_values = []
         args = (self._render_references(a) for a in operation.format_args)
@@ -337,7 +345,7 @@ class BaseExtractor:
 
         return formatted_values
 
-    @async_debug(offset=4)
+    @async_debug(offset=5)
     async def _transform_values(self, operation, values):
         transformed_values = []
         args = (self._render_references(a) for a in operation.transform_args)
@@ -461,9 +469,6 @@ class BaseExtractor:
         with open(file_path) as stream:
             return yaml.safe_load(stream)
 
-    def _form_page_url(self, configuration):
-        raise NotImplementedError
-
     def _derive_web_driver_class(self, web_driver_type):
         return getattr(webdriver, web_driver_type.name.capitalize())
 
@@ -482,14 +487,11 @@ class BaseExtractor:
     def __init__(self, directory, web_driver_type=None, loop=None):
         self.loop = loop or asyncio.get_event_loop()
         self.created_timestamp = self.loop.time()
-        self.pp = PrettyPrinter(indent=INDENT, width=WIDTH)
 
         self.directory = directory
         self.file_path = self._form_file_path(self.directory)
         self.configuration = self._marshall_configuration(self.file_path)
         self.is_enabled = self.configuration.get(self.IS_ENABLED_TAG, True)
-
-        self.page_url = self._form_page_url(self.configuration)
 
         self.web_driver_type = web_driver_type or self.DEFAULT_WEB_DRIVER_TYPE
         self.web_driver_class = self._derive_web_driver_class(self.web_driver_type)
@@ -503,47 +505,218 @@ class SourceExtractor(BaseExtractor):
 
     FILE_NAME = 'source.yaml'
 
+    HTTPS_TAG = 'https://'
+    HTTP_TAG = 'http://'
+    WWW_DOT_TAG = 'www.'
+    DOMAIN_DELIMITER = '.'
+    DIRECTORY_NAME_DELIMITER = '_'
+    PATH_DELIMITER = '/'
+    QUERY_STRING_DELIMITER = '?'
+
+    MINIMUM_WAIT = 1
+    MAXIMUM_WAIT = 3
+
+    @async_debug()
+    async def extract(self):
+        if self.initial_wait:
+            await asyncio.sleep(self.initial_wait)
+        return await super().extract()
+
+    @async_debug(1)
+    async def _extract_page(self):
+        content_config = self.configuration[self.CONTENT_TAG]
+        try:
+            content = await self._extract_content(self.web_driver, content_config)
+            if not content:
+                raise ValueError('No content extracted')
+
+        except Exception as e:
+            PP.pprint(dict(
+                msg='Extract content failure',
+                type='extract_content_failure', error=str(e),
+                extractor=repr(self), config=content_config))
+            raise
+        else:
+            content[self.SOURCE_URL_TAG] = self.page_url
+            return content
+
+    @classmethod
+    def provision_extractors(cls, urls=None):
+        """
+        Provision Extractors
+
+        Instantiate and yield source extractors for the given urls.
+
+        I/O:
+        urls=None:  List of url strings for source content
+        yield:      Fully configured search extractor instances
+        """
+        human_selection_shuffle(urls)
+        initial_wait = 0
+        for url in urls:
+            try:
+                initial_wait += random.uniform(cls.MINIMUM_WAIT, cls.MAXIMUM_WAIT)
+                extractor = cls(page_url=url, initial_wait=initial_wait)
+                if extractor.is_enabled:
+                    yield extractor
+            # FileNotFoundError, ruamel.yaml.scanner.ScannerError, ValueError
+            except Exception as e:
+                print(e)  # TODO: Replace with logging
+
+    def _derive_directory(self, page_url):
+        clipped_url = self._clip_url(page_url)
+        url_path = clipped_url.split(self.PATH_DELIMITER)
+        base_url = url_path[0]
+        base_url_directory = base_url.replace(self.DOMAIN_DELIMITER,
+                                              self.DIRECTORY_NAME_DELIMITER)
+        path_components = [base_url_directory] + url_path[1:]
+        num_components = deepest_index = len(path_components)
+
+        # Find deepest directory
+        for i in range(num_components):
+            sub_directory = self.PATH_DELIMITER.join(path_components[:i + 1])
+            path = os.path.join(self.FILE_PATH_BASE, sub_directory)
+            if not Path(path).is_dir():
+                deepest_index = i
+                break
+
+        # Look for source configuration directory, starting with deepest
+        for i in range(deepest_index, 0, -1):
+            sub_directory = self.PATH_DELIMITER.join(path_components[:i])
+            path = os.path.join(self.FILE_PATH_BASE, sub_directory, self.FILE_NAME)
+            if Path(path).is_file():
+                return sub_directory
+
+        raise FileNotFoundError(f'Source extractor configuration not found for {page_url}')
+
+    def _clip_url(self, url):
+        start = 0
+        if url.startswith(self.HTTPS_TAG):
+            start = len(self.HTTPS_TAG)
+        elif url.startswith(self.HTTP_TAG):
+            start = len(self.HTTP_TAG)
+        www_index = url.find(self.WWW_DOT_TAG)
+        if www_index == start:
+            start += len(self.WWW_DOT_TAG)
+        query_index = url.find(self.QUERY_STRING_DELIMITER)
+        end = query_index if query_index > -1 else len(url)
+        if url[end - 1] == self.PATH_DELIMITER:
+            end -= 1
+        clipped_url = url[start:end]
+        return clipped_url
+
+    def __init__(self, page_url, initial_wait=0, web_driver_type=None, loop=None):
+        self.page_url = url_normalize(page_url)
+        self.initial_wait = initial_wait
+        directory = self._derive_directory(self.page_url)
+        super().__init__(directory, web_driver_type, loop)
+
 
 class SearchExtractor(BaseExtractor):
 
     FILE_NAME = 'search.yaml'
 
+    @async_debug(offset=1)
     async def _extract_page(self):
         search_results = await self._extract_search_results()
         return search_results
 
-    @async_debug(offset=1)
+    @async_debug(offset=2)
     async def _extract_search_results(self):
         content_config = self.configuration[self.CONTENT_TAG]
         search_results_config = content_config[self.SEARCH_RESULTS_TAG]
+        self.search_results = OrderedDict()
 
-        elements = await self._perform_operation(self.web_driver,
-                                                 search_results_config)
-
-        self.search_results = []
+        elements = await self._perform_operation(self.web_driver, search_results_config)
 
         if elements is not None:
             for index, element in enumerate(elements, start=1):
                 try:
-                    content = await self._extract_content(element,
-                                                          content_config,
-                                                          index)
+                    content = await self._extract_content(element, content_config, index)
                     if not content:
                         raise ValueError('No content extracted')
-                    self.search_results.append(content)
+                    source_url = content.get(self.SOURCE_URL_TAG)
+                    if not source_url:
+                        raise ValueError('Content missing source URL')
+                    self.search_results[source_url] = content
 
                 except Exception as e:
-                    self.pp.pprint(dict(
+                    PP.pprint(dict(
                         msg='Extract content failure',
                         type='extract_content_failure', error=str(e),
                         extractor=repr(self), config=content_config))
+
         else:
-            self.pp.pprint(dict(
+            PP.pprint(dict(
                 msg='Extract search results failure',
                 type='extract_search_results_failure',
                 extractor=repr(self), config=search_results_config))
 
+        # TODO: Store preliminary results in memcache
+        source_results = await self._extract_sources(self.search_results)
+        await self._combine_results(self.search_results, source_results)
         return self.search_results
+
+    @async_debug(offset=3)
+    async def _extract_sources(self, search_results):
+        source_urls = [content[self.SOURCE_URL_TAG] for content in search_results.values()]
+        source_extractors = SourceExtractor.provision_extractors(source_urls)
+        futures = {extractor.extract() for extractor in source_extractors}
+        done, pending = await asyncio.wait(futures)
+        source_results = [task.result() for task in done]
+        return source_results
+
+    @async_debug(offset=3)
+    async def _combine_results(self, search_results, source_results):
+        for source_content in source_results:
+            source_url = source_content[self.SOURCE_URL_TAG]
+            search_content = search_results[source_url]
+            for field, source_value in source_content.items():
+                search_value = search_content.get(field)
+                if source_value is not None:
+                    if search_value is not None and search_value != source_value:
+                        PP.pprint(dict(
+                            msg='Overwriting search content with source content',
+                            type='overwriting_search_content_with_source_content',
+                            extractor=repr(self), field=field,
+                            search_value=search_value, source_value=source_value))
+
+                    search_content[field] = source_value
+
+    @classmethod
+    def provision_extractors(cls, problem_name=None, org_name=None, geo_name=None):
+        """
+        Provision Extractors
+
+        Instantiate and yield all search extractors configured with the
+        given problem name, org name, and geo name.
+
+        I/O:
+        problem_name=None:  Name of problem to be used as search term
+        org_name=None:      Name of organization to be used as search term
+        geo_name=None:      Name of geo to be used as search term
+        yield:              Fully configured search extractor instances
+        """
+        dir_nodes = os.walk(cls.FILE_PATH_BASE)
+        search_directories = (cls._debase_directory(dn[0]) for dn in dir_nodes
+                              if cls.FILE_NAME in dn[2])
+
+        for directory in search_directories:
+            try:
+                extractor = cls(directory, problem_name, org_name, geo_name)
+                if extractor.is_enabled:
+                    yield extractor
+            # FileNotFoundError, ruamel.yaml.scanner.ScannerError, ValueError
+            except Exception as e:
+                print(e)  # TODO: Replace with logging
+
+    @classmethod
+    def _debase_directory(cls, directory_path):
+        base = f'{cls.FILE_PATH_BASE}/'
+        if not directory_path.startswith(base):
+            raise ValueError(f"'{directory_path}' must start with '{base}'")
+        directory = directory_path.replace(base, '', 1)
+        return directory
 
     def _form_page_url(self, configuration):
         problem_name = self.problem_name
@@ -595,6 +768,7 @@ class SearchExtractor(BaseExtractor):
         self.org_name = org_name
         self.geo_name = geo_name
 
-        self.search_results = None  # Store results after extraction
-
         super().__init__(directory, web_driver_type, loop)
+
+        self.page_url = self._form_page_url(self.configuration)
+        self.search_results = None  # Store results after extraction
