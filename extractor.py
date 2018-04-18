@@ -120,7 +120,7 @@ class BaseExtractor:
         finally:
             await self._dispose_web_driver()
 
-    @async_debug(offset=1)
+    @async_debug()
     async def _provision_web_driver(self):
         # TODO: retrieve from web driver pool
         future_web_driver = self._execute_in_future(self.web_driver_class,
@@ -130,22 +130,22 @@ class BaseExtractor:
         # Configure web driver to allow waiting on each operation
         self.web_driver.implicitly_wait(max_wait)
 
-    @async_debug(offset=1)
+    @async_debug()
     async def _fetch_page(self):
         future_page = self._execute_in_future(self.web_driver.get, self.page_url)
         await future_page
 
-    @async_debug(offset=1)
+    @async_debug()
     async def _extract_page(self):
         raise NotImplementedError
 
-    @async_debug(offset=1)
+    @async_debug()
     async def _dispose_web_driver(self):
         if self.web_driver:
             future_web_driver_quit = self._execute_in_future(self.web_driver.quit)
             await future_web_driver_quit
 
-    @async_debug(offset=3)
+    @async_debug()
     async def _extract_content(self, element, config, index=1):
         self.content = content = OrderedDict()
         for field in self.CONTENT_FIELDS:
@@ -171,7 +171,7 @@ class BaseExtractor:
         self.content = None
         return content
 
-    @async_debug(offset=4)
+    @async_debug()
     async def _perform_operation(self, target, config, index=1):
         if isinstance(config, list):
             latest = prior = parent = target
@@ -217,7 +217,7 @@ class BaseExtractor:
 
             return delist(values)
 
-    @async_debug(offset=5)
+    @async_debug()
     async def _find_elements(self, operation, element, index=1):
         self._validate_element(element)
         find_method, find_by = self._derive_find_method(operation, element)
@@ -237,7 +237,7 @@ class BaseExtractor:
         new_elements = await future_elements
         return enlist(new_elements)
 
-    @async_debug(offset=5)
+    @async_debug()
     async def _click_elements(self, elements):
         """
         Click elements sequentially
@@ -249,7 +249,7 @@ class BaseExtractor:
             future_dom = self._execute_in_future(element.click)
             await future_dom
 
-    @async_debug(offset=5)
+    @async_debug()
     async def _extract_values(self, operation, elements):
         extracted_values = []
         args = (self._render_references(a) for a in operation.extract_args)
@@ -274,7 +274,7 @@ class BaseExtractor:
 
         return extracted_values
 
-    @async_debug(offset=5)
+    @async_debug()
     async def _get_values(self, operation, values):
         retrieved_values = []
         args = operation.get_args
@@ -286,7 +286,7 @@ class BaseExtractor:
 
         return retrieved_values
 
-    @async_debug(offset=5)
+    @async_debug()
     async def _parse_values(self, operation, values):
         parsed_values = []
         args = (self._render_references(a) for a in operation.parse_args)
@@ -320,7 +320,7 @@ class BaseExtractor:
 
         return parsed_values
 
-    @async_debug(offset=5)
+    @async_debug()
     async def _format_values(self, operation, values):
         formatted_values = []
         args = (self._render_references(a) for a in operation.format_args)
@@ -345,7 +345,7 @@ class BaseExtractor:
 
         return formatted_values
 
-    @async_debug(offset=5)
+    @async_debug()
     async def _transform_values(self, operation, values):
         transformed_values = []
         args = (self._render_references(a) for a in operation.transform_args)
@@ -522,7 +522,7 @@ class SourceExtractor(BaseExtractor):
             await asyncio.sleep(self.initial_wait)
         return await super().extract()
 
-    @async_debug(1)
+    @async_debug()
     async def _extract_page(self):
         content_config = self.configuration[self.CONTENT_TAG]
         try:
@@ -616,12 +616,12 @@ class SearchExtractor(BaseExtractor):
 
     FILE_NAME = 'search.yaml'
 
-    @async_debug(offset=1)
+    @async_debug()
     async def _extract_page(self):
         search_results = await self._extract_search_results()
         return search_results
 
-    @async_debug(offset=2)
+    @async_debug()
     async def _extract_search_results(self):
         content_config = self.configuration[self.CONTENT_TAG]
         search_results_config = content_config[self.SEARCH_RESULTS_TAG]
@@ -657,16 +657,18 @@ class SearchExtractor(BaseExtractor):
         await self._combine_results(self.search_results, source_results)
         return self.search_results
 
-    @async_debug(offset=3)
+    @async_debug()
     async def _extract_sources(self, search_results):
         source_urls = [content[self.SOURCE_URL_TAG] for content in search_results.values()]
         source_extractors = SourceExtractor.provision_extractors(source_urls)
         futures = {extractor.extract() for extractor in source_extractors}
+        if not futures:
+            return []
         done, pending = await asyncio.wait(futures)
         source_results = [task.result() for task in done]
         return source_results
 
-    @async_debug(offset=3)
+    @async_debug()
     async def _combine_results(self, search_results, source_results):
         for source_content in source_results:
             source_url = source_content[self.SOURCE_URL_TAG]

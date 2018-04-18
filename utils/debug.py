@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import asyncio
+import inspect
 
 import wrapt
 from pprint import PrettyPrinter
@@ -25,9 +26,16 @@ def format_text(label, text, offset_space):
         print(f'{offset_space}{label}: {text}')
 
 
-def async_debug(offset=0, indent=4):
+def async_debug(offset=None, indent=4):
+
     @wrapt.decorator
-    async def wrapper(wrapped, instance, args, kwargs):
+    async def async_debug_wrapper(wrapped, instance, args, kwargs):
+        nonlocal offset
+        if offset is None:
+            frame_records = inspect.stack()
+            offset = sum(1 for f in frame_records
+                         if f.function == 'async_debug_wrapper') - 1
+
         pp = PrettyPrinter(indent=indent, width=WIDTH)
         print(SEPARATOR)
         offset_space = ' ' * offset * indent
@@ -62,4 +70,5 @@ def async_debug(offset=0, indent=4):
         print(SEPARATOR)
 
         return result
-    return wrapper
+
+    return async_debug_wrapper
