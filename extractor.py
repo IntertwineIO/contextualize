@@ -459,6 +459,7 @@ class BaseExtractor:
             raise TypeError(f'Expected driver or element. Received: {value}')
 
     def _execute_in_future(self, func, *args, **kwds):
+        """Run in executor with kwds support & default loop/executor"""
         return run_in_executor(self.loop, None, func, *args, **kwds)
 
     def _form_file_path(self, directory):

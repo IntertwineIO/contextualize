@@ -12,6 +12,7 @@ SEPARATOR = DELIMITER * WIDTH
 
 
 def offset_text(text, offset_space):
+    """Offset text by given space with proper newline handling"""
     lines = text.split('\n')
     offset_lines = (offset_space + line for line in lines)
     offset_text = '\n'.join(offset_lines)
@@ -19,6 +20,7 @@ def offset_text(text, offset_space):
 
 
 def format_text(label, text, offset_space):
+    """Format text with given label and space with newline handling"""
     if '\n' in text:
         print(f'{offset_space}{label}:')
         print(f'{offset_text(text, offset_space)}')
@@ -27,7 +29,25 @@ def format_text(label, text, offset_space):
 
 
 def async_debug(offset=None, indent=4):
+    """
+    Async Debug
 
+    Decorator for async functions/methods to provide debugging info:
+    - Upon await: args/kwargs, instance repr (if method), & start time
+    - Upon return: args/kwargs, instance repr (if method), return value,
+      & end/elapsed time (args/kwargs/instance are repeated since the
+      return message can be far removed from the await message)
+    - Each message is offset based on the degree to which the function
+      is awaited by other functions also decorated by Async Debug
+    - Horizontal separators visually delineate each message
+
+    I/O:
+    offset=None:    By default, offset increases automatically with each
+                    level of decorated async call, but this parameter
+                    allows it to be overridden
+    indent=4:       Integer specifying the number of spaces to be used
+                    for each level of offset
+    """
     @wrapt.decorator
     async def async_debug_wrapper(wrapped, instance, args, kwargs):
         nonlocal offset
