@@ -478,6 +478,7 @@ class BaseExtractor:
             chrome_options = webdriver.ChromeOptions()
             chrome_options.add_argument('--headless')
             chrome_options.add_argument('--disable-extensions')
+            chrome_options.add_argument('--disable-infobars')
             return dict(chrome_options=chrome_options)
         elif web_driver_type is self.WebDriverType.FIREFOX:
             raise NotImplementedError('Firefox not yet supported')
