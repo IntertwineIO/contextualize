@@ -5,6 +5,7 @@ import math
 import random
 from functools import lru_cache
 from itertools import islice
+from pprint import PrettyPrinter
 
 from parse import parse
 
@@ -13,16 +14,11 @@ from exceptions import TooFewValuesError, TooManyValuesError
 VALUE_DELIMITER = ', '
 MORE_VALUES = '...'
 
-# https://searchenginewatch.com/sew/study/2276184/no-1-position-in-google-gets-33-of-search-traffic-study
-FIRST_SELECTION_PROBABILITY = 0.325
-# Cumulative exponential distribution:
-#      F = 1 - exp(- lambda * x)
-# lambda = - log(1 - F) / x
-#        = - log(1 - 0.325) / 1 = 0.393
-HUMAN_SELECTION_LAMBDA = 0.393
+INDENT = 4
+WIDTH = 160
+PP = PrettyPrinter(indent=INDENT, width=WIDTH)
 
 SELF_REFERENTIAL_PARAMS = {'self', 'cls', 'meta'}
-
 
 def derive_args(func):
     args = inspect.getfullargspec(func).args
@@ -106,6 +102,14 @@ def form_values_string(values, iterator=None):
 
     return values_string
 
+
+# https://searchenginewatch.com/sew/study/2276184/no-1-position-in-google-gets-33-of-search-traffic-study
+FIRST_SELECTION_PROBABILITY = 0.325
+# Cumulative exponential distribution:
+#      F = 1 - exp(- lambda * x)
+# lambda = - log(1 - F) / x
+#        = - log(1 - 0.325) / 1 = 0.393
+HUMAN_SELECTION_LAMBDA = 0.393
 
 def random_exponential_index(lambd=1, length=None, attempts=10):
     """

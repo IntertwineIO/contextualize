@@ -25,12 +25,9 @@ from utils.debug import async_debug
 from utils.structures import FlexEnum
 from utils.time import flex_strptime
 from utils.tools import (
-    delist, enlist, human_selection_shuffle, multi_parse, one, one_max, one_min
+    PP, delist, enlist, human_selection_shuffle, multi_parse,
+    one, one_max, one_min
 )
-
-INDENT = 4
-WIDTH = 160
-PP = PrettyPrinter(indent=INDENT, width=WIDTH)
 
 
 class BaseExtractor:
