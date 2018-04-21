@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import inspect
 import math
 import random
 from functools import lru_cache
@@ -19,6 +20,15 @@ FIRST_SELECTION_PROBABILITY = 0.325
 # lambda = - log(1 - F) / x
 #        = - log(1 - 0.325) / 1 = 0.393
 HUMAN_SELECTION_LAMBDA = 0.393
+
+SELF_REFERENTIAL_PARAMS = {'self', 'cls', 'meta'}
+
+
+def derive_args(func):
+    args = inspect.getfullargspec(func).args
+    if args and args[0] in SELF_REFERENTIAL_PARAMS:
+        del args[0]
+    return args
 
 
 def delist(obj):

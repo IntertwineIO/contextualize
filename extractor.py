@@ -19,6 +19,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from url_normalize import url_normalize
 
+from secret_service.agency import SecretService
 from utils.async import run_in_executor
 from utils.debug import async_debug
 from utils.structures import FlexEnum
@@ -474,11 +475,14 @@ class BaseExtractor:
         return getattr(webdriver, web_driver_type.name.capitalize())
 
     def _derive_web_driver_kwargs(self, web_driver_type):
+        secret_service = SecretService(web_driver_type.name)
+        user_agent = secret_service.random
         if web_driver_type is self.WebDriverType.CHROME:
             chrome_options = webdriver.ChromeOptions()
             chrome_options.add_argument('--headless')
             chrome_options.add_argument('--disable-extensions')
             chrome_options.add_argument('--disable-infobars')
+            chrome_options.add_argument(f'user-agent={user_agent}')
             return dict(chrome_options=chrome_options)
         elif web_driver_type is self.WebDriverType.FIREFOX:
             raise NotImplementedError('Firefox not yet supported')

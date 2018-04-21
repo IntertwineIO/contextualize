@@ -7,10 +7,21 @@ from functools import lru_cache
 
 class FlexEnum(Enum):
     """
-    FlexEnum, the flexible enum class
+    FlexEnum, the flexible Enum
 
-
+    Enum with helpful cast, accessor, and transformation methods.
     """
+    @classmethod
+    def cast(cls, value):
+        """Cast value to cls"""
+        if value in cls:
+            return value
+        if isinstance(value, int):
+            return cls(value)
+        try:
+            return cls[value.upper()]
+        except (AttributeError, KeyError):
+            return cls(value)
 
     @classmethod
     def names(cls, transform=None):
@@ -20,9 +31,11 @@ class FlexEnum(Enum):
         return (en.name for en in cls)
 
     @classmethod
-    def values(cls):
-        """Generator of enum values"""
-        return (en.value for en in cls)
+    def values(cls, transform=None):
+        """Generator of enum values, transformed if function provided"""
+        if transform:
+            return (transform(en.value) for en in cls)
+        return (en.values for en in cls)
 
     @classmethod
     def items(cls, transform=None, labels=False, inverse=False):
@@ -60,16 +73,17 @@ class FlexEnum(Enum):
 
     @classmethod
     @lru_cache(maxsize=None)
-    def map(cls, transform=None, inverse=False):
+    def map(cls, transform=None, labels=False, inverse=False):
         """
         Ordered enum name/value map
 
         I/O
-        transform=None: function to be applied to each name
-        inverse=False: if True, names and values are swapped
+        transform=None: function to be applied to each primary enum name
+        labels=False: if True, values replaced with secondary enum names
+        inverse=False: if True, values (or secondary names) then names
         return: OrderedDict of enum name/value pairs
         """
-        return OrderedDict(cls.items(transform, labels=False, inverse=inverse))
+        return OrderedDict(cls.items(transform, labels=labels, inverse=inverse))
 
     @classmethod
     @lru_cache(maxsize=None)
@@ -105,5 +119,5 @@ class InfinIterator:
         return value
 
     def __init__(self, iterable):
-        self.values = iterable if hasattr(iterable, '__len__') else list(iterable)
+        self.values = iterable if isinstance(iterable, (list, tuple)) else list(iterable)
         self.index = 0
