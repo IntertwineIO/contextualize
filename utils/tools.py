@@ -70,14 +70,13 @@ def multi_parse(templates, string):
     string:     string to be parsed
     return:     first successful parse result
     """
-    num_templates = len(templates)
-    for i, template in enumerate(templates, start=1):
+    for template in templates:
         parsed = parse(template, string)
         if parsed:
             return parsed
-        if i == num_templates:
-            raise ValueError(
-                f"'{string}' does not match any template: {templates}")
+
+    raise ValueError(
+        f"'{string}' does not match any template: {templates}")
 
 
 def form_range_string(minimum, maximum):
