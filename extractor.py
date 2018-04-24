@@ -41,7 +41,7 @@ class BaseExtractor:
     CONTENT_TAG = 'content'
     PAGE_URL_TAG = 'page_url'
     CLAUSE_DELIMITER_TAG = 'clause_delimiter'
-    SEARCH_RESULTS_TAG = 'search_results'
+    ITEMS_TAG = 'items'
 
     ELEMENT_TAG = 'element'
     ELEMENTS_TAG = 'elements'
@@ -553,7 +553,7 @@ class SourceExtractor(BaseExtractor):
 
         I/O:
         urls=None:  List of url strings for source content
-        yield:      Fully configured search extractor instances
+        yield:      Fully configured source extractor instances
         """
         human_selection_shuffle(urls)
         initial_wait = 0
@@ -616,22 +616,21 @@ class SourceExtractor(BaseExtractor):
         super().__init__(directory, web_driver_type, loop)
 
 
-class SearchExtractor(BaseExtractor):
+class MultiExtractor(BaseExtractor):
 
-    FILE_NAME = 'search.yaml'
+    FILE_NAME = 'multi.yaml'
 
     @async_debug()
     async def _extract_page(self):
-        search_results = await self._extract_search_results()
-        return search_results
+        return await self._extract_multiple()
 
     @async_debug()
-    async def _extract_search_results(self):
+    async def _extract_multiple(self):
         content_config = self.configuration[self.CONTENT_TAG]
-        search_results_config = content_config[self.SEARCH_RESULTS_TAG]
-        self.search_results = OrderedDict()
+        items_config = content_config[self.ITEMS_TAG]
+        self.item_results = OrderedDict()
 
-        elements = await self._perform_operation(self.web_driver, search_results_config)
+        elements = await self._perform_operation(self.web_driver, items_config)
 
         if elements is not None:
             for index, element in enumerate(elements, start=1):
@@ -642,7 +641,7 @@ class SearchExtractor(BaseExtractor):
                     source_url = content.get(self.SOURCE_URL_TAG)
                     if not source_url:
                         raise ValueError('Content missing source URL')
-                    self.search_results[source_url] = content
+                    self.item_results[source_url] = content
 
                 except Exception as e:
                     PP.pprint(dict(
@@ -652,18 +651,18 @@ class SearchExtractor(BaseExtractor):
 
         else:
             PP.pprint(dict(
-                msg='Extract search results failure',
-                type='extract_search_results_failure',
-                extractor=repr(self), config=search_results_config))
+                msg='Extract item results failure',
+                type='extract_item_results_failure',
+                extractor=repr(self), config=items_config))
 
-        # TODO: Store preliminary results in memcache
-        source_results = await self._extract_sources(self.search_results)
-        await self._combine_results(self.search_results, source_results)
-        return self.search_results
+        # TODO: Store preliminary results in redis
+        source_results = await self._extract_sources(self.item_results)
+        await self._combine_results(self.item_results, source_results)
+        return self.item_results
 
     @async_debug()
-    async def _extract_sources(self, search_results):
-        source_urls = [content[self.SOURCE_URL_TAG] for content in search_results.values()]
+    async def _extract_sources(self, item_results):
+        source_urls = [content[self.SOURCE_URL_TAG] for content in item_results.values()]
         source_extractors = SourceExtractor.provision_extractors(source_urls)
         futures = {extractor.extract() for extractor in source_extractors}
         if not futures:
@@ -673,28 +672,28 @@ class SearchExtractor(BaseExtractor):
         return source_results
 
     @async_debug()
-    async def _combine_results(self, search_results, source_results):
-        for source_content in source_results:
-            source_url = source_content[self.SOURCE_URL_TAG]
-            search_content = search_results[source_url]
-            for field, source_value in source_content.items():
-                search_value = search_content.get(field)
-                if source_value is not None:
-                    if search_value is not None and search_value != source_value:
-                        PP.pprint(dict(
-                            msg='Overwriting search content with source content',
-                            type='overwriting_search_content_with_source_content',
-                            extractor=repr(self), field=field,
-                            search_value=search_value, source_value=source_value))
+    async def _combine_results(self, item_results, source_results):
+        for source_result in source_results:
+            source_url = source_result[self.SOURCE_URL_TAG]
+            item_result = item_results[source_url]
+            source_overrides = ((k, v) for k, v in source_result.items() if v is not None)
+            for field, source_value in source_overrides:
+                item_value = item_result.get(field)
+                if item_value is not None and item_value != source_value:
+                    PP.pprint(dict(
+                        msg='Overwriting item value from source',
+                        type='overwriting_item_value_from_source',
+                        extractor=repr(self), field=field,
+                        item_value=item_value, source_value=source_value))
 
-                    search_content[field] = source_value
+                item_result[field] = source_value
 
     @classmethod
     def provision_extractors(cls, problem_name=None, org_name=None, geo_name=None):
         """
         Provision Extractors
 
-        Instantiate and yield all search extractors configured with the
+        Instantiate and yield all multi extractors configured with the
         given problem name, org name, and geo name.
 
         I/O:
@@ -704,10 +703,10 @@ class SearchExtractor(BaseExtractor):
         yield:              Fully configured search extractor instances
         """
         dir_nodes = os.walk(cls.FILE_PATH_BASE)
-        search_directories = (cls._debase_directory(dn[0]) for dn in dir_nodes
-                              if cls.FILE_NAME in dn[2])
+        multi_directories = (cls._debase_directory(dn[0]) for dn in dir_nodes
+                             if cls.FILE_NAME in dn[2])
 
-        for directory in search_directories:
+        for directory in multi_directories:
             try:
                 extractor = cls(directory, problem_name, org_name, geo_name)
                 if extractor.is_enabled:
@@ -734,14 +733,14 @@ class SearchExtractor(BaseExtractor):
         clause_count = 0
 
         local_dict = locals()
-        search_terms = ((component, local_dict[f'{component}_name'])
-                        for component in self.SearchComponent.names(str.lower))
+        terms = ((component, local_dict[f'{component}_name'])
+                 for component in self.SearchComponent.names(str.lower))
 
-        for index, (component, search_term) in enumerate(search_terms, start=1):
+        for index, (component, term) in enumerate(terms, start=1):
             clause_tag = f'{component}_clause'
             clause_template = self.configuration.get(clause_tag)
             rendered_clause = self._form_url_clause(
-                clause_template, component, search_term, index)
+                clause_template, component, term, index)
             if rendered_clause:
                 if clause_delimiter and clause_count:
                     rendered_clause = f'{clause_delimiter}{rendered_clause}'
@@ -753,10 +752,10 @@ class SearchExtractor(BaseExtractor):
 
         return page_url
 
-    def _form_url_clause(self, clause_template, component, search_term, index):
-        if not clause_template or not search_term:
+    def _form_url_clause(self, clause_template, component, term, index):
+        if not clause_template or not term:
             return ''
-        encoded_term = urllib.parse.quote(search_term)
+        encoded_term = urllib.parse.quote(term)
         return (clause_template.replace(f'{{{component}}}', encoded_term)
                                .replace(f'{{{self.INDEX_TAG}}}', str(index)))
 
@@ -777,4 +776,4 @@ class SearchExtractor(BaseExtractor):
         super().__init__(directory, web_driver_type, loop)
 
         self.page_url = self._form_page_url(self.configuration)
-        self.search_results = None  # Store results after extraction
+        self.item_results = None  # Store results after extraction

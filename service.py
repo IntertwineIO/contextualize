@@ -2,14 +2,14 @@
 # -*- coding: utf-8 -*-
 import asyncio
 
-from extractor import SearchExtractor
+from extractor import MultiExtractor
 from utils.tools import PP
 
 
 class Service:
 
     def contextualize(self):
-        extractors = SearchExtractor.provision_extractors(
+        extractors = MultiExtractor.provision_extractors(
             self.problem_name, self.org_name, self.geo_name)
         futures = {extractor.extract() for extractor in extractors}
         done, pending = self.loop.run_until_complete(asyncio.wait(futures))

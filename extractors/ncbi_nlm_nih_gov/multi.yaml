@@ -1,7 +1,7 @@
 %YAML 1.2
 ---
 is_enabled: True
-page_type: SEARCH
+page_type: MULTI
 # https://www.ncbi.nlm.nih.gov/pmc/?term=(Homelessness%5BTitle%5D)+AND+Texas%5BText+Word%5D
 page_url: "https://www.ncbi.nlm.nih.gov/pmc/?term={problem_clause}{org_clause}{geo_clause}"
 problem_clause: '({problem}%5BTitle%5D)'
@@ -11,7 +11,7 @@ clause_delimiter: '+AND+'
 wait: 10
 
 content:
-  search_results:
+  items:
     is_multiple: True
     class_name: rprt
   source_url:
