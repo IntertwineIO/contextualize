@@ -6,36 +6,15 @@ import random
 from collections import OrderedDict
 from functools import lru_cache
 
+from utils.mixins import FieldMixin
 from utils.structures import FlexEnum
-from utils.tools import derive_args
 
 
 Browser = FlexEnum('Browser', 'CHROME FIREFOX')
 
 
-class SecretAgent:
+class SecretAgent(FieldMixin):
     """SecretAgent, a user agent class"""
-    _FIELDS = None
-
-    @classmethod
-    def fields(cls):
-        if cls._FIELDS is not None:
-            return cls._FIELDS
-        cls._FIELDS = derive_args(cls.__init__)
-        return cls._FIELDS
-
-    def items(self):
-        return ((f, getattr(self, f)) for f in self.fields())
-
-    def values(self):
-        return (getattr(self, f) for f in self.fields())
-
-    def quoted_values(self):
-        return (f"'{v}'" for v in self.values())
-
-    def __repr__(self):
-        arg_string = ', '.join(self.quoted_values())
-        return f'{self.__class__.__name__}({arg_string})'
 
     def __str__(self):
         return self.user_agent
@@ -43,7 +22,7 @@ class SecretAgent:
     def __init__(self, user_agent=None, browser=None, browser_version=None,
                  operating_system=None, hardware_type=None, popularity=None,
                  *args, **kwds):
-        super().__init__()
+        super().__init__(*args, **kwds)
         self.user_agent = user_agent
         self.browser = browser
         self.browser_version = browser_version

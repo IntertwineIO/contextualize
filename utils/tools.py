@@ -27,6 +27,18 @@ def derive_args(func):
     return args
 
 
+def _derive_attribute_from_code(line):
+    parsed = parse('{}self.{value} = {}', line)
+    if parsed:
+        return parsed.named['value']
+
+
+def derive_attributes(init):
+    lines = inspect.getsource(init).split('\n')
+    parsed = (_derive_attribute_from_code(line) for line in lines)
+    return (value for value in parsed if value is not None)
+
+
 def delist(obj):
     """
     Delist
