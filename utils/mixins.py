@@ -27,3 +27,10 @@ class FieldMixin:
     def __repr__(self):
         arg_string = ', '.join(self.quoted_values())
         return f'{self.__class__.__name__}({arg_string})'
+
+
+class Extractable(FieldMixin):
+    """Extractable mixin to allow class to be extracted from websites"""
+    def __init__(self, source_url=None, *args, **kwds):
+        super().__init__(*args, **kwds)
+        self.source_url = source_url
