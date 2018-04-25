@@ -3,8 +3,9 @@
 import inspect
 import math
 import random
+from collections import OrderedDict
 from functools import lru_cache
-from itertools import islice
+from itertools import chain, islice
 from pprint import PrettyPrinter
 
 from parse import parse
@@ -21,22 +22,52 @@ PP = PrettyPrinter(indent=INDENT, width=WIDTH)
 SELF_REFERENTIAL_PARAMS = {'self', 'cls', 'meta'}
 
 def derive_args(func):
+    """Derive args from the given function"""
     args = inspect.getfullargspec(func).args
     if args and args[0] in SELF_REFERENTIAL_PARAMS:
         del args[0]
     return args
 
 
-def _derive_attribute_from_code(line):
-    parsed = parse('{}self.{value} = {}', line)
-    if parsed:
-        return parsed.named['value']
+def derive_attributes(cls, _mro=None):
+    """
+    Derive attributes
 
+    Given a class, derive all instance attributes the class declares or
+    inherits by inspecting __init__ methods. Attributes are listed
+    by initial declaration order, taking into account super calls.
+    """
+    mro = cls.mro() if _mro is None else _mro
+    len_mro = len(mro)
+    attributes = OrderedDict()
 
-def derive_attributes(init):
-    lines = inspect.getsource(init).split('\n')
-    parsed = (_derive_attribute_from_code(line) for line in lines)
-    return (value for value in parsed if value is not None)
+    try:
+        lines = inspect.getsource(cls.__init__).split('\n')
+
+    except TypeError:  # class definition does not contain __init__
+        if len_mro > 2:
+            super_attributes = derive_attributes(mro[1], mro[1:])
+            attributes.update(super_attributes)
+        else:
+            return attributes
+
+    for line in lines:
+        line = line.strip()
+        parsed = parse('self.{field} = {}', line)
+
+        if parsed is not None:
+            field = parsed.named['field']
+            attributes[field] = None
+            continue
+
+        if len_mro > 2:  # No attributes on object class
+            parsed = (parse('super().__init__({}', line) or
+                      parse(f'super({cls.__name__}, self).__init__({{}}', line))
+            if parsed is not None:
+                super_attributes = derive_attributes(mro[1], mro[1:])
+                attributes.update(super_attributes)
+
+    return [k for k in attributes] if _mro is None else attributes
 
 
 def delist(obj):
