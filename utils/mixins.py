@@ -5,8 +5,7 @@ from utils.tools import derive_attributes
 
 class FieldMixin:
 
-    VALUE_TAG = 'value'
-    _FIELDS = None
+    _FIELDS = {}
 
     def items(self):
         return ((f, getattr(self, f)) for f in self.fields())
@@ -19,10 +18,11 @@ class FieldMixin:
 
     @classmethod
     def fields(cls):
-        if cls._FIELDS is not None:
-            return cls._FIELDS
-        cls._FIELDS = list(derive_attributes(cls.__init__))
-        return cls._FIELDS
+        try:
+            return cls._FIELDS[cls.__name__]
+        except KeyError:
+            cls._FIELDS[cls.__name__] = derive_attributes(cls)
+            return cls._FIELDS[cls.__name__]
 
     def __repr__(self):
         arg_string = ', '.join(self.quoted_values())
