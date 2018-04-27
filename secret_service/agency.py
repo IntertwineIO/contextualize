@@ -6,14 +6,14 @@ import random
 from collections import OrderedDict
 from functools import lru_cache
 
-from utils.mixins import FieldMixin
+from utils.mixins import Extractable
 from utils.structures import FlexEnum
-
+from utils.tools import PP
 
 Browser = FlexEnum('Browser', 'CHROME FIREFOX')
 
 
-class SecretAgent(FieldMixin):
+class SecretAgent(Extractable):
     """SecretAgent, a user agent class"""
 
     def __str__(self):
@@ -37,7 +37,7 @@ class SecretService:
     BASE_DIRECTORY = 'secret_service'
     FILE_IDENTIFIER = 'agents'
     FILE_TYPE = 'csv'
-    _DATA = {}
+    _data = {}
 
     @property
     def random(self):
@@ -47,37 +47,61 @@ class SecretService:
     @property
     def random_agent(self):
         """Random secret agent instance for the current browser"""
-        if self.browser not in self._DATA:
-            try:
-                self._DATA[self.browser] = self.load_data(self.file_path)
-            except FileNotFoundError as e:
-                raise FileNotFoundError(
-                    f'{e}; use {self.__class__.__name__}.extract() to create')
-
-        user_agents = self._DATA.get(self.browser)
+        user_agents = self._data.get(self.browser)
         if not user_agents:
             raise ValueError('No user agents found')
 
         selected_agent = SecretAgent(*random.choice(user_agents))
         return selected_agent
 
+    def acquire_data(self):
+        """Acquire user agent data by extracting and saving it"""
+        self.extract_data()
+        self.save_data()
+
+    def extract_data(self):
+        """Extract user agent data"""
+        extractors = MultiExtractor.provision_extractors(
+            SecretAgent, self.browser.name.lower())
+        futures = {extractor.extract() for extractor in extractors}
+        done, pending = self.loop.run_until_complete(asyncio.wait(futures))
+        self._data[self.browser] = [task.result() for task in done]
+
+    def save_data(self, file_path=None):
+        """Save data to the given file path and clear the cache"""
+        file_path = file_path or self.file_path
+        data = self._data.get(self.browser)
+        if not data:
+            raise ValueError('No data to save')
+        with open(file_path, 'w', newline='') as csv_file:
+            csv_writer = csv.writer(csv_file, delimiter='|', quotechar='"')
+            csv_writer.writerows(data)
+
+        self.load_data.cache_clear()
+
+    def load_data(self, file_path=None):
+        file_path = file_path or self.file_path
+        try:
+            self._data[self.browser] = self.get_saved_data(self.file_path)
+        except FileNotFoundError as e:
+            PP.pprint(dict(
+                msg='User agent data file missing; use acquire_data()',
+                type='user_agent_data_file_missing', error=e,
+                file_path=self.file_path, browser=self.browser,
+                secret_service=repr(self)))
+
     @classmethod
     @lru_cache(maxsize=None)
-    def load_data(cls, file_path=None):
+    def get_saved_data(cls, file_path=None):
         """Load data from the given file path and cache it"""
-        file_path = file_path or self._form_file_path(cls.DEFAULT_BROWSER)
-        with open(file_path, newline='') as csv_file:
+        file_path = file_path or cls._form_file_path(cls.DEFAULT_BROWSER)
+        with open(file_path, 'r', newline='') as csv_file:
             csv_reader = csv.reader(csv_file, delimiter='|', quotechar='"')
             return list(csv_reader)
 
     @classmethod
-    async def extract_data(cls, browser):
-        """Extract user agent data and save to file"""
-        # TODO
-        self.load_data.cache_clear()
-
-    @classmethod
     def _form_file_path(cls, browser):
+        """Form file path for given browser"""
         browser_name = browser.name.lower()
         file_name = f'{browser_name}_{cls.FILE_IDENTIFIER}.{cls.FILE_TYPE}'
         return os.path.join(cls.BASE_DIRECTORY, file_name)
@@ -85,3 +109,5 @@ class SecretService:
     def __init__(self, browser=None, file_path=None):
         self.browser = Browser.cast(browser) if browser else self.DEFAULT_BROWSER
         self.file_path = file_path or self._form_file_path(self.browser)
+        if self.browser not in self._data:
+            self.load_data()

@@ -54,13 +54,6 @@ class BaseExtractor:
     RIGHT_REFERENCE_TOKEN = REFERENCE_TEMPLATE[-1]
     REFERENCE_DELIMITER = '.'
 
-    # TODO: Make Content a class/model
-    CONTENT_FIELDS = [
-        'source_url', 'title', 'author_names', 'publication', 'volume',
-        'issue', 'issue_date', 'issue_date_granularity',
-        'first_page', 'last_page', 'doi',
-        'published_timestamp', 'granularity_published', 'tzinfo_published',
-        'publisher', 'summary', 'full_text']
     SOURCE_URL_TAG = 'source_url'
 
     SearchComponent = FlexEnum('SearchComponent', 'PROBLEM ORG GEO')
@@ -176,7 +169,7 @@ class BaseExtractor:
     @async_debug()
     async def _extract_content(self, element, config, index=1):
         self.content = content = OrderedDict()
-        for field in self.CONTENT_FIELDS:
+        for field in self.model.fields():
             field_config = config.get(field)
             # Allow field to be set by other field without overwriting
             if field_config is None and content.get(field):
@@ -525,10 +518,11 @@ class BaseExtractor:
         class_name = self.__class__.__name__
         return (f'<{class_name}: {self.directory}, {self.created_timestamp}>')
 
-    def __init__(self, directory, web_driver_type=None, loop=None):
+    def __init__(self, model, directory, web_driver_type=None, loop=None):
         self.loop = loop or asyncio.get_event_loop()
         self.created_timestamp = self.loop.time()
 
+        self.model = model
         self.directory = directory
         self.file_path = self._form_file_path(self.directory)
         self.configuration = self._marshall_configuration(self.file_path)
@@ -582,13 +576,14 @@ class SourceExtractor(BaseExtractor):
             return content
 
     @classmethod
-    def provision_extractors(cls, urls=None):
+    def provision_extractors(cls, model, urls=None):
         """
         Provision Extractors
 
         Instantiate and yield source extractors for the given urls.
 
         I/O:
+        model:      Extractable content class
         urls=None:  List of url strings for source content
         yield:      Fully configured source extractor instances
         """
@@ -597,7 +592,7 @@ class SourceExtractor(BaseExtractor):
         for url in urls:
             try:
                 initial_wait += random.uniform(cls.MINIMUM_WAIT, cls.MAXIMUM_WAIT)
-                extractor = cls(page_url=url, initial_wait=initial_wait)
+                extractor = cls(model, page_url=url, initial_wait=initial_wait)
                 if extractor.is_enabled:
                     yield extractor
             # FileNotFoundError, ruamel.yaml.scanner.ScannerError, ValueError
@@ -646,11 +641,11 @@ class SourceExtractor(BaseExtractor):
         clipped_url = url[start:end]
         return clipped_url
 
-    def __init__(self, page_url, initial_wait=0, web_driver_type=None, loop=None):
+    def __init__(self, model, page_url, initial_wait=0, web_driver_type=None, loop=None):
         self.page_url = url_normalize(page_url)
         self.initial_wait = initial_wait
         directory = self._derive_directory(self.page_url)
-        super().__init__(directory, web_driver_type, loop)
+        super().__init__(model, directory, web_driver_type, loop)
 
 
 class MultiExtractor(BaseExtractor):
@@ -700,7 +695,7 @@ class MultiExtractor(BaseExtractor):
     @async_debug()
     async def _extract_sources(self, item_results):
         source_urls = [content[self.SOURCE_URL_TAG] for content in item_results.values()]
-        source_extractors = SourceExtractor.provision_extractors(source_urls)
+        source_extractors = SourceExtractor.provision_extractors(self.model, source_urls)
         futures = {extractor.extract() for extractor in source_extractors}
         if not futures:
             return []
@@ -726,7 +721,7 @@ class MultiExtractor(BaseExtractor):
                 item_result[field] = source_value
 
     @classmethod
-    def provision_extractors(cls, problem_name=None, org_name=None, geo_name=None):
+    def provision_extractors(cls, model, problem_name=None, org_name=None, geo_name=None):
         """
         Provision Extractors
 
@@ -745,7 +740,7 @@ class MultiExtractor(BaseExtractor):
 
         for directory in multi_directories:
             try:
-                extractor = cls(directory, problem_name, org_name, geo_name)
+                extractor = cls(model, directory, problem_name, org_name, geo_name)
                 if extractor.is_enabled:
                     yield extractor
             # FileNotFoundError, ruamel.yaml.scanner.ScannerError, ValueError
@@ -804,13 +799,13 @@ class MultiExtractor(BaseExtractor):
         return (f'<{class_name}: {self.directory}, {community_name}, '
                 f'{self.created_timestamp}>')
 
-    def __init__(self, directory, problem_name, org_name=None, geo_name=None,
+    def __init__(self, model, directory, problem_name, org_name=None, geo_name=None,
                  web_driver_type=None, loop=None):
         self.problem_name = problem_name
         self.org_name = org_name
         self.geo_name = geo_name
 
-        super().__init__(directory, web_driver_type, loop)
+        super().__init__(model, directory, web_driver_type, loop)
 
         self.page_url = self._form_page_url(self.configuration)
         self.item_results = None  # Store results after extraction

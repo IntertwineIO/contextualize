@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
 
+from content import ResearchArticle
 from extractor import MultiExtractor
 from utils.tools import PP
 
@@ -10,7 +11,7 @@ class Service:
 
     def contextualize(self):
         extractors = MultiExtractor.provision_extractors(
-            self.problem_name, self.org_name, self.geo_name)
+            ResearchArticle, self.problem_name, self.org_name, self.geo_name)
         futures = {extractor.extract() for extractor in extractors}
         done, pending = self.loop.run_until_complete(asyncio.wait(futures))
         PP.pprint([task.result() for task in done])
