@@ -15,7 +15,7 @@ from ruamel import yaml
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
-from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait
 from url_normalize import url_normalize
 
@@ -87,6 +87,35 @@ class BaseExtractor:
                           'CLASS_NAME CSS_SELECTOR ID LINK_TEXT NAME '
                           'PARTIAL_LINK_TEXT TAG_NAME XPATH')
 
+    WaitMethod = FlexEnum('WaitMethod', [
+        'ELEMENT_LOCATED_TO_BE_SELECTED',           # locator
+        'ELEMENT_TO_BE_CLICKABLE',                  # locator
+        'FRAME_TO_BE_AVAILABLE_AND_SWITCH_TO_IT',   # locator
+        'INVISIBILITY_OF_ELEMENT_LOCATED',          # locator
+        'PRESENCE_OF_ALL_ELEMENTS_LOCATED',         # locator
+        'PRESENCE_OF_ELEMENT_LOCATED',              # locator
+        'VISIBILITY_OF_ALL_ELEMENTS_LOCATED',       # locator
+        'VISIBILITY_OF_ANY_ELEMENTS_LOCATED',       # locator
+        'VISIBILITY_OF_ELEMENT_LOCATED',            # locator
+
+        # 'ALERT_IS_PRESENT',                         # (no args)
+        # 'ELEMENT_LOCATED_SELECTION_STATE_TO_BE',    # locator, is_selected
+        # 'ELEMENT_SELECTION_STATE_TO_BE',            # element, is_selected
+        # 'ELEMENT_TO_BE_SELECTED',                   # element
+        # 'NEW_WINDOW_IS_OPENED',                     # current_handles
+        # 'NUMBER_OF_WINDOWS_TO_BE',                  # num_windows
+        # 'STALENESS_OF',                             # element
+        # 'TEXT_TO_BE_PRESENT_IN_ELEMENT',            # locator, text_
+        # 'TEXT_TO_BE_PRESENT_IN_ELEMENT_VALUE',      # locator, text_
+        # 'TITLE_CONTAINS',                           # title
+        # 'TITLE_IS',                                 # title
+        # 'URL_CHANGES',                              # url
+        # 'URL_CONTAINS',                             # url
+        # 'URL_MATCHES',                              # pattern
+        # 'URL_TO_BE',                                # url
+        # 'VISIBILITY_OF',                            # element
+    ])
+
     ExtractMethod = FlexEnum('ExtractMethod', 'GETATTR ATTRIBUTE PROPERTY')
     GetMethod = FlexEnum('GetMethod', 'GET')
     ParseMethod = FlexEnum('ParseMethod', 'PARSE STRPTIME')
@@ -96,6 +125,7 @@ class BaseExtractor:
 
     ExtractOperation = namedtuple('ExtractOperation',
                                   'is_multiple find_method find_args '
+                                  'wait_method wait_args '
                                   'wait click '
                                   'extract_method extract_args '
                                   'get_method get_args '
@@ -124,9 +154,9 @@ class BaseExtractor:
         future_web_driver = self._execute_in_future(self.web_driver_class,
                                                     **self.web_driver_kwargs)
         self.web_driver = await future_web_driver
-        max_wait = self.configuration.get(self.WAIT_TAG, self.DEFAULT_MAX_WAIT)
+        max_implicit_wait = self.configuration.get(self.WAIT_TAG, self.DEFAULT_MAX_WAIT)
         # Configure web driver to allow waiting on each operation
-        self.web_driver.implicitly_wait(max_wait)
+        self.web_driver.implicitly_wait(max_implicit_wait)
 
     @async_debug()
     async def _fetch_page(self):
@@ -223,11 +253,15 @@ class BaseExtractor:
         template = one(args)
         selector = template.format(index=index)
 
-        if operation.wait:
-            wait = WebDriverWait(self.web_driver, operation.wait,
+        if operation.wait_method:
+            max_explicit_wait = operation.wait or self.DEFAULT_MAX_WAIT
+            wait = WebDriverWait(self.web_driver, max_explicit_wait,
                                  poll_frequency=self.WAIT_POLL_INTERVAL)
-            # TODO: Make wait condition configurable rather than max wait
-            wait_condition = EC.presence_of_element_located((find_by, selector))
+            wait_method_name = operation.wait_method.name.lower()
+            wait_condition_method = getattr(expected_conditions, wait_method_name)
+            locator = (find_by, selector)
+            wait_condition = wait_condition_method(locator)
+            # wait_condition = expected_conditions.presence_of_element_located((find_by, selector))
             future_elements = self._execute_in_future(wait.until, wait_condition)
         else:
             future_elements = self._execute_in_future(find_method, selector)
@@ -383,6 +417,8 @@ class BaseExtractor:
         is_multiple = config.get(self.IS_MULTIPLE_TAG, False)
         find_method, find_args = self._configure_method(
             config, self.FindMethod)
+        wait_method, wait_args = self._configure_method(
+            config, self.WaitMethod)
         wait = config.get(self.WAIT_TAG, 0)
         click = config.get(self.CLICK_TAG, False)
         extract_method, extract_args = self._configure_method(
@@ -396,6 +432,7 @@ class BaseExtractor:
         transform_method, transform_args = self._configure_method(
             config, self.TransformMethod)
         return self.ExtractOperation(is_multiple, find_method, find_args,
+                                     wait_method, wait_args,
                                      wait, click,
                                      extract_method, extract_args,
                                      get_method, get_args,
@@ -476,7 +513,7 @@ class BaseExtractor:
         user_agent = secret_service.random
         if web_driver_type is self.WebDriverType.CHROME:
             chrome_options = webdriver.ChromeOptions()
-            chrome_options.add_argument('--headless')
+            # chrome_options.add_argument('--headless')
             chrome_options.add_argument('--disable-extensions')
             chrome_options.add_argument('--disable-infobars')
             chrome_options.add_argument(f'user-agent={user_agent}')

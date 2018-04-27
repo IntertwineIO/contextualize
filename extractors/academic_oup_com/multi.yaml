@@ -2,6 +2,7 @@
 ---
 is_enabled: True
 page_type: MULTI
+# https://academic.oup.com/journals/search-results?page=1&fl_SiteID=5567&qb={%22Keywords1%22:%22Homelessness%22,%22FullText2%22:%22Texas%22}
 # https://academic.oup.com/journals/search-results?page=1&fl_SiteID=5567&qb={
 # %22Keywords1%22:%22Homelessness%22,%22FullText2%22:%22Texas%22,%22FullText3%22:%22Veteran%20Affairs%22}
 page_url: "https://academic.oup.com/journals/search-results?page=1&qb={\
@@ -73,9 +74,12 @@ content:
   tzinfo_published: UTC
   publisher: Oxford University Press
   summary:
-    - class_name: widget-ArticleAbstract
+    - wait: 5
+      element_to_be_clickable:  # All wait operation locations use absolute paths:
+      xpath: "(//div[contains(concat(' ', @class, ' '), ' widget-ArticleAbstract ')])[{index}]"
       click: True
-    - wait: 10  # All wait operations use absolute paths:
+    - wait: 5
+      presence_of_element_located:  # All wait operation locations use absolute paths:
       xpath: "(//div[contains(concat(' ', @class, ' '), ' abstract-response-placeholder ')])[{index}]/section |\
               (//div[contains(concat(' ', @class, ' '), ' abstract-response-placeholder ')])[{index}]/p"
     - scope: parent

@@ -1,6 +1,6 @@
 %YAML 1.2
 ---
-is_enabled: True
+is_enabled: False
 page_type: MULTI
 # https://www.ncbi.nlm.nih.gov/pmc/?term=(Homelessness%5BTitle%5D)+AND+Texas%5BText+Word%5D
 page_url: "https://www.ncbi.nlm.nih.gov/pmc/?term={problem_clause}{org_clause}{geo_clause}"
