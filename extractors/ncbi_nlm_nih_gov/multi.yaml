@@ -2,13 +2,15 @@
 ---
 is_enabled: False
 page_type: MULTI
-# https://www.ncbi.nlm.nih.gov/pmc/?term=(Homelessness%5BTitle%5D)+AND+Texas%5BText+Word%5D
-page_url: "https://www.ncbi.nlm.nih.gov/pmc/?term={problem_clause}{org_clause}{geo_clause}"
-problem_clause: '({problem}%5BTitle%5D)'
-org_clause: '{org}%5BText+Word%5D'
-geo_clause: '{geo}%5BText+Word%5D'
-clause_delimiter: '+AND+'
 wait: 10
+url:
+  # https://www.ncbi.nlm.nih.gov/pmc/?term=(Homelessness%5BTitle%5D)+AND+Texas%5BText+Word%5D
+  url_template: "https://www.ncbi.nlm.nih.gov/pmc/?term={clause_series}"
+  clause_series: ['problem_clause', 'org_clause', 'geo_clause']
+  clause_delimiter: '+AND+'
+  problem_clause: '({problem}%5BTitle%5D)'
+  org_clause: '{org}%5BText+Word%5D'
+  geo_clause: '{geo}%5BText+Word%5D'
 
 content:
   items:

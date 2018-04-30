@@ -2,9 +2,10 @@
 ---
 is_enabled: True
 page_type: SOURCE
-# https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3865876/
-page_url: "https://www.ncbi.nlm.nih.gov"
 wait: 0
+url:
+  # https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3865876/
+  url_template: "https://www.ncbi.nlm.nih.gov/pmc/articles/{article_id}/"
 
 content:
   title:

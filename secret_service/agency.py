@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import asyncio
 import csv
 import os
 import random
 from collections import OrderedDict
 from functools import lru_cache
+from itertools import chain
 
 from utils.mixins import Extractable
 from utils.structures import FlexEnum
@@ -15,14 +17,29 @@ Browser = FlexEnum('Browser', 'CHROME FIREFOX')
 
 class SecretAgent(Extractable):
     """SecretAgent, a user agent class"""
+    BASE_DIRECTORY = 'secret_service/extractors'
+    # UNIQUE_FIELD = 'user_agent'
+
+    @classmethod
+    def default(cls):
+        return cls(source_url=('https://developers.whatismybrowser.com/'
+                               'useragents/parse/627832-chrome-windows-blink'),
+                   user_agent=('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                               'AppleWebKit/537.36 (KHTML, like Gecko) '
+                               'Chrome/60.0.3112.113 Safari/537.36'),
+                   browser='Chrome',
+                   browser_version='60.0.3112.113',
+                   operating_system='Windows',
+                   hardware_type='Computer',
+                   popularity='Very common')
 
     def __str__(self):
         return self.user_agent
 
-    def __init__(self, user_agent=None, browser=None, browser_version=None,
+    def __init__(self, source_url=None, user_agent=None, browser=None, browser_version=None,
                  operating_system=None, hardware_type=None, popularity=None,
                  *args, **kwds):
-        super().__init__(*args, **kwds)
+        super().__init__(source_url=source_url, *args, **kwds)
         self.user_agent = user_agent
         self.browser = browser
         self.browser_version = browser_version
@@ -37,6 +54,7 @@ class SecretService:
     BASE_DIRECTORY = 'secret_service'
     FILE_IDENTIFIER = 'agents'
     FILE_TYPE = 'csv'
+
     _data = {}
 
     @property
@@ -48,10 +66,16 @@ class SecretService:
     def random_agent(self):
         """Random secret agent instance for the current browser"""
         user_agents = self._data.get(self.browser)
-        if not user_agents:
-            raise ValueError('No user agents found')
 
-        selected_agent = SecretAgent(*random.choice(user_agents))
+        try:
+            selected_agent = SecretAgent(*random.choice(user_agents))
+        except Exception as e:
+            PP.pprint(dict(
+                msg='Unable to generate random agent; using default',
+                type='unable_to_generate_random_agent', error=e,
+                file_path=self.file_path, browser=self.browser, secret_service=repr(self)))
+            return SecretAgent.default()
+
         return selected_agent
 
     def acquire_data(self):
@@ -61,11 +85,17 @@ class SecretService:
 
     def extract_data(self):
         """Extract user agent data"""
-        extractors = MultiExtractor.provision_extractors(
-            SecretAgent, self.browser.name.lower())
+        from extractor import MultiExtractor
+
+        loop = asyncio.get_event_loop()
+        url_fragments = dict(browser=self.browser.name.lower())
+        extractors = MultiExtractor.provision_extractors(SecretAgent, url_fragments)
         futures = {extractor.extract() for extractor in extractors}
-        done, pending = self.loop.run_until_complete(asyncio.wait(futures))
-        self._data[self.browser] = [task.result() for task in done]
+        done, pending = loop.run_until_complete(asyncio.wait(futures))
+        agent_dicts = chain(*(task.result().values() for task in done))
+        self._data[self.browser] = [list(d.values()) for d in agent_dicts]
+
+        loop.close()
 
     def save_data(self, file_path=None):
         """Save data to the given file path and clear the cache"""
@@ -74,12 +104,14 @@ class SecretService:
         if not data:
             raise ValueError('No data to save')
         with open(file_path, 'w', newline='') as csv_file:
-            csv_writer = csv.writer(csv_file, delimiter='|', quotechar='"')
+            csv_writer = csv.writer(csv_file, delimiter='|', quotechar='"', lineterminator='\n')
             csv_writer.writerows(data)
 
-        self.load_data.cache_clear()
+        self.get_saved_data.cache_clear()
 
     def load_data(self, file_path=None):
+        # import ipdb; ipdb.set_trace()
+
         file_path = file_path or self.file_path
         try:
             self._data[self.browser] = self.get_saved_data(self.file_path)

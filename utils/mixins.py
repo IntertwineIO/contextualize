@@ -31,6 +31,8 @@ class FieldMixin:
 
 class Extractable(FieldMixin):
     """Extractable mixin to allow class to be extracted from websites"""
+    UNIQUE_FIELD = 'source_url'
+
     def __init__(self, source_url=None, *args, **kwds):
         super().__init__(*args, **kwds)
         self.source_url = source_url

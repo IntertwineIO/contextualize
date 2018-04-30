@@ -2,15 +2,19 @@
 ---
 is_enabled: True
 page_type: SEARCH
-# https://developers.whatismybrowser.com/useragents/explore/software_name/chrome/1
-page_url: "https://developers.whatismybrowser.com/useragents/explore/software_name/{browser}/1"
 wait: 10
 extract_sources: False
+url:
+  # https://developers.whatismybrowser.com/useragents/explore/software_name/chrome/1
+  url_template: "https://developers.whatismybrowser.com/useragents/explore/software_name/{browser}/1"
 
 content:
-  search_results:
+  items:
     is_multiple: True
     xpath: ".//table[contains(concat(' ', @class, ' '), ' table-useragents ')]/tbody/tr"
+  source_url:
+    xpath: "./td[contains(concat(' ', @class, ' '), ' useragent ')]/a"
+    attribute: href
   user_agent:
     class_name: useragent
     getattr: text

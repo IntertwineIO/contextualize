@@ -97,3 +97,6 @@ Temporary Items
 tmp/
 *.tmp
 
+# Backup directories and files
+bak/
+*.bak

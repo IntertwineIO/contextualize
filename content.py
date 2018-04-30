@@ -5,6 +5,8 @@ from utils.mixins import Extractable
 
 class ResearchArticle(Extractable):
     """ResearchArticle"""
+    BASE_DIRECTORY = 'extractors'
+
     def __init__(self, source_url=None, title=None, author_names=None, publication=None,
                  volume=None, issue=None, issue_date=None, issue_date_granularity=None,
                  first_page=None, last_page=None, doi=None, published_timestamp=None,

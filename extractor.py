@@ -32,31 +32,35 @@ from utils.tools import (
 
 class BaseExtractor:
 
-    FILE_PATH_BASE = 'extractors'
     FILE_NAME = NotImplementedError
 
-    OPTIONS_TAG = 'options'
+    OPTIONS_KEY = 'options'
 
-    IS_ENABLED_TAG = 'is_enabled'
-    CONTENT_TAG = 'content'
-    PAGE_URL_TAG = 'page_url'
-    CLAUSE_DELIMITER_TAG = 'clause_delimiter'
-    ITEMS_TAG = 'items'
+    IS_ENABLED_KEY = 'is_enabled'
+    EXTRACT_SOURCES_KEY = 'extract_sources'
+    URL_KEY = 'url'
+    URL_TEMPLATE_KEY = 'url_template'
+    CLAUSE_SERIES_KEY = 'clause_series'
+    CLAUSE_SERIES_TAG = f'{{{CLAUSE_SERIES_KEY}}}'
+    CLAUSE_DELIMITER_KEY = 'clause_delimiter'
+    CLAUSE_INDEX_KEY = 'clause_index'
+    # PAGE_INDEX_KEY = 'page_index'
 
-    ELEMENT_TAG = 'element'
-    ELEMENTS_TAG = 'elements'
-    INDEX_TAG = 'index'
-    TEXT_TAG = 'text'
-    VALUE_TAG = 'value'
+    SearchComponent = FlexEnum('SearchComponent', 'PROBLEM ORG GEO')
+
+    SOURCE_URL_KEY = 'source_url'
+    ITEMS_KEY = 'items'
+    CONTENT_KEY = 'content'
+    ELEMENT_KEY = 'element'
+    ELEMENTS_KEY = 'elements'
+    INDEX_KEY = 'index'
+    TEXT_KEY = 'text'
+    VALUE_KEY = 'value'
 
     REFERENCE_TEMPLATE = '<{}>'
     LEFT_REFERENCE_TOKEN = REFERENCE_TEMPLATE[0]
     RIGHT_REFERENCE_TOKEN = REFERENCE_TEMPLATE[-1]
     REFERENCE_DELIMITER = '.'
-
-    SOURCE_URL_TAG = 'source_url'
-
-    SearchComponent = FlexEnum('SearchComponent', 'PROBLEM ORG GEO')
 
     WebDriverType = FlexEnum('WebDriverType', 'CHROME FIREFOX')
     DEFAULT_WEB_DRIVER_TYPE = WebDriverType.CHROME
@@ -67,11 +71,11 @@ class BaseExtractor:
     # TODO: Make ExtractOperation a class & encapsulate relevant methods
     ####################################################################
 
-    SCOPE_TAG = 'scope'
-    IS_MULTIPLE_TAG = 'is_multiple'
-    WAIT_TAG = 'wait'
-    CLICK_TAG = 'click'
-    ATTRIBUTE_TAG = 'attribute'
+    SCOPE_KEY = 'scope'
+    IS_MULTIPLE_KEY = 'is_multiple'
+    WAIT_KEY = 'wait'
+    CLICK_KEY = 'click'
+    ATTRIBUTE_KEY = 'attribute'
 
     OperationScope = FlexEnum('OperationScope', 'PAGE PARENT PRIOR LATEST')
     DEFAULT_OPERATION_SCOPE = OperationScope.LATEST
@@ -147,7 +151,7 @@ class BaseExtractor:
         future_web_driver = self._execute_in_future(self.web_driver_class,
                                                     **self.web_driver_kwargs)
         self.web_driver = await future_web_driver
-        max_implicit_wait = self.configuration.get(self.WAIT_TAG, self.DEFAULT_MAX_WAIT)
+        max_implicit_wait = self.configuration.get(self.WAIT_KEY, self.DEFAULT_MAX_WAIT)
         # Configure web driver to allow waiting on each operation
         self.web_driver.implicitly_wait(max_implicit_wait)
 
@@ -199,7 +203,7 @@ class BaseExtractor:
             for operation_config in config:
                 new_targets = self._select_targets(operation_config, latest, prior, parent)
                 prior = latest
-                if operation_config.get(self.IS_MULTIPLE_TAG, False):
+                if operation_config.get(self.IS_MULTIPLE_KEY, False):
                     latest = await self._perform_operation(new_targets, operation_config, index)
                     continue
                 for new_target in new_targets:
@@ -325,7 +329,7 @@ class BaseExtractor:
                 parsed = None
                 try:
                     parsed = multi_parse(templates, value)
-                    parsed_values.append(parsed.named[self.VALUE_TAG])
+                    parsed_values.append(parsed.named[self.VALUE_KEY])
 
                 except (ValueError, AttributeError, KeyError) as e:
                     PP.pprint(dict(
@@ -352,15 +356,15 @@ class BaseExtractor:
 
         if operation.format_method is self.FormatMethod.FORMAT:
             template = one(args)
-            if self.VALUE_TAG in self.content:
+            if self.VALUE_KEY in self.content:
                 raise ValueError(
-                    "Reserved word '{self.VALUE_TAG}' cannot be content field")
-            self.content[self.VALUE_TAG] = None
+                    "Reserved word '{self.VALUE_KEY}' cannot be content field")
+            self.content[self.VALUE_KEY] = None
             for value in values:
-                self.content[self.VALUE_TAG] = value
+                self.content[self.VALUE_KEY] = value
                 formatted = template.format(**self.content)
                 formatted_values.append(formatted)
-            del self.content[self.VALUE_TAG]
+            del self.content[self.VALUE_KEY]
 
         elif operation.format_method is self.FormatMethod.STRFTIME:
             template = one(args)
@@ -400,20 +404,20 @@ class BaseExtractor:
         return [self.web_driver]  # Selenium WebDriver instance
 
     def _derive_operation_scope(self, config):
-        if self.SCOPE_TAG in config:
-            operation_scope = config[self.SCOPE_TAG]
+        if self.SCOPE_KEY in config:
+            operation_scope = config[self.SCOPE_KEY]
             return self.OperationScope[operation_scope.upper()]
 
         return self.DEFAULT_OPERATION_SCOPE
 
     def _configure_operation(self, config):
-        is_multiple = config.get(self.IS_MULTIPLE_TAG, False)
+        is_multiple = config.get(self.IS_MULTIPLE_KEY, False)
         find_method, find_args = self._configure_method(
             config, self.FindMethod)
         wait_method, wait_args = self._configure_method(
             config, self.WaitMethod)
-        wait = config.get(self.WAIT_TAG, 0)
-        click = config.get(self.CLICK_TAG, False)
+        wait = config.get(self.WAIT_KEY, 0)
+        click = config.get(self.CLICK_KEY, False)
         extract_method, extract_args = self._configure_method(
             config, self.ExtractMethod)
         get_method, get_args = self._configure_method(
@@ -444,8 +448,8 @@ class BaseExtractor:
         return method_type, method_args
 
     def _derive_find_method(self, operation, element):
-        element_tag = (self.ELEMENTS_TAG if operation.is_multiple
-                       else self.ELEMENT_TAG)
+        element_tag = (self.ELEMENTS_KEY if operation.is_multiple
+                       else self.ELEMENT_KEY)
         method_tag = operation.find_method.name.lower()
         find_method_name = f'find_{element_tag}_by_{method_tag}'
         find_method = getattr(element, find_method_name)
@@ -490,8 +494,8 @@ class BaseExtractor:
         """Run in executor with kwds support & default loop/executor"""
         return run_in_executor(self.loop, None, func, *args, **kwds)
 
-    def _form_file_path(self, directory):
-        return os.path.join(self.FILE_PATH_BASE, directory, self.FILE_NAME)
+    def _form_file_path(self, base, directory):
+        return os.path.join(base, directory, self.FILE_NAME)
 
     @lru_cache(maxsize=None, typed=False)
     def _marshall_configuration(self, file_path):
@@ -523,10 +527,11 @@ class BaseExtractor:
         self.created_timestamp = self.loop.time()
 
         self.model = model
+        self.base_directory = model.BASE_DIRECTORY
         self.directory = directory
-        self.file_path = self._form_file_path(self.directory)
+        self.file_path = self._form_file_path(self.base_directory, self.directory)
         self.configuration = self._marshall_configuration(self.file_path)
-        self.is_enabled = self.configuration.get(self.IS_ENABLED_TAG, True)
+        self.is_enabled = self.configuration.get(self.IS_ENABLED_KEY, True)
 
         self.web_driver_type = web_driver_type or self.DEFAULT_WEB_DRIVER_TYPE
         self.web_driver_class = self._derive_web_driver_class(self.web_driver_type)
@@ -540,9 +545,9 @@ class SourceExtractor(BaseExtractor):
 
     FILE_NAME = 'source.yaml'
 
-    HTTPS_TAG = 'https://'
-    HTTP_TAG = 'http://'
-    WWW_DOT_TAG = 'www.'
+    HTTPS_KEY = 'https://'
+    HTTP_KEY = 'http://'
+    WWW_DOT_KEY = 'www.'
     DOMAIN_DELIMITER = '.'
     DIRECTORY_NAME_DELIMITER = '_'
     PATH_DELIMITER = '/'
@@ -559,7 +564,7 @@ class SourceExtractor(BaseExtractor):
 
     @async_debug()
     async def _extract_page(self):
-        content_config = self.configuration[self.CONTENT_TAG]
+        content_config = self.configuration[self.CONTENT_KEY]
         try:
             content = await self._extract_content(self.web_driver, content_config)
             if not content:
@@ -572,7 +577,7 @@ class SourceExtractor(BaseExtractor):
                 extractor=repr(self), config=content_config))
             raise
         else:
-            content[self.SOURCE_URL_TAG] = self.page_url
+            content[self.SOURCE_URL_KEY] = self.page_url
             return content
 
     @classmethod
@@ -599,7 +604,8 @@ class SourceExtractor(BaseExtractor):
             except Exception as e:
                 print(e)  # TODO: Replace with logging
 
-    def _derive_directory(self, page_url):
+    def _derive_directory(self, model, page_url):
+        base_directory = model.BASE_DIRECTORY
         clipped_url = self._clip_url(page_url)
         url_path = clipped_url.split(self.PATH_DELIMITER)
         base_url = url_path[0]
@@ -611,7 +617,7 @@ class SourceExtractor(BaseExtractor):
         # Find deepest directory
         for i in range(num_components):
             sub_directory = self.PATH_DELIMITER.join(path_components[:i + 1])
-            path = os.path.join(self.FILE_PATH_BASE, sub_directory)
+            path = os.path.join(base_directory, sub_directory)
             if not Path(path).is_dir():
                 deepest_index = i
                 break
@@ -619,7 +625,7 @@ class SourceExtractor(BaseExtractor):
         # Look for source configuration directory, starting with deepest
         for i in range(deepest_index, 0, -1):
             sub_directory = self.PATH_DELIMITER.join(path_components[:i])
-            path = os.path.join(self.FILE_PATH_BASE, sub_directory, self.FILE_NAME)
+            path = os.path.join(base_directory, sub_directory, self.FILE_NAME)
             if Path(path).is_file():
                 return sub_directory
 
@@ -627,13 +633,13 @@ class SourceExtractor(BaseExtractor):
 
     def _clip_url(self, url):
         start = 0
-        if url.startswith(self.HTTPS_TAG):
-            start = len(self.HTTPS_TAG)
-        elif url.startswith(self.HTTP_TAG):
-            start = len(self.HTTP_TAG)
-        www_index = url.find(self.WWW_DOT_TAG)
+        if url.startswith(self.HTTPS_KEY):
+            start = len(self.HTTPS_KEY)
+        elif url.startswith(self.HTTP_KEY):
+            start = len(self.HTTP_KEY)
+        www_index = url.find(self.WWW_DOT_KEY)
         if www_index == start:
-            start += len(self.WWW_DOT_TAG)
+            start += len(self.WWW_DOT_KEY)
         query_index = url.find(self.QUERY_STRING_DELIMITER)
         end = query_index if query_index > -1 else len(url)
         if url[end - 1] == self.PATH_DELIMITER:
@@ -642,9 +648,9 @@ class SourceExtractor(BaseExtractor):
         return clipped_url
 
     def __init__(self, model, page_url, initial_wait=0, web_driver_type=None, loop=None):
-        self.page_url = url_normalize(page_url)
         self.initial_wait = initial_wait
-        directory = self._derive_directory(self.page_url)
+        self.page_url = url_normalize(page_url)
+        directory = self._derive_directory(model, self.page_url)
         super().__init__(model, directory, web_driver_type, loop)
 
 
@@ -658,8 +664,9 @@ class MultiExtractor(BaseExtractor):
 
     @async_debug()
     async def _extract_multiple(self):
-        content_config = self.configuration[self.CONTENT_TAG]
-        items_config = content_config[self.ITEMS_TAG]
+        content_config = self.configuration[self.CONTENT_KEY]
+        items_config = content_config[self.ITEMS_KEY]
+        unique_field_name = self.model.UNIQUE_FIELD
         self.item_results = OrderedDict()
 
         elements = await self._perform_operation(self.web_driver, items_config)
@@ -670,10 +677,14 @@ class MultiExtractor(BaseExtractor):
                     content = await self._extract_content(element, content_config, index)
                     if not content:
                         raise ValueError('No content extracted')
-                    source_url = content.get(self.SOURCE_URL_TAG)
-                    if not source_url:
-                        raise ValueError('Content missing source URL')
-                    self.item_results[source_url] = content
+                    unique_field_value = content.get(unique_field_name)
+                    if not unique_field_value:
+                        raise ValueError('Content missing value for unique field '
+                                         f"'{unique_field_name}'")
+                    if unique_field_value in self.item_results:
+                        raise ValueError('Duplicate value for unique field '
+                                         f"'{unique_field_name}': '{unique_field_value}'")
+                    self.item_results[unique_field_value] = content
 
                 except Exception as e:
                     PP.pprint(dict(
@@ -687,14 +698,19 @@ class MultiExtractor(BaseExtractor):
                 type='extract_item_results_failure',
                 extractor=repr(self), config=items_config))
 
-        # TODO: Store preliminary results in redis
-        source_results = await self._extract_sources(self.item_results)
-        await self._combine_results(self.item_results, source_results)
+        if self.configuration.get(self.EXTRACT_SOURCES_KEY, True):
+            if unique_field_name != self.SOURCE_URL_KEY:
+                raise ValueError('Unique field must be '
+                                 f"'{self.SOURCE_URL_KEY}' to extract sources")
+            # TODO: Store preliminary results in redis
+            source_results = await self._extract_sources(self.item_results)
+            await self._combine_results(self.item_results, source_results)
+
         return self.item_results
 
     @async_debug()
     async def _extract_sources(self, item_results):
-        source_urls = [content[self.SOURCE_URL_TAG] for content in item_results.values()]
+        source_urls = [content[self.SOURCE_URL_KEY] for content in item_results.values()]
         source_extractors = SourceExtractor.provision_extractors(self.model, source_urls)
         futures = {extractor.extract() for extractor in source_extractors}
         if not futures:
@@ -706,7 +722,7 @@ class MultiExtractor(BaseExtractor):
     @async_debug()
     async def _combine_results(self, item_results, source_results):
         for source_result in source_results:
-            source_url = source_result[self.SOURCE_URL_TAG]
+            source_url = source_result[self.SOURCE_URL_KEY]
             item_result = item_results[source_url]
             source_overrides = ((k, v) for k, v in source_result.items() if v is not None)
             for field, source_value in source_overrides:
@@ -721,7 +737,7 @@ class MultiExtractor(BaseExtractor):
                 item_result[field] = source_value
 
     @classmethod
-    def provision_extractors(cls, model, problem_name=None, org_name=None, geo_name=None):
+    def provision_extractors(cls, model, url_fragments=None):
         """
         Provision Extractors
 
@@ -734,13 +750,14 @@ class MultiExtractor(BaseExtractor):
         geo_name=None:      Name of geo to be used as search term
         yield:              Fully configured search extractor instances
         """
-        dir_nodes = os.walk(cls.FILE_PATH_BASE)
-        multi_directories = (cls._debase_directory(dn[0]) for dn in dir_nodes
-                             if cls.FILE_NAME in dn[2])
+        base = model.BASE_DIRECTORY
+        dir_nodes = os.walk(base)
+        directories = (cls._debase_directory(base, dn[0]) for dn in dir_nodes
+                       if cls.FILE_NAME in dn[2])
 
-        for directory in multi_directories:
+        for directory in directories:
             try:
-                extractor = cls(model, directory, problem_name, org_name, geo_name)
+                extractor = cls(model, directory, url_fragments)
                 if extractor.is_enabled:
                     yield extractor
             # FileNotFoundError, ruamel.yaml.scanner.ScannerError, ValueError
@@ -748,64 +765,74 @@ class MultiExtractor(BaseExtractor):
                 print(e)  # TODO: Replace with logging
 
     @classmethod
-    def _debase_directory(cls, directory_path):
-        base = f'{cls.FILE_PATH_BASE}/'
-        if not directory_path.startswith(base):
-            raise ValueError(f"'{directory_path}' must start with '{base}'")
-        directory = directory_path.replace(base, '', 1)
+    def _debase_directory(cls, base, path):
+        base = os.path.join(base, '')  # Add slash
+        if not path.startswith(base):
+            raise ValueError(f"'{path}' must start with '{base}'")
+        directory = path.replace(base, '', 1)
         return directory
 
-    def _form_page_url(self, configuration):
-        problem_name = self.problem_name
-        org_name = self.org_name
-        geo_name = self.geo_name
+    def _encode_url_fragments(self, url_fragments):
+        return {k: urllib.parse.quote(v) for k, v in url_fragments.items()
+                if v is not None}
 
-        page_url = self.configuration[self.PAGE_URL_TAG]
-        clause_delimiter = self.configuration.get(self.CLAUSE_DELIMITER_TAG)
-        clause_count = 0
+    def _form_page_url(self, configuration, url_fragments):
+        url_config = self.configuration[self.URL_KEY]
+        # Support shorthand form for hard-coded urls
+        if isinstance(url_config, str):
+            return url_config
 
-        local_dict = locals()
-        terms = ((component, local_dict[f'{component}_name'])
-                 for component in self.SearchComponent.names(str.lower))
+        encoded_fragments = self._encode_url_fragments(url_fragments)
+        url_template = url_config[self.URL_TEMPLATE_KEY]
+        if self.CLAUSE_SERIES_TAG in url_template:
+            encoded_fragments[self.CLAUSE_SERIES_KEY] = self._form_clause_series(
+                url_config, encoded_fragments)
 
-        for index, (component, term) in enumerate(terms, start=1):
-            clause_tag = f'{component}_clause'
-            clause_template = self.configuration.get(clause_tag)
-            rendered_clause = self._form_url_clause(
-                clause_template, component, term, index)
-            if rendered_clause:
-                if clause_delimiter and clause_count:
-                    rendered_clause = f'{clause_delimiter}{rendered_clause}'
-                clause_count += 1
-            page_url = page_url.replace(f'{{{clause_tag}}}', rendered_clause)
+        return url_template.format(**encoded_fragments)
 
-        if not clause_count:
-            raise ValueError('At least one search term is required')
+    def _form_clause_series(self, url_config, encoded_fragments):
+        clauses = []
+        clause_keys = url_config[self.CLAUSE_SERIES_KEY]
+        clause_index = 1
+        for clause_key in clause_keys:
+            clause_template = url_config[clause_key]
+            encoded_fragments[self.CLAUSE_INDEX_KEY] = str(clause_index)
+            try:
+                rendered_clause = clause_template.format(**encoded_fragments)
+            except KeyError:
+                continue
+            else:
+                clauses.append(rendered_clause)
+                clause_index += 1
 
-        return page_url
+        if not clauses:
+            raise ValueError(f'No clauses rendered in series: {encoded_fragments}')
 
-    def _form_url_clause(self, clause_template, component, term, index):
-        if not clause_template or not term:
-            return ''
-        encoded_term = urllib.parse.quote(term)
-        return (clause_template.replace(f'{{{component}}}', encoded_term)
-                               .replace(f'{{{self.INDEX_TAG}}}', str(index)))
+        del encoded_fragments[self.CLAUSE_INDEX_KEY]
+        clause_delimiter = url_config[self.CLAUSE_DELIMITER_KEY]
+        return clause_delimiter.join(clauses)
+
+    def _template_keys(self, template):
+        length = len(template)
+        start = end = -1
+        while end < length:
+            start = template.find('{', start + 1)
+            end = template.find('}', end + 1)
+            if start == -1 and end == -1:
+                break
+            if start == -1 or start > end:
+                raise ValueError(f"Invalid template format: '{template}'")
+            yield template[start + 1:end]
 
     def __repr__(self):
         class_name = self.__class__.__name__
-        org_clause = f' at {self.org_name}' if self.org_name else ''
-        geo_clause = f' in {self.geo_name}' if self.geo_name else ''
-        community_name = f'{self.problem_name}{org_clause}{geo_clause}'
-        return (f'<{class_name}: {self.directory}, {community_name}, '
+        return (f'<{class_name} | {self.directory} | {self.url_fragments!r} | '
                 f'{self.created_timestamp}>')
 
-    def __init__(self, model, directory, problem_name, org_name=None, geo_name=None,
+    def __init__(self, model, directory, url_fragments=None,
                  web_driver_type=None, loop=None):
-        self.problem_name = problem_name
-        self.org_name = org_name
-        self.geo_name = geo_name
-
         super().__init__(model, directory, web_driver_type, loop)
-
-        self.page_url = self._form_page_url(self.configuration)
+        self.url_fragments = {k: v for k, v in url_fragments.items()
+                              if v is not None} if url_fragments else {}
+        self.page_url = self._form_page_url(self.configuration, self.url_fragments)
         self.item_results = None  # Store results after extraction
