@@ -3,7 +3,15 @@
 is_enabled: True
 page_type: SEARCH
 wait: 10
+pause: 2
 extract_sources: False
+
+pagination:
+  pages: 10
+  next_page:
+    xpath: "//div[contains(concat(' ', @id, ' '), ' pagination ')]/a[text()='>']"
+    attribute: href
+
 url:
   # https://developers.whatismybrowser.com/useragents/explore/software_name/chrome/1
   url_template: "https://developers.whatismybrowser.com/useragents/explore/software_name/{browser}/1"

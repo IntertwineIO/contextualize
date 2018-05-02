@@ -3,6 +3,9 @@
 is_enabled: False
 page_type: MULTI
 wait: 10
+pause: 2
+extract_sources: True
+
 url:
   # https://www.ncbi.nlm.nih.gov/pmc/?term=(Homelessness%5BTitle%5D)+AND+Texas%5BText+Word%5D
   url_template: "https://www.ncbi.nlm.nih.gov/pmc/?term={clause_series}"

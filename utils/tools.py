@@ -36,6 +36,11 @@ def derive_attributes(cls, _mro=None):
     Given a class, derive all instance attributes the class declares or
     inherits by inspecting __init__ methods. Attributes are listed
     by initial declaration order, taking into account super calls.
+
+    Does NOT detect the following:
+    - attributes set in methods other than __init__
+    - attributes set via setattr
+    - attributes only conditionally set (they will always be included)
     """
     mro = cls.mro() if _mro is None else _mro
     len_mro = len(mro)

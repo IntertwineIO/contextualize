@@ -37,24 +37,10 @@ class BaseExtractor:
     OPTIONS_KEY = 'options'
 
     IS_ENABLED_KEY = 'is_enabled'
-    EXTRACT_SOURCES_KEY = 'extract_sources'
-    URL_KEY = 'url'
-    URL_TEMPLATE_KEY = 'url_template'
-    CLAUSE_SERIES_KEY = 'clause_series'
-    CLAUSE_SERIES_TAG = f'{{{CLAUSE_SERIES_KEY}}}'
-    CLAUSE_DELIMITER_KEY = 'clause_delimiter'
-    CLAUSE_INDEX_KEY = 'clause_index'
-    # PAGE_INDEX_KEY = 'page_index'
-
-    SearchComponent = FlexEnum('SearchComponent', 'PROBLEM ORG GEO')
-
     SOURCE_URL_KEY = 'source_url'
-    ITEMS_KEY = 'items'
     CONTENT_KEY = 'content'
     ELEMENT_KEY = 'element'
     ELEMENTS_KEY = 'elements'
-    INDEX_KEY = 'index'
-    TEXT_KEY = 'text'
     VALUE_KEY = 'value'
 
     REFERENCE_TEMPLATE = '<{}>'
@@ -140,8 +126,7 @@ class BaseExtractor:
                 type='extractor_disabled_warning', extractor=repr(self)))
         try:
             await self._provision_web_driver()
-            await self._fetch_page()
-            return await self._extract_page()
+            return await self._perform_extraction(self.page_url)
         finally:
             await self._dispose_web_driver()
 
@@ -156,8 +141,14 @@ class BaseExtractor:
         self.web_driver.implicitly_wait(max_implicit_wait)
 
     @async_debug()
-    async def _fetch_page(self):
-        future_page = self._execute_in_future(self.web_driver.get, self.page_url)
+    async def _perform_extraction(self, url=None):
+        url = url or self.page_url
+        await self._fetch_page(url)
+        return await self._extract_page()
+
+    @async_debug()
+    async def _fetch_page(self, url):
+        future_page = self._execute_in_future(self.web_driver.get, url)
         await future_page
 
     @async_debug()
@@ -188,10 +179,8 @@ class BaseExtractor:
             # e.g. NoSuchElementException
             except Exception as e:
                 PP.pprint(dict(
-                    msg='Extract field failure',
-                    type='extract_field_failure',
-                    error=str(e), field=field, content=content,
-                    extractor=repr(self)))
+                    msg='Extract field failure', type='extract_field_failure',
+                    error=e, field=field, content=content, extractor=repr(self)))
 
         self.content = None
         return content
@@ -584,9 +573,8 @@ class SourceExtractor(BaseExtractor):
 
         except Exception as e:
             PP.pprint(dict(
-                msg='Extract content failure',
-                type='extract_content_failure', error=str(e),
-                extractor=repr(self), config=content_config))
+                msg='Extract content failure', type='extract_content_failure',
+                error=e, extractor=repr(self), config=content_config))
             raise
         else:
             content[self.SOURCE_URL_KEY] = self.page_url
@@ -608,6 +596,8 @@ class SourceExtractor(BaseExtractor):
         initial_wait = 0
         for url in urls:
             try:
+                # TODO: Use lognormal with pause_mean and pause_standard_deviation
+                # Also apply minimum/maximum values
                 initial_wait += random.uniform(cls.MINIMUM_WAIT, cls.MAXIMUM_WAIT)
                 extractor = cls(model, page_url=url, initial_wait=initial_wait)
                 if extractor.is_enabled:
@@ -672,6 +662,56 @@ class MultiExtractor(BaseExtractor):
 
     FILE_NAME = 'multi.yaml'
 
+    # URL keys
+    URL_KEY = 'url'
+    URL_TEMPLATE_KEY = 'url_template'
+    CLAUSE_SERIES_KEY = 'clause_series'
+    CLAUSE_SERIES_TAG = f'{{{CLAUSE_SERIES_KEY}}}'
+    CLAUSE_DELIMITER_KEY = 'clause_delimiter'
+    CLAUSE_INDEX_KEY = 'clause_index'
+    # PAGE_INDEX_KEY = 'page_index'
+
+    # Pagination keys
+    PAGINATION_KEY = 'pagination'
+    PAGES_KEY = 'pages'
+    NEXT_PAGE_KEY = 'next_page'
+
+    EXTRACT_SOURCES_KEY = 'extract_sources'
+    ITEMS_KEY = 'items'
+    PAUSE_KEY = 'pause'
+    DEFAULT_PAUSE = 2
+
+    @async_debug()
+    async def _perform_extraction(self, url=None):
+        url = url or self.page_url
+        results = await super()._perform_extraction(url)
+
+        pagination_config = self.configuration.get(self.PAGINATION_KEY)
+        if not pagination_config:
+            return results
+
+        next_page_config = pagination_config[self.NEXT_PAGE_KEY]
+        pages = pagination_config.get(self.PAGES_KEY, float('Inf'))
+        page = 1
+
+        while page < pages:
+            url = await self._extract_next_page_url(self.web_driver, next_page_config, page + 1)
+            if not url:
+                break
+            page += 1
+            await asyncio.sleep(self.pause)
+            results = await super()._perform_extraction(url)
+
+        return results
+
+    @async_debug()
+    async def _extract_next_page_url(self, web_driver, config, page):
+        try:
+            return await self._perform_operation(web_driver, config, page)
+        # e.g. NoSuchElementException
+        except Exception as e:
+            return  # Last page always fails to find next url
+
     @async_debug()
     async def _extract_page(self):
         return await self._extract_multiple()
@@ -680,8 +720,7 @@ class MultiExtractor(BaseExtractor):
     async def _extract_multiple(self):
         content_config = self.configuration[self.CONTENT_KEY]
         items_config = content_config[self.ITEMS_KEY]
-        unique_field_name = self.model.UNIQUE_FIELD
-        self.item_results = OrderedDict()
+        unique_field = self.model.UNIQUE_FIELD
 
         elements = await self._perform_operation(self.web_driver, items_config)
 
@@ -691,29 +730,32 @@ class MultiExtractor(BaseExtractor):
                     content = await self._extract_content(element, content_config, index)
                     if not content:
                         raise ValueError('No content extracted')
-                    unique_field_value = content.get(unique_field_name)
-                    if not unique_field_value:
-                        raise ValueError('Content missing value for unique field '
-                                         f"'{unique_field_name}'")
-                    if unique_field_value in self.item_results:
-                        raise ValueError('Duplicate value for unique field '
-                                         f"'{unique_field_name}': '{unique_field_value}'")
-                    self.item_results[unique_field_value] = content
+
+                    unique_key = content.get(unique_field)
+                    if not unique_key:
+                        raise ValueError(f"Content missing unique key for '{unique_field}'")
+
+                    if unique_key in self.item_results:
+                        PP.pprint(dict(
+                            msg='Unique key collision', type='unique_key_collision',
+                            field=unique_field, unique_key=unique_key,
+                            old_content=self.item_results[unique_key], new_content=content,
+                            index=index, extractor=repr(self), config=content_config))
+
+                    self.item_results[unique_key] = content
 
                 except Exception as e:
                     PP.pprint(dict(
-                        msg='Extract content failure',
-                        type='extract_content_failure', error=str(e),
-                        extractor=repr(self), config=content_config))
+                        msg='Extract content failure', type='extract_content_failure',
+                        error=e, index=index, extractor=repr(self), config=content_config))
 
         else:
             PP.pprint(dict(
-                msg='Extract item results failure',
-                type='extract_item_results_failure',
+                msg='Extract item results failure', type='extract_item_results_failure',
                 extractor=repr(self), config=items_config))
 
         if self.configuration.get(self.EXTRACT_SOURCES_KEY, True):
-            if unique_field_name != self.SOURCE_URL_KEY:
+            if unique_field != self.SOURCE_URL_KEY:
                 raise ValueError('Unique field must be '
                                  f"'{self.SOURCE_URL_KEY}' to extract sources")
             # TODO: Store preliminary results in redis
@@ -848,8 +890,9 @@ class MultiExtractor(BaseExtractor):
 
     def __init__(self, model, directory, url_fragments=None,
                  web_driver_type=None, loop=None):
-        super().__init__(model, directory, web_driver_type, loop)
         self.url_fragments = {k: v for k, v in url_fragments.items()
                               if v is not None} if url_fragments else {}
+        super().__init__(model, directory, web_driver_type, loop)
         self.page_url = self._form_page_url(self.configuration, self.url_fragments)
-        self.item_results = None  # Store results after extraction
+        self.pause = self.configuration.get(self.PAUSE_KEY, self.DEFAULT_PAUSE)
+        self.item_results = OrderedDict()  # Store results after extraction

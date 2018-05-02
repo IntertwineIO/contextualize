@@ -54,6 +54,7 @@ class SecretService:
     BASE_DIRECTORY = 'secret_service'
     FILE_IDENTIFIER = 'agents'
     FILE_TYPE = 'csv'
+    CSV_FORMAT = dict(delimiter='|', quotechar='"')
 
     _data = {}
 
@@ -104,7 +105,7 @@ class SecretService:
         if not data:
             raise ValueError('No data to save')
         with open(file_path, 'w', newline='') as csv_file:
-            csv_writer = csv.writer(csv_file, delimiter='|', quotechar='"', lineterminator='\n')
+            csv_writer = csv.writer(csv_file, **self.CSV_FORMAT)
             csv_writer.writerows(data)
 
         self.get_saved_data.cache_clear()
@@ -128,7 +129,7 @@ class SecretService:
         """Load data from the given file path and cache it"""
         file_path = file_path or cls._form_file_path(cls.DEFAULT_BROWSER)
         with open(file_path, 'r', newline='') as csv_file:
-            csv_reader = csv.reader(csv_file, delimiter='|', quotechar='"')
+            csv_reader = csv.reader(csv_file, **cls.CSV_FORMAT)
             return list(csv_reader)
 
     @classmethod
