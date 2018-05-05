@@ -337,3 +337,17 @@ def one_min(iterable):
     if not values:
         raise TooFewValuesError(expected=1, received='')
     return values
+
+
+def logical_xor(a, b):
+    return bool(a) ^ bool(b)
+
+
+def xor_constrain(a, b):
+    if a and not b:
+        return a
+    if b and not a:
+        return b
+    if a and b:
+        raise ValueError('xor error: both values cannot be True')
+    raise ValueError('xor error: both values cannot be False')
