@@ -1,10 +1,10 @@
 %YAML 1.2
 ---
-is_enabled: False
+is_enabled: True
 page_type: MULTI
 wait: 10
 pause: 2
-extract_sources: True
+extract_sources: False
 
 url:
   # https://www.ncbi.nlm.nih.gov/pmc/?term=(Homelessness%5BTitle%5D)+AND+Texas%5BText+Word%5D
@@ -14,6 +14,16 @@ url:
   problem_clause: '({problem}%5BTitle%5D)'
   org_clause: '{org}%5BText+Word%5D'
   geo_clause: '{geo}%5BText+Word%5D'
+
+pagination:
+  pages: 5
+  next_page_click:
+    - xpath: "//div[contains(concat(' ', @class, ' '), ' pagination ')]/a[text()='Next >']"
+      click: True
+    - wait: 5
+      presence_of_all_elements_located:  # All wait operation locations use absolute paths:
+      is_multiple: True
+      class_name: rprt
 
 content:
   items:

@@ -13,6 +13,7 @@ from parse import parse
 from pprint import PrettyPrinter
 from ruamel import yaml
 from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions
@@ -25,8 +26,8 @@ from utils.debug import async_debug, debug
 from utils.structures import FlexEnum
 from utils.time import flex_strptime
 from utils.tools import (
-    PP, delist, enlist, human_selection_shuffle, multi_parse,
-    one, one_max, one_min
+    PP, delist, enlist, human_selection_shuffle,
+    multi_parse, one, one_max, one_min, xor_constrain
 )
 
 
@@ -142,8 +143,8 @@ class BaseExtractor:
 
     @async_debug()
     async def _perform_extraction(self, url=None):
-        url = url or self.page_url
-        await self._fetch_page(url)
+        if url:
+            await self._fetch_page(url)
         return await self._extract_page()
 
     @async_debug()
@@ -174,8 +175,7 @@ class BaseExtractor:
                 continue
 
             try:
-                content[field] = await self._perform_operation(
-                    element, field_config, index)
+                content[field] = await self._perform_operation(element, field_config, index)
             # e.g. NoSuchElementException
             except Exception as e:
                 PP.pprint(dict(
@@ -346,15 +346,16 @@ class BaseExtractor:
 
         if operation.format_method is self.FormatMethod.FORMAT:
             template = one(args)
-            if self.VALUE_KEY in self.content:
+            fields = {} if self.content is None else self.content
+            if self.VALUE_KEY in fields:
                 raise ValueError(
                     "Reserved word '{self.VALUE_KEY}' cannot be content field")
-            self.content[self.VALUE_KEY] = None
+            fields[self.VALUE_KEY] = None
             for value in values:
-                self.content[self.VALUE_KEY] = value
-                formatted = template.format(**self.content)
+                fields[self.VALUE_KEY] = value
+                formatted = template.format(**fields)
                 formatted_values.append(formatted)
-            del self.content[self.VALUE_KEY]
+            del fields[self.VALUE_KEY]
 
         elif operation.format_method is self.FormatMethod.STRFTIME:
             template = one(args)
@@ -675,7 +676,8 @@ class MultiExtractor(BaseExtractor):
     # Pagination keys
     PAGINATION_KEY = 'pagination'
     PAGES_KEY = 'pages'
-    NEXT_PAGE_KEY = 'next_page'
+    NEXT_PAGE_CLICK_KEY = 'next_page_click'
+    NEXT_PAGE_URL_KEY = 'next_page_url'
 
     EXTRACT_SOURCES_KEY = 'extract_sources'
     ITEMS_KEY = 'items'
@@ -691,27 +693,29 @@ class MultiExtractor(BaseExtractor):
         if not pagination_config:
             return results
 
-        next_page_config = pagination_config[self.NEXT_PAGE_KEY]
         pages = pagination_config.get(self.PAGES_KEY, float('Inf'))
-        page = 1
 
+        click_config = pagination_config.get(self.NEXT_PAGE_CLICK_KEY)
+        url_config = pagination_config.get(self.NEXT_PAGE_URL_KEY)
+        next_page_operation_config = xor_constrain(click_config, url_config)
+        via_url = bool(url_config)
+        return await self._extract_following_pages(next_page_operation_config, pages, via_url)
+
+    @async_debug()
+    async def _extract_following_pages(self, config, pages, via_url=False):
+        page = 1
         while page < pages:
-            url = await self._extract_next_page_url(self.web_driver, next_page_config, page + 1)
-            if not url:
-                break
+            try:
+                next_page_result = await self._perform_operation(self.web_driver, config, page)
+            except NoSuchElementException:
+                break  # Last page always fails to find next element
+
             page += 1
             await asyncio.sleep(self.pause)
+            url = next_page_result if via_url else None
             results = await super()._perform_extraction(url)
 
         return results
-
-    @async_debug()
-    async def _extract_next_page_url(self, web_driver, config, page):
-        try:
-            return await self._perform_operation(web_driver, config, page)
-        # e.g. NoSuchElementException
-        except Exception as e:
-            return  # Last page always fails to find next url
 
     @async_debug()
     async def _extract_page(self):

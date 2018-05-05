@@ -1,6 +1,6 @@
 %YAML 1.2
 ---
-is_enabled: True
+is_enabled: False
 page_type: MULTI
 wait: 0
 pause: 2
@@ -15,6 +15,13 @@ url:
   problem_clause: '%22Keywords{clause_index}%22:%22{problem}%22'
   org_clause: '%22FullText{clause_index}%22:%22{org}%22'
   geo_clause: '%22FullText{clause_index}%22:%22{geo}%22'
+
+pagination:
+  pages: 5
+  next_page_url:
+    id: pagination-next
+    attribute: data-url
+    format: "https://academic.oup.com/journals/search-results?{value}"
 
 content:
   items:
