@@ -233,6 +233,7 @@ class BaseExtractor:
 
     @async_debug()
     async def _find_elements(self, operation, element, index=1):
+        element = delist(element)
         self._validate_element(element)
         find_method, find_by = self._derive_find_method(operation, element)
         args = (self._render_references(a) for a in operation.find_args)
