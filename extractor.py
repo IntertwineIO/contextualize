@@ -561,8 +561,8 @@ class SourceExtractor(BaseExtractor):
 
     @async_debug()
     async def extract(self):
-        if self.initial_wait:
-            await asyncio.sleep(self.initial_wait)
+        if self.initial_delay:
+            await asyncio.sleep(self.initial_delay)
         return await super().extract()
 
     @async_debug()
@@ -595,13 +595,13 @@ class SourceExtractor(BaseExtractor):
         yield:      Fully configured source extractor instances
         """
         human_selection_shuffle(urls)
-        initial_wait = 0
+        initial_delay = 0
         for url in urls:
             try:
                 # TODO: Use lognormal with pause_mean and pause_standard_deviation
                 # Also apply minimum/maximum values
-                initial_wait += random.uniform(cls.MINIMUM_WAIT, cls.MAXIMUM_WAIT)
-                extractor = cls(model, page_url=url, initial_wait=initial_wait)
+                initial_delay += random.uniform(cls.MINIMUM_WAIT, cls.MAXIMUM_WAIT)
+                extractor = cls(model, page_url=url, initial_delay=initial_delay)
                 if extractor.is_enabled:
                     yield extractor
             # FileNotFoundError, ruamel.yaml.scanner.ScannerError, ValueError
@@ -653,8 +653,8 @@ class SourceExtractor(BaseExtractor):
         clipped_url = url[start:end]
         return clipped_url
 
-    def __init__(self, model, page_url, initial_wait=0, web_driver_type=None, loop=None):
-        self.initial_wait = initial_wait
+    def __init__(self, model, page_url, initial_delay=0, web_driver_type=None, loop=None):
+        self.initial_delay = initial_delay
         self.page_url = url_normalize(page_url)
         directory = self._derive_directory(model, self.page_url)
         super().__init__(model, directory, web_driver_type, loop)
