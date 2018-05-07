@@ -1,10 +1,9 @@
 %YAML 1.2
 ---
-is_enabled: False
 page_type: MULTI
-wait: 0
-pause: 2
+is_enabled: False
 extract_sources: False
+wait: 0
 
 url:
   # https://academic.oup.com/journals/search-results?page=1&fl_SiteID=5567&qb={%22Keywords1%22:%22Homelessness%22,%22FullText2%22:%22Texas%22}
@@ -22,6 +21,14 @@ pagination:
     id: pagination-next
     attribute: data-url
     format: "https://academic.oup.com/journals/search-results?{value}"
+
+delay:
+  mu: 0
+  sigma: 0.5
+  base: 0
+  multiplier: 2
+  minimum: 1
+  maximum: 4
 
 content:
   items:

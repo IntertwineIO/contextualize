@@ -50,9 +50,13 @@ class BaseExtractor:
     REFERENCE_DELIMITER = '.'
 
     WebDriverType = FlexEnum('WebDriverType', 'CHROME FIREFOX')
-    DEFAULT_WEB_DRIVER_TYPE = WebDriverType.CHROME
-    DEFAULT_MAX_WAIT = 10
+    WEB_DRIVER_TYPE_DEFAULT = WebDriverType.CHROME
+    WAIT_MAXIMUM_DEFAULT = 10
     WAIT_POLL_INTERVAL = 0.2
+
+    DELAY_KEY = 'delay'
+    DELAY_DEFAULTS = HumanDwellTime(
+        mu=0, sigma=0.5, base=1, multiplier=1, minimum=1, maximum=3)
 
     ####################################################################
     # TODO: Make ExtractOperation a class & encapsulate relevant methods
@@ -65,7 +69,7 @@ class BaseExtractor:
     ATTRIBUTE_KEY = 'attribute'
 
     OperationScope = FlexEnum('OperationScope', 'PAGE PARENT PRIOR LATEST')
-    DEFAULT_OPERATION_SCOPE = OperationScope.LATEST
+    OPERATION_SCOPE_DEFAULT = OperationScope.LATEST
 
     FindMethod = FlexEnum('FindMethod',
                           'CLASS_NAME CSS_SELECTOR ID LINK_TEXT NAME '
@@ -137,7 +141,7 @@ class BaseExtractor:
         future_web_driver = self._execute_in_future(self.web_driver_class,
                                                     **self.web_driver_kwargs)
         self.web_driver = await future_web_driver
-        max_implicit_wait = self.configuration.get(self.WAIT_KEY, self.DEFAULT_MAX_WAIT)
+        max_implicit_wait = self.configuration.get(self.WAIT_KEY, self.WAIT_MAXIMUM_DEFAULT)
         # Configure web driver to allow waiting on each operation
         self.web_driver.implicitly_wait(max_implicit_wait)
 
@@ -241,8 +245,8 @@ class BaseExtractor:
         selector = template.format(index=index)
 
         if operation.wait_method:
-            max_explicit_wait = operation.wait or self.DEFAULT_MAX_WAIT
-            wait = WebDriverWait(self.web_driver, max_explicit_wait,
+            explicit_wait = operation.wait or self.WAIT_MAXIMUM_DEFAULT
+            wait = WebDriverWait(self.web_driver, explicit_wait,
                                  poll_frequency=self.WAIT_POLL_INTERVAL)
             wait_method_name = operation.wait_method.name.lower()
             wait_condition_method = getattr(expected_conditions, wait_method_name)
@@ -401,7 +405,7 @@ class BaseExtractor:
             operation_scope = config[self.SCOPE_KEY]
             return self.OperationScope[operation_scope.upper()]
 
-        return self.DEFAULT_OPERATION_SCOPE
+        return self.OPERATION_SCOPE_DEFAULT
 
     @debug()
     def _configure_operation(self, config):
@@ -440,6 +444,24 @@ class BaseExtractor:
         method_type = method_enum[method_key.upper()]
         method_args = enlist(config[method_key])
         return method_type, method_args
+
+    def _configure_delay(self, configuration):
+        delay_config = self.DELAY_DEFAULTS._asdict()
+        if self.DELAY_KEY not in configuration:
+            return delay_config
+        delay_overrides = configuration[self.DELAY_KEY]
+        unsupported = delay_overrides.keys() - delay_config.keys()
+        delay_config.update(delay_overrides)
+
+        if unsupported:
+            for key in unsupported:
+                del delay_config[key]
+            PP.pprint(dict(
+                msg='Unsupported keys in delay configuration',
+                type='unsupported_keys_in_delay_configuration',
+                config=delay_overrides, unsupported=unsupported, extractor=repr(self)))
+
+        return delay_config
 
     @debug()
     def _derive_find_method(self, operation, element):
@@ -535,8 +557,9 @@ class BaseExtractor:
         self.file_path = self._form_file_path(self.base_directory, self.directory)
         self.configuration = self._marshall_configuration(self.file_path)
         self.is_enabled = self.configuration.get(self.IS_ENABLED_KEY, True)
+        self.delay_configuration = self._configure_delay(self.configuration)
 
-        self.web_driver_type = web_driver_type or self.DEFAULT_WEB_DRIVER_TYPE
+        self.web_driver_type = web_driver_type or self.WEB_DRIVER_TYPE_DEFAULT
         self.web_driver_class = self._derive_web_driver_class(self.web_driver_type)
         self.web_driver_kwargs = self._derive_web_driver_kwargs(self.web_driver_type)
         self.web_driver = None
@@ -555,9 +578,6 @@ class SourceExtractor(BaseExtractor):
     DIRECTORY_NAME_DELIMITER = '_'
     PATH_DELIMITER = '/'
     QUERY_STRING_DELIMITER = '?'
-
-    MINIMUM_WAIT = 1
-    MAXIMUM_WAIT = 3
 
     @async_debug()
     async def extract(self):
@@ -583,24 +603,24 @@ class SourceExtractor(BaseExtractor):
             return content
 
     @classmethod
-    def provision_extractors(cls, model, urls=None):
+    def provision_extractors(cls, model, urls=None, delay_configuration=None):
         """
         Provision Extractors
 
         Instantiate and yield source extractors for the given urls.
 
         I/O:
-        model:      Extractable content class
-        urls=None:  List of url strings for source content
-        yield:      Fully configured source extractor instances
+        model:                      Extractable content class
+        urls=None:                  List of URL strings for content
+        delay_configuration=None:   Configuration to stagger extractions
+        yield:                      Fully configured source extractors
         """
         human_selection_shuffle(urls)
+        delay_config = delay_configuration or cls.DELAY_DEFAULTS._asdict()
         initial_delay = 0
         for url in urls:
             try:
-                # TODO: Use lognormal with pause_mean and pause_standard_deviation
-                # Also apply minimum/maximum values
-                initial_delay += random.uniform(cls.MINIMUM_WAIT, cls.MAXIMUM_WAIT)
+                initial_delay += human_dwell_time(**delay_config)
                 extractor = cls(model, page_url=url, initial_delay=initial_delay)
                 if extractor.is_enabled:
                     yield extractor
@@ -681,8 +701,6 @@ class MultiExtractor(BaseExtractor):
 
     EXTRACT_SOURCES_KEY = 'extract_sources'
     ITEMS_KEY = 'items'
-    PAUSE_KEY = 'pause'
-    DEFAULT_PAUSE = 2
 
     @async_debug()
     async def _perform_extraction(self, url=None):
@@ -711,7 +729,8 @@ class MultiExtractor(BaseExtractor):
                 break  # Last page always fails to find next element
 
             page += 1
-            await asyncio.sleep(self.pause)
+            delay = human_dwell_time(**self.delay_configuration)
+            await asyncio.sleep(delay)
             url = next_page_result if via_url else None
             results = await super()._perform_extraction(url)
 
@@ -772,7 +791,8 @@ class MultiExtractor(BaseExtractor):
     @async_debug()
     async def _extract_sources(self, item_results):
         source_urls = [content[self.SOURCE_URL_KEY] for content in item_results.values()]
-        source_extractors = SourceExtractor.provision_extractors(self.model, source_urls)
+        source_extractors = SourceExtractor.provision_extractors(
+            self.model, source_urls, self.delay_configuration)
         futures = {extractor.extract() for extractor in source_extractors}
         if not futures:
             return []
@@ -899,5 +919,4 @@ class MultiExtractor(BaseExtractor):
                               if v is not None} if url_fragments else {}
         super().__init__(model, directory, web_driver_type, loop)
         self.page_url = self._form_page_url(self.configuration, self.url_fragments)
-        self.pause = self.configuration.get(self.PAUSE_KEY, self.DEFAULT_PAUSE)
         self.item_results = OrderedDict()  # Store results after extraction

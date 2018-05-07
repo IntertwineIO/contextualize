@@ -1,8 +1,9 @@
 %YAML 1.2
 ---
-is_enabled: True
 page_type: SOURCE
+is_enabled: True
 wait: 0
+
 url:
   # https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3865876/
   url_template: "https://www.ncbi.nlm.nih.gov/pmc/articles/{article_id}/"
