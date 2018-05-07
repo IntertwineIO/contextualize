@@ -25,9 +25,9 @@ from utils.async import run_in_executor
 from utils.debug import async_debug, debug
 from utils.structures import FlexEnum
 from utils.time import flex_strptime
+from utils.statistics import HumanDwellTime, human_dwell_time, human_selection_shuffle
 from utils.tools import (
-    PP, delist, enlist, human_selection_shuffle,
-    multi_parse, one, one_max, one_min, xor_constrain
+    PP, delist, enlist, multi_parse, one, one_max, one_min, xor_constrain
 )
 
 
