@@ -108,7 +108,7 @@ class BaseExtractor:
     GetMethod = FlexEnum('GetMethod', 'GET')
     ParseMethod = FlexEnum('ParseMethod', 'PARSE STRPTIME')
     FormatMethod = FlexEnum('FormatMethod', 'FORMAT STRFTIME')
-    TransformMethod = FlexEnum('TransformMethod', 'JOIN SPLIT')
+    TransformMethod = FlexEnum('TransformMethod', 'EXCISE JOIN SPLIT')
     # SetMethod = FlexEnum('SetMethod', 'SET')
 
     ExtractOperation = namedtuple('ExtractOperation',
@@ -374,7 +374,15 @@ class BaseExtractor:
         transformed_values = []
         args = (self._render_references(a) for a in operation.transform_args)
 
-        if operation.transform_method is self.TransformMethod.JOIN:
+        if operation.transform_method is self.TransformMethod.EXCISE:
+            snippets = one_min(args)
+            for value in values:
+                excised_value = value
+                for snippet in snippets:
+                    excised_value = value.replace(snippet, '')
+                transformed_values.append(excised_value)
+
+        elif operation.transform_method is self.TransformMethod.JOIN:
             delimiter = one(args)
             joined_values = delimiter.join(values)
             transformed_values.append(joined_values)
