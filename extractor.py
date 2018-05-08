@@ -545,7 +545,9 @@ class BaseExtractor:
 
     def __repr__(self):
         class_name = self.__class__.__name__
-        return (f'<{class_name}: {self.directory}, {self.created_timestamp}>')
+        directory = getattr(self, 'directory', None)
+        created_timestamp = getattr(self, 'created_timestamp', None)
+        return (f'<{class_name}: {directory}, {created_timestamp}>')
 
     def __init__(self, model, directory, web_driver_type=None, loop=None):
         self.loop = loop or asyncio.get_event_loop()
@@ -712,15 +714,21 @@ class MultiExtractor(BaseExtractor):
             return results
 
         pages = pagination_config.get(self.PAGES_KEY, float('Inf'))
+        if pages < 2:
+            return results
 
         click_config = pagination_config.get(self.NEXT_PAGE_CLICK_KEY)
         url_config = pagination_config.get(self.NEXT_PAGE_URL_KEY)
         next_page_operation_config = xor_constrain(click_config, url_config)
         via_url = bool(url_config)
-        return await self._extract_following_pages(next_page_operation_config, pages, via_url)
+        updated_results = await self._extract_following_pages(
+            next_page_operation_config, pages, via_url)
+
+        return updated_results if updated_results else results
 
     @async_debug()
     async def _extract_following_pages(self, config, pages, via_url=False):
+        updated_results = None
         page = 1
         while page < pages:
             try:
@@ -732,9 +740,9 @@ class MultiExtractor(BaseExtractor):
             delay = human_dwell_time(**self.delay_configuration)
             await asyncio.sleep(delay)
             url = next_page_result if via_url else None
-            results = await super()._perform_extraction(url)
+            updated_results = await super()._perform_extraction(url)
 
-        return results
+        return updated_results
 
     @async_debug()
     async def _extract_page(self):
@@ -910,8 +918,10 @@ class MultiExtractor(BaseExtractor):
 
     def __repr__(self):
         class_name = self.__class__.__name__
-        return (f'<{class_name} | {self.directory} | {self.url_fragments!r} | '
-                f'{self.created_timestamp}>')
+        directory = getattr(self, 'directory', None)
+        url_fragments = getattr(self, 'url_fragments', None)
+        created_timestamp = getattr(self, 'created_timestamp', None)
+        return (f'<{class_name} | {directory} | {url_fragments!r} | {created_timestamp}>')
 
     def __init__(self, model, directory, url_fragments=None,
                  web_driver_type=None, loop=None):

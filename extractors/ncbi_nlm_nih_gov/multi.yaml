@@ -2,7 +2,7 @@
 ---
 page_type: MULTI
 is_enabled: True
-extract_sources: False
+extract_sources: True
 wait: 10
 
 url:
@@ -15,7 +15,7 @@ url:
   geo_clause: '{geo}%5BText+Word%5D'
 
 pagination:
-  pages: 5
+  pages: 2
   next_page_click:
     - xpath: "//div[contains(concat(' ', @class, ' '), ' pagination ')]/a[text()='Next >']"
       click: True
