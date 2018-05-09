@@ -62,9 +62,8 @@ content:
     xpath: ".//div[contains(concat(' ', @class, ' '), ' article ')]/div[1]/div[3]/div[2]"
     getattr: text
   full_text:
-    - is_multiple: True
-      xpath: ".//div[contains(concat(' ', @class, ' '), ' article ')]/div[1]/div[position() > 2]"
-      getattr: text
-      parse: ['Go to:\n{value}', '{value}\nGo to:', '{value}']
-      join: '\n'
-    - excise: '\nGo to:'
+    is_multiple: True
+    xpath: ".//div[contains(concat(' ', @class, ' '), ' article ')]/div[1]/div[position() > 2]"
+    getattr: text
+    parse: ["Go to:\n{value}", "{value}"]
+    join: "\n"

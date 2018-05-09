@@ -317,8 +317,8 @@ class BaseExtractor:
         if operation.parse_method is self.ParseMethod.PARSE:
             templates = one_min(args)
             for value in values:
-                if value is None:
-                    parsed_values.append(None)
+                if not value:
+                    parsed_values.append(value)
                     continue
                 parsed = None
                 try:
