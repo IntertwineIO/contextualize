@@ -22,7 +22,7 @@ from url_normalize import url_normalize
 
 from secret_service.agency import SecretService
 from utils.async import run_in_executor
-from utils.debug import async_debug, debug
+from utils.debug import async_debug, sync_debug
 from utils.structures import FlexEnum
 from utils.time import flex_strptime
 from utils.statistics import HumanDwellTime, human_dwell_time, human_selection_shuffle
@@ -395,7 +395,7 @@ class BaseExtractor:
 
         return transformed_values
 
-    @debug()
+    @sync_debug()
     def _select_targets(self, config, latest, prior, parent):
         operation_scope = self._derive_operation_scope(config)
         if operation_scope is self.OperationScope.LATEST:
@@ -407,7 +407,7 @@ class BaseExtractor:
         assert operation_scope is self.OperationScope.PAGE
         return [self.web_driver]  # Selenium WebDriver instance
 
-    @debug()
+    @sync_debug()
     def _derive_operation_scope(self, config):
         if self.SCOPE_KEY in config:
             operation_scope = config[self.SCOPE_KEY]
@@ -415,7 +415,7 @@ class BaseExtractor:
 
         return self.OPERATION_SCOPE_DEFAULT
 
-    @debug()
+    @sync_debug()
     def _configure_operation(self, config):
         is_multiple = config.get(self.IS_MULTIPLE_KEY, False)
         find_method, find_args = self._configure_method(
@@ -471,7 +471,7 @@ class BaseExtractor:
 
         return delay_config
 
-    @debug()
+    @sync_debug()
     def _derive_find_method(self, operation, element):
         element_tag = (self.ELEMENTS_KEY if operation.is_multiple
                        else self.ELEMENT_KEY)
@@ -481,7 +481,7 @@ class BaseExtractor:
         find_by = getattr(By, operation.find_method.name)
         return find_method, find_by
 
-    @debug()
+    @sync_debug()
     def _render_references(self, template):
         while (self.LEFT_REFERENCE_TOKEN in template and
                self.RIGHT_REFERENCE_TOKEN in template):
@@ -495,7 +495,7 @@ class BaseExtractor:
 
         return template
 
-    @debug()
+    @sync_debug()
     def _get_by_reference_tag(self, reference_tag):
         parsed = parse(self.REFERENCE_TEMPLATE, reference_tag)
         if not parsed:
@@ -504,7 +504,7 @@ class BaseExtractor:
         reference = parsed.fixed[0]
         return self._get_by_reference(reference)
 
-    @debug()
+    @sync_debug()
     def _get_by_reference(self, reference):
         components = reference.split(self.REFERENCE_DELIMITER)
         field_name = components[0]
@@ -514,17 +514,17 @@ class BaseExtractor:
                 value = getattr(value, component)
         return value
 
-    @debug()
+    @sync_debug()
     def _validate_element(self, value):
         if not isinstance(value, (self.web_driver_class, WebElement)):
             raise TypeError(f'Expected driver or element. Received: {value}')
 
-    @debug()
+    @sync_debug()
     def _execute_in_future(self, func, *args, **kwds):
         """Run in executor with kwds support & default loop/executor"""
         return run_in_executor(self.loop, None, func, *args, **kwds)
 
-    @debug()
+    @sync_debug()
     def _form_file_path(self, base, directory):
         return os.path.join(base, directory, self.FILE_NAME)
 
@@ -533,11 +533,11 @@ class BaseExtractor:
         with open(file_path) as stream:
             return yaml.safe_load(stream)
 
-    @debug()
+    @sync_debug()
     def _derive_web_driver_class(self, web_driver_type):
         return getattr(webdriver, web_driver_type.name.capitalize())
 
-    @debug()
+    @sync_debug()
     def _derive_web_driver_kwargs(self, web_driver_type):
         secret_service = SecretService(web_driver_type.name)
         user_agent = secret_service.random
@@ -638,7 +638,7 @@ class SourceExtractor(BaseExtractor):
             except Exception as e:
                 print(e)  # TODO: Replace with logging
 
-    @debug()
+    @sync_debug()
     def _derive_directory(self, model, page_url):
         base_directory = model.BASE_DIRECTORY
         clipped_url = self._clip_url(page_url)
@@ -666,7 +666,7 @@ class SourceExtractor(BaseExtractor):
 
         raise FileNotFoundError(f'Source extractor configuration not found for {page_url}')
 
-    @debug()
+    @sync_debug()
     def _clip_url(self, url):
         start = 0
         if url.startswith(self.HTTPS_KEY):
@@ -869,12 +869,12 @@ class MultiExtractor(BaseExtractor):
         directory = path.replace(base, '', 1)
         return directory
 
-    @debug()
+    @sync_debug()
     def _encode_url_fragments(self, url_fragments):
         return {k: urllib.parse.quote(v) for k, v in url_fragments.items()
                 if v is not None}
 
-    @debug()
+    @sync_debug()
     def _form_page_url(self, configuration, url_fragments):
         url_config = self.configuration[self.URL_KEY]
         # Support shorthand form for hard-coded urls
@@ -889,7 +889,7 @@ class MultiExtractor(BaseExtractor):
 
         return url_template.format(**encoded_fragments)
 
-    @debug()
+    @sync_debug()
     def _form_clause_series(self, url_config, encoded_fragments):
         clauses = []
         clause_keys = url_config[self.CLAUSE_SERIES_KEY]

@@ -6,7 +6,7 @@ import inspect
 import wrapt
 from pprint import PrettyPrinter
 
-DEBUG_WRAPPERS = {'debug_wrapper', 'async_debug_wrapper'}
+DEBUG_WRAPPERS = {'async_debug_wrapper', 'sync_debug_wrapper'}
 DELIMITER = '–'
 WIDTH = 160
 SEPARATOR = DELIMITER * WIDTH
@@ -71,9 +71,9 @@ def print_exit_info(wrapped, instance, args, kwargs,
     print(SEPARATOR)
 
 
-def debug(offset=None, indent=4):
+def sync_debug(offset=None, indent=4):
     """
-    Debug
+    Sync Debug
 
     Decorator for synchronous functions to provide debugging info:
     - Upon entering: args/kwargs, instance repr (if method) & start time
@@ -92,7 +92,7 @@ def debug(offset=None, indent=4):
                     for each level of offset
     """
     @wrapt.decorator
-    def debug_wrapper(wrapped, instance, args, kwargs):
+    def sync_debug_wrapper(wrapped, instance, args, kwargs):
         loop = asyncio.get_event_loop()
         printer = PrettyPrinter(indent=indent, width=WIDTH)
         offset_space = derive_offset_space(offset, indent)
@@ -109,7 +109,7 @@ def debug(offset=None, indent=4):
                         printer, offset_space, loop)
         return result
 
-    return debug_wrapper
+    return sync_debug_wrapper
 
 
 def async_debug(offset=None, indent=4):
