@@ -35,18 +35,18 @@ class BaseExtractor:
 
     FILE_NAME = NotImplementedError
 
-    OPTIONS_KEY = 'options'
+    OPTIONS_TAG = 'options'
 
-    IS_ENABLED_KEY = 'is_enabled'
-    SOURCE_URL_KEY = 'source_url'
-    CONTENT_KEY = 'content'
-    ELEMENT_KEY = 'element'
-    ELEMENTS_KEY = 'elements'
-    VALUE_KEY = 'value'
+    IS_ENABLED_TAG = 'is_enabled'
+    SOURCE_URL_TAG = 'source_url'
+    CONTENT_TAG = 'content'
+    ELEMENT_TAG = 'element'
+    ELEMENTS_TAG = 'elements'
+    VALUE_TAG = 'value'
 
     REFERENCE_TEMPLATE = '<{}>'
-    LEFT_REFERENCE_TOKEN = REFERENCE_TEMPLATE[0]
-    RIGHT_REFERENCE_TOKEN = REFERENCE_TEMPLATE[-1]
+    LEFT_REFERENCE_SYMBOL = REFERENCE_TEMPLATE[0]
+    RIGHT_REFERENCE_SYMBOL = REFERENCE_TEMPLATE[-1]
     REFERENCE_DELIMITER = '.'
 
     WebDriverType = FlexEnum('WebDriverType', 'CHROME FIREFOX')
@@ -54,7 +54,7 @@ class BaseExtractor:
     WAIT_MAXIMUM_DEFAULT = 10
     WAIT_POLL_INTERVAL = 0.2
 
-    DELAY_KEY = 'delay'
+    DELAY_TAG = 'delay'
     DELAY_DEFAULTS = HumanDwellTime(
         mu=0, sigma=0.5, base=1, multiplier=1, minimum=1, maximum=3)
 
@@ -62,11 +62,11 @@ class BaseExtractor:
     # TODO: Make ExtractOperation a class & encapsulate relevant methods
     ####################################################################
 
-    SCOPE_KEY = 'scope'
-    IS_MULTIPLE_KEY = 'is_multiple'
-    WAIT_KEY = 'wait'
-    CLICK_KEY = 'click'
-    ATTRIBUTE_KEY = 'attribute'
+    SCOPE_TAG = 'scope'
+    IS_MULTIPLE_TAG = 'is_multiple'
+    WAIT_TAG = 'wait'
+    CLICK_TAG = 'click'
+    ATTRIBUTE_TAG = 'attribute'
 
     OperationScope = FlexEnum('OperationScope', 'PAGE PARENT PRIOR LATEST')
     OPERATION_SCOPE_DEFAULT = OperationScope.LATEST
@@ -141,7 +141,7 @@ class BaseExtractor:
         future_web_driver = self._execute_in_future(self.web_driver_class,
                                                     **self.web_driver_kwargs)
         self.web_driver = await future_web_driver
-        max_implicit_wait = self.configuration.get(self.WAIT_KEY, self.WAIT_MAXIMUM_DEFAULT)
+        max_implicit_wait = self.configuration.get(self.WAIT_TAG, self.WAIT_MAXIMUM_DEFAULT)
         # Configure web driver to allow waiting on each operation
         self.web_driver.implicitly_wait(max_implicit_wait)
 
@@ -196,7 +196,7 @@ class BaseExtractor:
             for operation_config in config:
                 new_targets = self._select_targets(operation_config, latest, prior, parent)
                 prior = latest
-                if operation_config.get(self.IS_MULTIPLE_KEY, False):
+                if operation_config.get(self.IS_MULTIPLE_TAG, False):
                     latest = await self._perform_operation(new_targets, operation_config, index)
                     continue
                 for new_target in new_targets:
@@ -323,7 +323,7 @@ class BaseExtractor:
                 parsed = None
                 try:
                     parsed = multi_parse(templates, value)
-                    parsed_values.append(parsed.named[self.VALUE_KEY])
+                    parsed_values.append(parsed.named[self.VALUE_TAG])
 
                 except (ValueError, AttributeError, KeyError) as e:
                     PP.pprint(dict(
@@ -351,15 +351,15 @@ class BaseExtractor:
         if operation.format_method is self.FormatMethod.FORMAT:
             template = one(args)
             fields = {} if self.content is None else self.content
-            if self.VALUE_KEY in fields:
+            if self.VALUE_TAG in fields:
                 raise ValueError(
-                    "Reserved word '{self.VALUE_KEY}' cannot be content field")
-            fields[self.VALUE_KEY] = None
+                    "Reserved word '{self.VALUE_TAG}' cannot be content field")
+            fields[self.VALUE_TAG] = None
             for value in values:
-                fields[self.VALUE_KEY] = value
+                fields[self.VALUE_TAG] = value
                 formatted = template.format(**fields)
                 formatted_values.append(formatted)
-            del fields[self.VALUE_KEY]
+            del fields[self.VALUE_TAG]
 
         elif operation.format_method is self.FormatMethod.STRFTIME:
             template = one(args)
@@ -409,21 +409,21 @@ class BaseExtractor:
 
     @sync_debug()
     def _derive_operation_scope(self, config):
-        if self.SCOPE_KEY in config:
-            operation_scope = config[self.SCOPE_KEY]
+        if self.SCOPE_TAG in config:
+            operation_scope = config[self.SCOPE_TAG]
             return self.OperationScope[operation_scope.upper()]
 
         return self.OPERATION_SCOPE_DEFAULT
 
     @sync_debug()
     def _configure_operation(self, config):
-        is_multiple = config.get(self.IS_MULTIPLE_KEY, False)
+        is_multiple = config.get(self.IS_MULTIPLE_TAG, False)
         find_method, find_args = self._configure_method(
             config, self.FindMethod)
         wait_method, wait_args = self._configure_method(
             config, self.WaitMethod)
-        wait = config.get(self.WAIT_KEY, 0)
-        click = config.get(self.CLICK_KEY, False)
+        wait = config.get(self.WAIT_TAG, 0)
+        click = config.get(self.CLICK_TAG, False)
         extract_method, extract_args = self._configure_method(
             config, self.ExtractMethod)
         get_method, get_args = self._configure_method(
@@ -455,9 +455,9 @@ class BaseExtractor:
 
     def _configure_delay(self, configuration):
         delay_config = self.DELAY_DEFAULTS._asdict()
-        if self.DELAY_KEY not in configuration:
+        if self.DELAY_TAG not in configuration:
             return delay_config
-        delay_overrides = configuration[self.DELAY_KEY]
+        delay_overrides = configuration[self.DELAY_TAG]
         unsupported = delay_overrides.keys() - delay_config.keys()
         delay_config.update(delay_overrides)
 
@@ -473,8 +473,8 @@ class BaseExtractor:
 
     @sync_debug()
     def _derive_find_method(self, operation, element):
-        element_tag = (self.ELEMENTS_KEY if operation.is_multiple
-                       else self.ELEMENT_KEY)
+        element_tag = (self.ELEMENTS_TAG if operation.is_multiple
+                       else self.ELEMENT_TAG)
         method_tag = operation.find_method.name.lower()
         find_method_name = f'find_{element_tag}_by_{method_tag}'
         find_method = getattr(element, find_method_name)
@@ -483,10 +483,10 @@ class BaseExtractor:
 
     @sync_debug()
     def _render_references(self, template):
-        while (self.LEFT_REFERENCE_TOKEN in template and
-               self.RIGHT_REFERENCE_TOKEN in template):
-            reference = (template.split(self.RIGHT_REFERENCE_TOKEN)[0]
-                                 .split(self.LEFT_REFERENCE_TOKEN)[-1])
+        while (self.LEFT_REFERENCE_SYMBOL in template and
+               self.RIGHT_REFERENCE_SYMBOL in template):
+            reference = (template.split(self.RIGHT_REFERENCE_SYMBOL)[0]
+                                 .split(self.LEFT_REFERENCE_SYMBOL)[-1])
             if not reference:
                 return template
             reference_tag = self.REFERENCE_TEMPLATE.format(reference)
@@ -566,7 +566,7 @@ class BaseExtractor:
         self.directory = directory
         self.file_path = self._form_file_path(self.base_directory, self.directory)
         self.configuration = self._marshall_configuration(self.file_path)
-        self.is_enabled = self.configuration.get(self.IS_ENABLED_KEY, True)
+        self.is_enabled = self.configuration.get(self.IS_ENABLED_TAG, True)
         self.delay_configuration = self._configure_delay(self.configuration)
 
         self.web_driver_type = web_driver_type or self.WEB_DRIVER_TYPE_DEFAULT
@@ -581,9 +581,9 @@ class SourceExtractor(BaseExtractor):
 
     FILE_NAME = 'source.yaml'
 
-    HTTPS_KEY = 'https://'
-    HTTP_KEY = 'http://'
-    WWW_DOT_KEY = 'www.'
+    HTTPS_TAG = 'https://'
+    HTTP_TAG = 'http://'
+    WWW_DOT_TAG = 'www.'
     DOMAIN_DELIMITER = '.'
     DIRECTORY_NAME_DELIMITER = '_'
     PATH_DELIMITER = '/'
@@ -597,7 +597,7 @@ class SourceExtractor(BaseExtractor):
 
     @async_debug()
     async def _extract_page(self):
-        content_config = self.configuration[self.CONTENT_KEY]
+        content_config = self.configuration[self.CONTENT_TAG]
         try:
             content = await self._extract_content(self.web_driver, content_config)
             if not content:
@@ -609,7 +609,7 @@ class SourceExtractor(BaseExtractor):
                 error=e, extractor=repr(self), config=content_config))
             raise
         else:
-            content[self.SOURCE_URL_KEY] = self.page_url
+            content[self.SOURCE_URL_TAG] = self.page_url
             return content
 
     @classmethod
@@ -669,13 +669,13 @@ class SourceExtractor(BaseExtractor):
     @sync_debug()
     def _clip_url(self, url):
         start = 0
-        if url.startswith(self.HTTPS_KEY):
-            start = len(self.HTTPS_KEY)
-        elif url.startswith(self.HTTP_KEY):
-            start = len(self.HTTP_KEY)
-        www_index = url.find(self.WWW_DOT_KEY)
+        if url.startswith(self.HTTPS_TAG):
+            start = len(self.HTTPS_TAG)
+        elif url.startswith(self.HTTP_TAG):
+            start = len(self.HTTP_TAG)
+        www_index = url.find(self.WWW_DOT_TAG)
         if www_index == start:
-            start += len(self.WWW_DOT_KEY)
+            start += len(self.WWW_DOT_TAG)
         query_index = url.find(self.QUERY_STRING_DELIMITER)
         end = query_index if query_index > -1 else len(url)
         if url[end - 1] == self.PATH_DELIMITER:
@@ -695,38 +695,38 @@ class MultiExtractor(BaseExtractor):
     FILE_NAME = 'multi.yaml'
 
     # URL keys
-    URL_KEY = 'url'
-    URL_TEMPLATE_KEY = 'url_template'
-    CLAUSE_SERIES_KEY = 'clause_series'
-    CLAUSE_SERIES_TAG = f'{{{CLAUSE_SERIES_KEY}}}'
-    CLAUSE_DELIMITER_KEY = 'clause_delimiter'
-    CLAUSE_INDEX_KEY = 'clause_index'
-    # PAGE_INDEX_KEY = 'page_index'
+    URL_TAG = 'url'
+    URL_TEMPLATE_TAG = 'url_template'
+    CLAUSE_SERIES_TAG = 'clause_series'
+    CLAUSE_SERIES_TOKEN = f'{{{CLAUSE_SERIES_TAG}}}'
+    CLAUSE_DELIMITER_TAG = 'clause_delimiter'
+    CLAUSE_INDEX_TAG = 'clause_index'
+    # PAGE_INDEX_TAG = 'page_index'
 
     # Pagination keys
-    PAGINATION_KEY = 'pagination'
-    PAGES_KEY = 'pages'
-    NEXT_PAGE_CLICK_KEY = 'next_page_click'
-    NEXT_PAGE_URL_KEY = 'next_page_url'
+    PAGINATION_TAG = 'pagination'
+    PAGES_TAG = 'pages'
+    NEXT_PAGE_CLICK_TAG = 'next_page_click'
+    NEXT_PAGE_URL_TAG = 'next_page_url'
 
-    EXTRACT_SOURCES_KEY = 'extract_sources'
-    ITEMS_KEY = 'items'
+    EXTRACT_SOURCES_TAG = 'extract_sources'
+    ITEMS_TAG = 'items'
 
     @async_debug()
     async def _perform_extraction(self, url=None):
         url = url or self.page_url
         results = await super()._perform_extraction(url)
 
-        pagination_config = self.configuration.get(self.PAGINATION_KEY)
+        pagination_config = self.configuration.get(self.PAGINATION_TAG)
         if not pagination_config:
             return results
 
-        pages = pagination_config.get(self.PAGES_KEY, float('Inf'))
+        pages = pagination_config.get(self.PAGES_TAG, float('Inf'))
         if pages < 2:
             return results
 
-        click_config = pagination_config.get(self.NEXT_PAGE_CLICK_KEY)
-        url_config = pagination_config.get(self.NEXT_PAGE_URL_KEY)
+        click_config = pagination_config.get(self.NEXT_PAGE_CLICK_TAG)
+        url_config = pagination_config.get(self.NEXT_PAGE_URL_TAG)
         next_page_operation_config = xor_constrain(click_config, url_config)
         via_url = bool(url_config)
         updated_results = await self._extract_following_pages(
@@ -758,8 +758,8 @@ class MultiExtractor(BaseExtractor):
 
     @async_debug()
     async def _extract_multiple(self):
-        content_config = self.configuration[self.CONTENT_KEY]
-        items_config = content_config[self.ITEMS_KEY]
+        content_config = self.configuration[self.CONTENT_TAG]
+        items_config = content_config[self.ITEMS_TAG]
         unique_field = self.model.UNIQUE_FIELD
 
         elements = await self._perform_operation(self.web_driver, items_config)
@@ -794,10 +794,10 @@ class MultiExtractor(BaseExtractor):
                 msg='Extract item results failure', type='extract_item_results_failure',
                 extractor=repr(self), config=items_config))
 
-        if self.configuration.get(self.EXTRACT_SOURCES_KEY, True):
-            if unique_field != self.SOURCE_URL_KEY:
+        if self.configuration.get(self.EXTRACT_SOURCES_TAG, True):
+            if unique_field != self.SOURCE_URL_TAG:
                 raise ValueError('Unique field must be '
-                                 f"'{self.SOURCE_URL_KEY}' to extract sources")
+                                 f"'{self.SOURCE_URL_TAG}' to extract sources")
             # TODO: Store preliminary results in redis
             source_results = await self._extract_sources(self.item_results)
             await self._combine_results(self.item_results, source_results)
@@ -806,7 +806,7 @@ class MultiExtractor(BaseExtractor):
 
     @async_debug()
     async def _extract_sources(self, item_results):
-        source_urls = [content[self.SOURCE_URL_KEY] for content in item_results.values()]
+        source_urls = [content[self.SOURCE_URL_TAG] for content in item_results.values()]
         source_extractors = SourceExtractor.provision_extractors(
             self.model, source_urls, self.delay_configuration)
         futures = {extractor.extract() for extractor in source_extractors}
@@ -819,7 +819,7 @@ class MultiExtractor(BaseExtractor):
     @async_debug()
     async def _combine_results(self, item_results, source_results):
         for source_result in source_results:
-            source_url = source_result[self.SOURCE_URL_KEY]
+            source_url = source_result[self.SOURCE_URL_TAG]
             item_result = item_results[source_url]
             source_overrides = ((k, v) for k, v in source_result.items() if v is not None)
             for field, source_value in source_overrides:
@@ -876,15 +876,15 @@ class MultiExtractor(BaseExtractor):
 
     @sync_debug()
     def _form_page_url(self, configuration, url_fragments):
-        url_config = self.configuration[self.URL_KEY]
+        url_config = self.configuration[self.URL_TAG]
         # Support shorthand form for hard-coded urls
         if isinstance(url_config, str):
             return url_config
 
         encoded_fragments = self._encode_url_fragments(url_fragments)
-        url_template = url_config[self.URL_TEMPLATE_KEY]
-        if self.CLAUSE_SERIES_TAG in url_template:
-            encoded_fragments[self.CLAUSE_SERIES_KEY] = self._form_clause_series(
+        url_template = url_config[self.URL_TEMPLATE_TAG]
+        if self.CLAUSE_SERIES_TOKEN in url_template:
+            encoded_fragments[self.CLAUSE_SERIES_TAG] = self._form_clause_series(
                 url_config, encoded_fragments)
 
         return url_template.format(**encoded_fragments)
@@ -892,11 +892,11 @@ class MultiExtractor(BaseExtractor):
     @sync_debug()
     def _form_clause_series(self, url_config, encoded_fragments):
         clauses = []
-        clause_keys = url_config[self.CLAUSE_SERIES_KEY]
+        clause_keys = url_config[self.CLAUSE_SERIES_TAG]
         clause_index = 1
         for clause_key in clause_keys:
             clause_template = url_config[clause_key]
-            encoded_fragments[self.CLAUSE_INDEX_KEY] = str(clause_index)
+            encoded_fragments[self.CLAUSE_INDEX_TAG] = str(clause_index)
             try:
                 rendered_clause = clause_template.format(**encoded_fragments)
             except KeyError:
@@ -908,8 +908,8 @@ class MultiExtractor(BaseExtractor):
         if not clauses:
             raise ValueError(f'No clauses rendered in series: {encoded_fragments}')
 
-        del encoded_fragments[self.CLAUSE_INDEX_KEY]
-        clause_delimiter = url_config[self.CLAUSE_DELIMITER_KEY]
+        del encoded_fragments[self.CLAUSE_INDEX_TAG]
+        clause_delimiter = url_config[self.CLAUSE_DELIMITER_TAG]
         return clause_delimiter.join(clauses)
 
     def _template_keys(self, template):
