@@ -620,7 +620,7 @@ class SourceExtractor(BaseExtractor):
 
         I/O:
         model:                      Extractable content class
-        urls=None:                  List of URL strings for content
+        urls=None:                  List of content URL strings
         delay_configuration=None:   Configuration to stagger extractions
         yield:                      Fully configured source extractors
         """
@@ -838,13 +838,23 @@ class MultiExtractor(BaseExtractor):
         Provision Extractors
 
         Instantiate and yield all multi extractors configured with the
-        given problem name, org name, and geo name.
+        given model and url fragments.
 
         I/O:
-        problem_name=None:  Name of problem to be used as search term
-        org_name=None:      Name of organization to be used as search term
-        geo_name=None:      Name of geo to be used as search term
-        yield:              Fully configured search extractor instances
+        model:                  Any Extractable content class (via
+                                Extractable mixin); defines base config
+                                directory and fields to extract.
+
+        url_fragments=None:     Dictionary of all url fragments required
+                                to render a complete url, as defined by
+                                each url configuration.
+
+                                Example:
+                                    dict(problem='Homelessness',
+                                         org=None,
+                                         geo='Texas')
+
+        yield:                  Fully configured search extractors
         """
         base = model.BASE_DIRECTORY
         dir_nodes = os.walk(base)
