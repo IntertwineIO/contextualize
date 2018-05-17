@@ -1,0 +1,69 @@
+%YAML 1.2
+---
+page_type: SOURCE
+is_enabled: True
+wait: 0
+
+url:
+  # https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3865876/
+  url_template: "https://www.ncbi.nlm.nih.gov/pmc/articles/{article_id}/"
+
+content:
+  title:
+    name: citation_title
+    attribute: content
+  author_names:
+    is_multiple: True
+    name: DC.Contributor
+    attribute: content
+    join: '; '
+  publication:
+    name: citation_journal_title
+    attribute: content
+  # <ResearchSpecific>
+  volume:
+    name: citation_volume
+    attribute: content
+  issue:
+    name: citation_issue
+    attribute: content
+  issue_date:
+    name: citation_date
+    attribute: content
+    strptime: ['%B %d, %Y', '%B %Y', '%Y']
+  issue_date_granularity:
+    get: '<issue_date.granularity.name>'
+  first_page:
+    name: citation_firstpage
+    attribute: content
+  last_page:
+    class_name: cit
+    getattr: text
+    parse: "{}(<issue>): <first_page>–{value}."
+  doi:
+    name: citation_doi
+    attribute: content
+    format: "https://doi.org/{value}"
+  # </ResearchSpecific>
+  published_timestamp:
+    class_name: fm-vol-iss-date
+    getattr: text
+    strptime:
+      - 'Published online %Y %b %d.'
+      - 'Published online %Y %b.'
+      - 'Published online %Y.'
+  granularity_published:
+    get: '<published_timestamp.granularity.name>'
+  tzinfo_published:
+  publisher:
+    name: DC.Publisher
+    attribute: content
+  summary:
+    xpath: ".//div[contains(concat(' ', @class, ' '), ' article ')]/div[1]/div[3]/div[2]"
+    getattr: text
+  full_text:
+    is_multiple: True
+    xpath: ".//div[contains(concat(' ', @class, ' '), ' article ')]/div[1]/div[position() > 2]"
+    getattr: text
+    parse: ["Go to:\n{value}", "{value}"]
+    join: "\n"

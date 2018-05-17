@@ -1,0 +1,116 @@
+%YAML 1.2
+---
+page_type: MULTI
+is_enabled: True
+extract_sources: True
+wait: 10
+
+url:
+  # https://www.ncbi.nlm.nih.gov/pmc/?term=(Homelessness%5BTitle%5D)+AND+Texas%5BText+Word%5D
+  url_template: "https://www.ncbi.nlm.nih.gov/pmc/?term={clause_series}"
+  clause_series: ['problem_clause', 'org_clause', 'geo_clause']
+  clause_delimiter: '+AND+'
+  problem_clause: '({problem}%5BTitle%5D)'
+  org_clause: '{org}%5BText+Word%5D'
+  geo_clause: '{geo}%5BText+Word%5D'
+
+pagination:
+  pages: 2
+  next_page_click:
+    - xpath: "//div[contains(concat(' ', @class, ' '), ' pagination ')]/a[text()='Next >']"
+      click: True
+    - wait: 5
+      presence_of_all_elements_located:  # All wait operation locations use absolute paths:
+      is_multiple: True
+      class_name: rprt
+
+content:
+  items:
+    is_multiple: True
+    class_name: rprt
+  source_url:
+    xpath: ".//div[contains(concat(' ', @class, ' '), ' title ')]/a"
+    attribute: href
+  title:
+    class_name: title
+    getattr: text
+  author_names:
+    - class_name: desc
+      getattr: text
+      split: ', '
+    - is_multiple: True
+      join: '; '
+  publication:
+    class_name: details
+    getattr: text
+    parse: '{value}. {}; {}'
+  # <ResearchSpecific>
+  volume:
+    class_name: details
+    getattr: text
+    parse:
+      - '{}Published in final edited form as: {}. {}; {value}({}):{}'
+      - '{}Published in final edited form as: {}. {}; {value}({}).'
+      - '{}Published in final edited form as: {}. {}; {value}:{}'
+      - '{}Published in final edited form as: {}. {}; {value}.'
+      - '{}; {value}({}):{}'
+      - '{}; {value}:{}'
+  issue:
+    class_name: details
+    getattr: text
+    parse:
+      - '{}Published in final edited form as: {}. {}; {}({value}):{}'
+      - '{}Published in final edited form as: {}. {}; {}({value}).'
+      - '{}; {}({value}):{}'
+      - '{}; ({value}):{}'
+      # - '{}; {}: {value}. {}'
+  issue_date:
+    - class_name: details
+      getattr: text
+      # Violence Vict. Author manuscript; available in PMC 2013 Apr 18.\nPublished in final edited form as: Violence Vict. 2012; 27(5): 793–810.
+      # Am J Public Health. 1995 Dec; 85(12): 1642–1649.
+      parse:
+        - '{}Published online {value}.{}'
+        - '{}Published in final edited form as: {}. {value};{}'
+        - '{}. {value};{}'
+    - strptime: ['%Y %b %d', '%Y %b', '%Y']
+  issue_date_granularity:
+    get: '<issue_date.granularity.name>'
+  first_page:
+    class_name: details
+    getattr: text
+    parse:
+      - '{}Published in final edited form as: {}; {}({}): {value}–{}.'
+      - '{}Published in final edited form as: {}; {}: {value}–{}.'
+      - '{}; {}: {value}–{}.{}'
+      - '{}; {}: {value}–{}.'
+      - '{}; {}: {value}.{}'
+      - '{}; {}: {value}.'
+  last_page:
+    class_name: details
+    getattr: text
+    parse:
+      - '{}Published in final edited form as: {}; {}({}): {}–{value}.'
+      - '{}Published in final edited form as: {}; {}: {}–{value}.'
+      - '{}; {}: {}–{value}.{}'
+      - '{}; {}: {}–{value}.'
+  doi:
+    class_name: details
+    getattr: text
+    parse: '{}doi: {value}'
+    format: "https://doi.org/{value}"
+  # </ResearchSpecific>
+  published_timestamp:
+    - class_name: details
+      getattr: text
+      parse:
+        - '{}Published online {value}.{}'
+        - '{}available in PMC {value}.{}'
+        - '{}. {value};{}'
+    - strptime: ['%Y %b %d', '%Y %b']
+  granularity_published:
+    get: '<published_timestamp.granularity.name>'
+  tzinfo_published:
+  publisher:
+  summary:
+  full_text:

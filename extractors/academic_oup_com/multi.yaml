@@ -1,0 +1,105 @@
+%YAML 1.2
+---
+page_type: MULTI
+is_enabled: False
+extract_sources: False
+wait: 0
+
+url:
+  # https://academic.oup.com/journals/search-results?page=1&fl_SiteID=5567&qb={%22Keywords1%22:%22Homelessness%22,%22FullText2%22:%22Texas%22}
+  # https://academic.oup.com/journals/search-results?page=1&fl_SiteID=5567&qb={%22Keywords1%22:%22Homelessness%22,%22FullText2%22:%22Texas%22,%22FullText3%22:%22Veteran%20Affairs%22}
+  url_template: "https://academic.oup.com/journals/search-results?page=1&qb={{{clause_series}}}"
+  clause_series: ['problem_clause', 'org_clause', 'geo_clause']
+  clause_delimiter: ','
+  problem_clause: '%22Keywords{clause_index}%22:%22{problem}%22'
+  org_clause: '%22FullText{clause_index}%22:%22{org}%22'
+  geo_clause: '%22FullText{clause_index}%22:%22{geo}%22'
+
+pagination:
+  pages: 5
+  next_page_url:
+    id: pagination-next
+    attribute: data-url
+    format: "https://academic.oup.com/journals/search-results?{value}"
+
+delay:
+  mu: 0
+  sigma: 0.5
+  base: 0
+  multiplier: 2
+  minimum: 1
+  maximum: 4
+
+content:
+  items:
+    is_multiple: True
+    class_name: al-article-box
+  source_url:
+    class_name: article-link
+    attribute: href
+    parse: "{value}?{}"
+  title:
+    class_name: article-link
+    getattr: text
+  author_names:
+    is_multiple: True
+    class_name: author-link
+    getattr: text
+    join: '; '
+  publication:
+    # xpath: ".//div[contains(concat(' ', @class, ' '), ' al-authors-list ')]/\
+    #         following-sibling::div/a"
+    xpath: ".//div[contains(concat(' ', @class, ' '), ' al-citation-list ')]/span/em"
+    getattr: text
+  # <ResearchSpecific>
+  volume:
+    class_name: al-citation-list
+    getattr: text
+    parse: "{} Volume {value}, {}"
+  issue:
+    class_name: al-citation-list
+    getattr: text
+    parse: "{} Issue {value}, {}"
+  issue_date:
+    - class_name: al-citation-list
+      getattr: text
+      parse: '{} Issue {}, {value},{}'
+    - strptime: ['%d %B %Y', '%B %Y']
+  issue_date_granularity:
+    get: '<issue_date.granularity.name>'
+  # 'The Journal of Nutrition, Volume 135, Issue 8, 1 August 2005, Pages 1926–1933, https://doi.org/10.1093/jn/135.8.1926'
+  first_page:
+    class_name: al-citation-list
+    getattr: text
+    parse: "{} Pages {value}–{}"
+  last_page:
+    class_name: al-citation-list
+    getattr: text
+    parse: "{} Pages {}–{value}, {}"
+  doi:
+    class_name: al-citation-list
+    getattr: text
+    parse: "{}doi.org{value}"
+    format: "https://doi.org{value}"
+  # </ResearchSpecific>
+  published_timestamp:
+    class_name: al-pub-date
+    getattr: text
+    strptime: ['Published: %d %B %Y', 'Published: %B %Y']
+  granularity_published:
+    get: '<published_timestamp.granularity.name>'
+  tzinfo_published: UTC
+  publisher: Oxford University Press
+  summary:
+    - wait: 5
+      element_to_be_clickable:  # All wait operation locations use absolute paths:
+      xpath: "(//div[contains(concat(' ', @class, ' '), ' widget-ArticleAbstract ')])[{index}]"
+      click: True
+    - wait: 5
+      presence_of_element_located:  # All wait operation locations use absolute paths:
+      xpath: "(//div[contains(concat(' ', @class, ' '), ' abstract-response-placeholder ')])[{index}]/section |\
+              (//div[contains(concat(' ', @class, ' '), ' abstract-response-placeholder ')])[{index}]/p"
+    - scope: parent
+      class_name: abstract-response-placeholder
+      getattr: text
+  full_text:

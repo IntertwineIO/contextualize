@@ -1,0 +1,44 @@
+%YAML 1.2
+---
+page_type: SEARCH
+is_enabled: True
+extract_sources: False
+wait: 10
+
+url:
+  # https://developers.whatismybrowser.com/useragents/explore/software_name/chrome/1
+  url_template: "https://developers.whatismybrowser.com/useragents/explore/software_name/{browser}/1"
+
+pagination:
+  pages: 10
+  next_page_url:
+    xpath: "//div[contains(concat(' ', @id, ' '), ' pagination ')]/a[text()='>']"
+    attribute: href
+
+content:
+  items:
+    is_multiple: True
+    xpath: ".//table[contains(concat(' ', @class, ' '), ' table-useragents ')]/tbody/tr"
+  source_url:
+    xpath: "./td[contains(concat(' ', @class, ' '), ' useragent ')]/a"
+    attribute: href
+  user_agent:
+    class_name: useragent
+    getattr: text
+  browser:
+    xpath: "./td[2]"
+    attribute: title
+    parse: "{value} {}"
+  browser_version:
+    xpath: "./td[2]"
+    attribute: title
+    parse: "{} {value}"
+  operating_system:
+    xpath: "./td[3]"
+    getattr: text
+  hardware_type:
+    xpath: "./td[4]"
+    getattr: text
+  popularity:
+    xpath: "./td[5]"
+    getattr: text

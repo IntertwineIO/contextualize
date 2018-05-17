@@ -1,41 +1,21 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import asyncio
-import os
 
-from pprint import PrettyPrinter
-from ruamel.yaml.scanner import ScannerError
-
-from extractor import RegistryExtractor
+from content import ResearchArticle
+from extractor import MultiExtractor
+from utils.tools import PP
 
 
 class Service:
 
     def contextualize(self):
-
-        extractors = self.provision_extractors()
+        url_fragments = dict(problem=self.problem_name, org=self.org_name, geo=self.geo_name)
+        extractors = MultiExtractor.provision_extractors(ResearchArticle, url_fragments)
         futures = {extractor.extract() for extractor in extractors}
         done, pending = self.loop.run_until_complete(asyncio.wait(futures))
-        pp = PrettyPrinter(indent=4)
-        pp.pprint([task.result() for task in done])
+        PP.pprint([task.result() for task in done])
         return [task.result() for task in done]
-
-    def provision_extractors(self):
-
-        extractor_directories = os.listdir(RegistryExtractor.FILE_PATH_BASE)
-
-        extractors = set()
-        for directory in extractor_directories:
-            try:
-                extractor = RegistryExtractor(
-                    directory, self.problem_name, self.org_name, self.geo_name)
-                if extractor.is_enabled:
-                    extractors.add(extractor)
-            # FileNotFoundError, ScannerError, ValueError
-            except Exception as e:
-                print(e)  # TODO: Replace with logging
-
-        return extractors
 
     def __init__(self, loop=None, problem_name=None, org_name=None, geo_name=None):
         self.loop = loop or asyncio.get_event_loop()
