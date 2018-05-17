@@ -7,8 +7,8 @@ import wrapt
 from pprint import PrettyPrinter
 
 DEBUG_WRAPPERS = {'async_debug_wrapper', 'sync_debug_wrapper'}
-DELIMITER = '–'
-WIDTH = 160
+DELIMITER = '–'  # chr(8211)
+WIDTH = 200
 SEPARATOR = DELIMITER * WIDTH
 
 
@@ -30,6 +30,7 @@ def format_text(label, text, offset_space):
 
 
 def derive_offset_space(offset=None, indent=4):
+    """Derive offset by counting wrapped stack frames if not given"""
     if offset is None:
         frame_records = inspect.stack()
         new_offset = sum(1 for f in frame_records
@@ -41,6 +42,7 @@ def derive_offset_space(offset=None, indent=4):
 
 def print_enter_info(wrapped, instance, args, kwargs,
                      printer, offset_space, loop=None, is_async=False):
+    """Print enter info for wrapped function to be called/awaited"""
     print(SEPARATOR)
     async_ = 'async ' if is_async else ''
     print(f'{offset_space}Entering {async_}{wrapped.__name__}')
@@ -57,6 +59,7 @@ def print_enter_info(wrapped, instance, args, kwargs,
 def print_exit_info(wrapped, instance, args, kwargs,
                     result, end_time, elapsed_time,
                     printer, offset_space, loop=None, is_async=False):
+    """Print exit info for wrapped function to be called/awaited"""
     print(SEPARATOR)
     async_ = 'async ' if is_async else ''
     print(f'{offset_space}Returning from {async_}{wrapped.__name__}')

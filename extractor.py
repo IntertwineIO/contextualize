@@ -180,8 +180,8 @@ class BaseExtractor:
 
             try:
                 content[field] = await self._perform_operation(element, field_config, index)
-            # e.g. NoSuchElementException
-            except Exception as e:
+
+            except Exception as e:  # e.g. NoSuchElementException
                 PP.pprint(dict(
                     msg='Extract field failure', type='extract_field_failure',
                     error=e, field=field, content=content, extractor=repr(self)))
@@ -252,7 +252,6 @@ class BaseExtractor:
             wait_condition_method = getattr(expected_conditions, wait_method_name)
             locator = (find_by, selector)
             wait_condition = wait_condition_method(locator)
-            # wait_condition = expected_conditions.presence_of_element_located((find_by, selector))
             future_elements = self._execute_in_future(wait.until, wait_condition)
         else:
             future_elements = self._execute_in_future(find_method, selector)
