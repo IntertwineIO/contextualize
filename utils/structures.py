@@ -99,10 +99,14 @@ class CacheKey:
         self.qualifiers = [] if qualifiers is None else qualifiers
 
     def __eq__(self, other):
-        return self.fields == other.fields and self.qualifiers == other.qualifiers
+        if other.__class__ is self.__class__:
+            return self.fields == other.fields and self.qualifiers == other.qualifiers
+        return NotImplemented
 
     def __ne__(self, other):
-        return self.fields != other.fields or self.qualifiers != other.qualifiers
+        if other.__class__ is self.__class__:
+            return self.fields != other.fields or self.qualifiers != other.qualifiers
+        return NotImplemented
 
 
 class FlexEnum(Enum):
