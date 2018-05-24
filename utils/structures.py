@@ -10,28 +10,45 @@ class CacheKey:
     """
     CacheKey
 
-    A class for composing cache keys from fields and/or qualifiers.
+    A class for composing cache keys from one or more terms.
 
-    Control characters are used as delimiters to minimize conflicts:
+    There are two types of supported terms:
+    Fields consist of name/value pairs, where names/values are strings.
+    Qualifiers are strings.
 
-    Field names and values are delimited by Start of Text (2). For
-    display purposes, Equal ('=') is used instead.
+    Cache keys may include any number of fields and qualifiers, provided
+    there is at least one term. Any/all fields always precede any/all
+    qualifiers within the key.
 
-    Terms (fields/qualifiers) are delimited by Record Separator (30).
-    For display purposes, Ampersand ('&') is used instead.
+    Terms (fields/qualifiers) are delimited by Start of Header (1: SOH).
+    For display purposes, Ampersand ('&') is used instead. As such,
+    SOH may not be used within field names/values or qualifiers.
+    Ampersand is permitted, but when used, `from_key` will not work on
+    the display version of the key.
 
-    This allows field values to include any other character, including
-    Null (0) and Unit Separator (31).
+    Field names and values are delimited by Start of Text (2: STX). For
+    display purposes, Equals ('=') is used instead. As such, STX may not
+    be used within field names/values or qualifiers. Equals is allowed,
+    but when used, `from_key` will not work on display keys.
+
+    Field values of None are converted to the Null (0: NUL) character.
+    This means field values that are strings consisting of just Null
+    will be indistinguishable from None. Null characters may be used as
+    part of longer strings without any such collision risk.
+
+    All other characters may be used, including but not limited to any
+    printable character and File/Group/Record/Unit Separators (28-31).
 
     I/O:
     fields=None      Ordered dictionary of name/value string pairs
     qualifiers=None  Sequence of strings
+    return           CacheKey instance
     """
-    NAME_VALUE_DELIMITER = chr(2)  # Start of Text (STX)
-    NAME_VALUE_DELIMITER_DISPLAY = '='
-
-    TERM_DELIMITER = chr(30)  # Record Separator (RS)
+    TERM_DELIMITER = chr(1)  # Start of Header (1: SOH)
     TERM_DELIMITER_DISPLAY = '&'
+
+    NAME_VALUE_DELIMITER = chr(2)  # Start of Text (2: STX)
+    NAME_VALUE_DELIMITER_DISPLAY = '='
 
     NULL = chr(0)
     NULL_DISPLAY = '~'
