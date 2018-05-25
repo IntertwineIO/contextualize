@@ -97,8 +97,9 @@ def sync_debug(offset=None, indent=4):
     @wrapt.decorator
     def sync_debug_wrapper(wrapped, instance, args, kwargs):
         loop = asyncio.get_event_loop()
-        printer = PrettyPrinter(indent=indent, width=WIDTH)
         offset_space = derive_offset_space(offset, indent)
+        width = WIDTH - len(offset_space)
+        printer = PrettyPrinter(indent=indent, width=width)
         print_enter_info(wrapped, instance, args, kwargs,
                          printer, offset_space, loop)
 
@@ -138,8 +139,9 @@ def async_debug(offset=None, indent=4):
     @wrapt.decorator
     async def async_debug_wrapper(wrapped, instance, args, kwargs):
         loop = asyncio.get_event_loop()
-        printer = PrettyPrinter(indent=indent, width=WIDTH)
         offset_space = derive_offset_space(offset, indent)
+        width = WIDTH - len(offset_space)
+        printer = PrettyPrinter(indent=indent, width=width)
         print_enter_info(wrapped, instance, args, kwargs,
                          printer, offset_space, loop, is_async=True)
 
