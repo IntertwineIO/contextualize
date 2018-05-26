@@ -5,6 +5,8 @@ from enum import Enum
 from functools import lru_cache
 from itertools import chain
 
+DEFAULT_ENCODING = 'utf-8'
+
 
 class CacheKey:
     """
@@ -54,10 +56,13 @@ class CacheKey:
     NULL_DISPLAY = '~'
 
     @classmethod
-    def from_key(cls, key, is_display=None):
+    def from_key(cls, key, is_display=None, encoding=DEFAULT_ENCODING):
         """Construct CacheKey instance from key or display string"""
         if not key:
             raise ValueError('Attempting to instantiate empty CacheKey')
+
+        if encoding:
+            key = str(key, encoding)
 
         if is_display is None:
             is_display = (cls.TERM_DELIMITER not in key and
@@ -84,7 +89,7 @@ class CacheKey:
             raise ValueError('CacheKey fields must precede all qualifiers')
 
         qualifiers = terms[i:]
-        return cls(fields, qualifiers)
+        return cls(fields, qualifiers, encoding)
 
     def to_key(self, is_display=False):
         """Form key from CacheKey instance, optionally for display"""
@@ -101,7 +106,8 @@ class CacheKey:
 
         packed_fields = (pack_field(name, value) for name, value in self.fields.items())
         terms = chain(packed_fields, self.qualifiers)
-        return term_delimiter.join(terms)
+        key = term_delimiter.join(terms)
+        return key if is_display or not self.encoding else key.encode(self.encoding)
 
     @property
     def key(self):
@@ -111,18 +117,23 @@ class CacheKey:
     def __repr__(self):
         return self.to_key(is_display=True)
 
-    def __init__(self, fields=None, qualifiers=None):
+    def __init__(self, fields=None, qualifiers=None, encoding=DEFAULT_ENCODING):
         self.fields = OrderedDict() if fields is None else fields
         self.qualifiers = [] if qualifiers is None else qualifiers
+        self.encoding = encoding
 
     def __eq__(self, other):
-        if other.__class__ is self.__class__:
-            return self.fields == other.fields and self.qualifiers == other.qualifiers
+        if isinstance(other, self.__class__):
+            return (self.fields == other.fields and
+                    self.qualifiers == other.qualifiers and
+                    self.encoding == other.encoding)
         return NotImplemented
 
     def __ne__(self, other):
-        if other.__class__ is self.__class__:
-            return self.fields != other.fields or self.qualifiers != other.qualifiers
+        if isinstance(other, self.__class__):
+            return (self.fields != other.fields or
+                    self.qualifiers != other.qualifiers or
+                    self.encoding != other.encoding)
         return NotImplemented
 
 
