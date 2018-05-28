@@ -253,3 +253,37 @@ class InfinIterator:
     def __init__(self, iterable):
         self.values = iterable if isinstance(iterable, (list, tuple)) else list(iterable)
         self.index = 0
+
+
+class Singleton:
+    """
+    Singleton
+
+    A base class to ensure only a single instance is created. Additional
+    restrictions are enforced to encourage responsible usage:
+    - Once instantiated, the constructor prohibits passing arguments to
+      discourage subsequent calls from changing state
+    - Modifying __new__ in subclasses is not permitted to discourage
+      side-stepping the post-initialization argument-passing prohibition
+
+    Adapted from Guido van Rossum's Singleton:
+    https://www.python.org/download/releases/2.2/descrintro/#__new__
+    """
+    __instance = None
+
+    def __new__(cls, *args, **kwds):
+
+        if cls.__new__ is not Singleton.__new__:
+            raise ValueError('Singletons may not modify __new__')
+
+        if cls.__instance is not None:
+            if args or kwds:
+                raise ValueError('Existing singletons accept no arguments')
+            return cls.__instance
+
+        cls.__instance = instance = object.__new__(cls)
+        instance.initialize(*args, **kwds)
+        return cls.__instance
+
+    def initialize(self, *args, **kwds):
+        pass
