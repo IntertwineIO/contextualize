@@ -127,17 +127,20 @@ class Singleton:
     """
     Singleton
 
-    A base class to ensure only a single instance is created. Additional
-    restrictions are enforced to encourage responsible usage:
-    - Once instantiated, the constructor prohibits passing arguments to
-      discourage subsequent calls from changing state
-    - Modifying __new__ in subclasses is not permitted to discourage
-      side-stepping the post-initialization argument-passing prohibition
+    A base class to ensure only a single instance is created. Several
+    measures are taken to encourage responsible usage:
+    - The instance is only initialized once upon initial creation and
+      arguments are permitted but not required
+    - The constructor prohibits arguments on subsequent calls unless
+      they match the initial ones as state must not change
+    - Modifying __new__ in subclasses is not permitted to guard against
+      side-stepping the aforementioned restrictions
 
     Adapted from Guido van Rossum's Singleton:
     https://www.python.org/download/releases/2.2/descrintro/#__new__
     """
     __instance = None
+    __arguments = None
 
     def __new__(cls, *args, **kwds):
 
@@ -146,12 +149,14 @@ class Singleton:
 
         if cls.__instance is not None:
             if args or kwds:
-                raise ValueError('Existing singletons accept no arguments')
+                if (args != cls.__arguments['args'] or kwds != cls.__arguments['kwds']):
+                    raise ValueError('Singleton initialization may not change')
             return cls.__instance
 
         cls.__instance = instance = object.__new__(cls)
+        cls.__arguments = {'args': args, 'kwds': kwds}
         instance.initialize(*args, **kwds)
-        return cls.__instance
+        return instance
 
     def initialize(self, *args, **kwds):
         pass
