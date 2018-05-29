@@ -5,6 +5,7 @@ from itertools import chain
 
 import aioredis
 
+from utils.debug import async_debug
 from utils.structures import Singleton
 
 ENCODING_DEFAULT = 'utf-8'
@@ -12,12 +13,22 @@ ENCODING_DEFAULT = 'utf-8'
 
 class AsyncCache(Singleton):
 
-    async def provision_client(self):
-        if self.client is None:
+    @async_debug()
+    async def connect(self):
+        redis = self.client
+        if redis is None:
             redis = await aioredis.create_redis_pool('redis://localhost',
                                                      encoding=ENCODING_DEFAULT)
             self.client = redis
-        return self.client
+        return redis
+
+    @async_debug()
+    async def disconnect(self):
+        redis = self.client
+        if redis:
+            redis.close()
+            await redis.wait_closed()
+            self.client = None
 
     def initialize(self):
         self.client = None
