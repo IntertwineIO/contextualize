@@ -160,3 +160,11 @@ class Singleton:
 
     def initialize(self, *args, **kwds):
         pass
+
+    def __repr__(self):
+        class_name = self.__class__.__name__
+        args, kwds = self.__arguments['args'], self.__arguments['kwds']
+        arg_strings = (str(arg) for arg in args)
+        kwd_strings = (f'{k}={v}' for k, v in kwds.items()) if kwds else ()
+        full_arg_string = ', '.join(chain(arg_strings, kwd_strings))
+        return f'{class_name}({full_arg_string})'
