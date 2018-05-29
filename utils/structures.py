@@ -3,6 +3,7 @@
 from collections import OrderedDict
 from enum import Enum
 from functools import lru_cache
+from itertools import chain
 
 
 class FlexEnum(Enum):

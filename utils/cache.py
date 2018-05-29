@@ -12,15 +12,15 @@ ENCODING_DEFAULT = 'utf-8'
 
 class AsyncCache(Singleton):
 
-    async def provision(self):
-        if self._client is None:
+    async def provision_client(self):
+        if self.client is None:
             redis = await aioredis.create_redis_pool('redis://localhost',
                                                      encoding=ENCODING_DEFAULT)
-            self._client = redis
-        return self._client
+            self.client = redis
+        return self.client
 
     def initialize(self):
-        self._client = None
+        self.client = None
 
 
 class CacheKey:
