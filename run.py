@@ -4,6 +4,7 @@ import asyncio
 
 import uvloop
 
+from utils.cache import AsyncCache
 from service import Service
 
 
@@ -17,9 +18,15 @@ def main():
 
     service = Service(loop, problem_name, org_name, geo_name)
 
-    service.contextualize()
+    try:
+        loop.run_until_complete(service.contextualize())
 
-    loop.close()
+    except asyncio.CancelledError:
+        print('One or more tasks have been canceled.')
+
+    finally:
+        loop.run_until_complete(AsyncCache().disconnect())
+        loop.close()
 
 
 if __name__ == '__main__':

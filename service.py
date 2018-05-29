@@ -9,11 +9,11 @@ from utils.tools import PP
 
 class Service:
 
-    def contextualize(self):
+    async def contextualize(self):
         url_fragments = dict(problem=self.problem_name, org=self.org_name, geo=self.geo_name)
         extractors = MultiExtractor.provision_extractors(ResearchArticle, url_fragments)
         futures = {extractor.extract() for extractor in extractors}
-        done, pending = self.loop.run_until_complete(asyncio.wait(futures))
+        done, pending = await asyncio.wait(futures)
         PP.pprint([task.result() for task in done])
         return [task.result() for task in done]
 

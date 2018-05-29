@@ -22,6 +22,7 @@ from url_normalize import url_normalize
 
 from secret_service.agency import SecretService
 from utils.async import run_in_executor
+from utils.cache import AsyncCache
 from utils.debug import async_debug, sync_debug
 from utils.structures import FlexEnum
 from utils.time import flex_strptime
@@ -130,10 +131,17 @@ class BaseExtractor:
                 msg='Extractor disabled warning',
                 type='extractor_disabled_warning', extractor=repr(self)))
         try:
-            await self._provision_web_driver()
+            await self._provision_resources()
             return await self._perform_extraction(self.page_url)
         finally:
             await self._dispose_web_driver()
+
+    @async_debug()
+    async def _provision_resources(self):
+        futures = [self._provision_web_driver()]
+        if not self.cache.client:
+            futures.append(self.cache.connect())
+        await asyncio.gather(*futures)
 
     @async_debug()
     async def _provision_web_driver(self):
@@ -394,6 +402,12 @@ class BaseExtractor:
 
         return transformed_values
 
+    # @async_debug()
+    # def _cache_content(self, unique_key, content):
+    #     redis = self.cache.client
+    #     keys_and_values = chain(*content.items())
+    #     await redis.mset(*keys_and_values)
+
     @sync_debug()
     def _select_targets(self, config, latest, prior, parent):
         operation_scope = self._derive_operation_scope(config)
@@ -556,8 +570,9 @@ class BaseExtractor:
         created_timestamp = getattr(self, 'created_timestamp', None)
         return (f'<{class_name}: {directory}, {created_timestamp}>')
 
-    def __init__(self, model, directory, web_driver_type=None, loop=None):
+    def __init__(self, model, directory, web_driver_type=None, cache=None, loop=None):
         self.loop = loop or asyncio.get_event_loop()
+        self.cache = cache or AsyncCache()
         self.created_timestamp = self.loop.time()
 
         self.model = model
@@ -612,7 +627,8 @@ class SourceExtractor(BaseExtractor):
             return content
 
     @classmethod
-    def provision_extractors(cls, model, urls=None, delay_configuration=None):
+    def provision_extractors(cls, model, urls=None, delay_configuration=None,
+                             web_driver_type=None, cache=None, loop=None):
         """
         Provision Extractors
 
@@ -630,7 +646,8 @@ class SourceExtractor(BaseExtractor):
         for url in urls:
             try:
                 initial_delay += human_dwell_time(**delay_config)
-                extractor = cls(model, page_url=url, initial_delay=initial_delay)
+                extractor = cls(model, page_url=url, initial_delay=initial_delay,
+                                web_driver_type=web_driver_type, cache=cache, loop=loop)
                 if extractor.is_enabled:
                     yield extractor
             # FileNotFoundError, ruamel.yaml.scanner.ScannerError, ValueError
@@ -682,11 +699,12 @@ class SourceExtractor(BaseExtractor):
         clipped_url = url[start:end]
         return clipped_url
 
-    def __init__(self, model, page_url, initial_delay=0, web_driver_type=None, loop=None):
+    def __init__(self, model, page_url, initial_delay=0, web_driver_type=None,
+                 cache=None, loop=None):
         self.initial_delay = initial_delay
         self.page_url = url_normalize(page_url)
         directory = self._derive_directory(model, self.page_url)
-        super().__init__(model, directory, web_driver_type, loop)
+        super().__init__(model, directory, web_driver_type, cache, loop)
 
 
 class MultiExtractor(BaseExtractor):
@@ -774,19 +792,21 @@ class MultiExtractor(BaseExtractor):
                     if not unique_key:
                         raise ValueError(f"Content missing unique key for '{unique_field}'")
 
-                    if unique_key in self.item_results:
-                        PP.pprint(dict(
-                            msg='Unique key collision', type='unique_key_collision',
-                            field=unique_field, unique_key=unique_key,
-                            old_content=self.item_results[unique_key], new_content=content,
-                            index=index, extractor=repr(self), config=content_config))
-
-                    self.item_results[unique_key] = content
-
                 except Exception as e:
                     PP.pprint(dict(
                         msg='Extract content failure', type='extract_content_failure',
                         error=e, index=index, extractor=repr(self), config=content_config))
+
+                if unique_key in self.item_results:
+                    PP.pprint(dict(
+                        msg='Unique key collision', type='unique_key_collision',
+                        field=unique_field, unique_key=unique_key,
+                        old_content=self.item_results[unique_key], new_content=content,
+                        index=index, extractor=repr(self), config=content_config))
+
+                self.item_results[unique_key] = content
+
+                # await self._cache_content(unique_key, content)
 
         else:
             PP.pprint(dict(
@@ -807,8 +827,9 @@ class MultiExtractor(BaseExtractor):
     async def _extract_sources(self, item_results):
         source_urls = [content[self.SOURCE_URL_TAG] for content in item_results.values()]
         source_extractors = SourceExtractor.provision_extractors(
-            self.model, source_urls, self.delay_configuration)
-        futures = {extractor.extract() for extractor in source_extractors}
+            self.model, source_urls, self.delay_configuration,
+            self.web_driver_type, self.cache, self.loop)
+        futures = [extractor.extract() for extractor in source_extractors]
         if not futures:
             return []
         done, pending = await asyncio.wait(futures)
@@ -833,7 +854,8 @@ class MultiExtractor(BaseExtractor):
                 item_result[field] = source_value
 
     @classmethod
-    def provision_extractors(cls, model, url_fragments=None):
+    def provision_extractors(cls, model, url_fragments=None, web_driver_type=None,
+                             cache=None, loop=None):
         """
         Provision Extractors
 
@@ -863,7 +885,7 @@ class MultiExtractor(BaseExtractor):
 
         for directory in directories:
             try:
-                extractor = cls(model, directory, url_fragments)
+                extractor = cls(model, directory, url_fragments, web_driver_type, cache, loop)
                 if extractor.is_enabled:
                     yield extractor
             # FileNotFoundError, ruamel.yaml.scanner.ScannerError, ValueError
@@ -941,9 +963,9 @@ class MultiExtractor(BaseExtractor):
         return (f'<{class_name} | {directory} | {url_fragments!r} | {created_timestamp}>')
 
     def __init__(self, model, directory, url_fragments=None,
-                 web_driver_type=None, loop=None):
+                 web_driver_type=None, cache=None, loop=None):
         self.url_fragments = {k: v for k, v in url_fragments.items()
                               if v is not None} if url_fragments else {}
-        super().__init__(model, directory, web_driver_type, loop)
+        super().__init__(model, directory, web_driver_type, cache, loop)
         self.page_url = self._form_page_url(self.configuration, self.url_fragments)
         self.item_results = OrderedDict()  # Store results after extraction
