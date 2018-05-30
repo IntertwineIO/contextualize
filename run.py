@@ -4,7 +4,6 @@ import asyncio
 
 import uvloop
 
-from utils.cache import AsyncCache
 from service import Service
 
 
@@ -25,7 +24,7 @@ def main():
         print('One or more tasks have been canceled.')
 
     finally:
-        loop.run_until_complete(AsyncCache().disconnect())
+        Service.shutdown(loop)
         loop.close()
 
 

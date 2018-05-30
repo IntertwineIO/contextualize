@@ -638,8 +638,15 @@ class SourceExtractor(BaseExtractor):
         model:                      Extractable content class
         urls=None:                  List of content URL strings
         delay_configuration=None:   Configuration to stagger extractions
+        web_driver_type=None:       WebDriverType, e.g. CHROME (default)
+        cache=None:                 AsyncCache singleton (optional)
+        loop=None:                  Event loop (optional)
         yield:                      Fully configured source extractors
         """
+        loop = loop or asyncio.get_event_loop()
+        cache = cache or AsyncCache()
+        web_driver_type = web_driver_type or cls.WEB_DRIVER_TYPE_DEFAULT
+
         human_selection_shuffle(urls)
         delay_config = delay_configuration or cls.DELAY_DEFAULTS._asdict()
         initial_delay = 0
@@ -876,8 +883,15 @@ class MultiExtractor(BaseExtractor):
                                          org=None,
                                          geo='Texas')
 
+        web_driver_type=None:   WebDriverType, e.g. CHROME (default)
+        cache=None:             AsyncCache singleton (optional)
+        loop=None:              Event loop (optional)
         yield:                  Fully configured search extractors
         """
+        loop = loop or asyncio.get_event_loop()
+        cache = cache or AsyncCache()
+        web_driver_type = web_driver_type or cls.WEB_DRIVER_TYPE_DEFAULT
+
         base = model.BASE_DIRECTORY
         dir_nodes = os.walk(base)
         directories = (cls._debase_directory(base, dn[0]) for dn in dir_nodes
