@@ -12,11 +12,16 @@ ENCODING_DEFAULT = 'utf-8'
 
 
 class AsyncCache(Singleton):
+    """AsyncCache manages async connections to Redis key-value store"""
+    def initialize(self):
+        """Initialize AsyncCache singleton"""
+        self.client = None
 
     @async_debug()
     async def connect(self):
+        """Connect to Redis via pool, set client, and return it"""
         redis = self.client
-        if redis is None:
+        if not redis:
             redis = await aioredis.create_redis_pool('redis://localhost',
                                                      encoding=ENCODING_DEFAULT)
             self.client = redis
@@ -24,14 +29,17 @@ class AsyncCache(Singleton):
 
     @async_debug()
     async def disconnect(self):
+        """Disconnect from Redis, await clean up, and remove client"""
         redis = self.client
         if redis:
             redis.close()
             await redis.wait_closed()
             self.client = None
 
-    def initialize(self):
-        self.client = None
+    def shutdown(self, loop=None):
+        """Shutdown AsyncCache from outside the event loop"""
+        loop = loop or asyncio.get_event_loop()
+        loop.run_until_complete(self.disconnect())
 
 
 class CacheKey:
