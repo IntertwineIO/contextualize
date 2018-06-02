@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import asyncio
 from collections import OrderedDict
 from itertools import chain
 
 import aioredis
 
-from utils.debug import async_debug
+from utils.debug import async_debug, sync_debug
 from utils.structures import Singleton
 
 ENCODING_DEFAULT = 'utf-8'
@@ -13,17 +14,21 @@ ENCODING_DEFAULT = 'utf-8'
 
 class AsyncCache(Singleton):
     """AsyncCache manages async connections to Redis key-value store"""
-    def initialize(self):
+    @sync_debug()
+    def initialize(self, loop=None):
         """Initialize AsyncCache singleton"""
         self.client = None
+        loop = loop or asyncio.get_event_loop()
+        loop.run_until_complete(self.connect(loop))
 
     @async_debug()
-    async def connect(self):
+    async def connect(self, loop):
         """Connect to Redis via pool, set client, and return it"""
         redis = self.client
         if not redis:
             redis = await aioredis.create_redis_pool('redis://localhost',
-                                                     encoding=ENCODING_DEFAULT)
+                                                     encoding=ENCODING_DEFAULT,
+                                                     loop=loop)
             self.client = redis
         return redis
 
@@ -36,6 +41,7 @@ class AsyncCache(Singleton):
             await redis.wait_closed()
             self.client = None
 
+    @sync_debug()
     def shutdown(self, loop=None):
         """Shutdown AsyncCache from outside the event loop"""
         loop = loop or asyncio.get_event_loop()

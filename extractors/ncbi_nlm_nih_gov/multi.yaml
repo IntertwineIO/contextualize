@@ -1,8 +1,8 @@
 %YAML 1.2
 ---
 page_type: MULTI
-is_enabled: False
-extract_sources: True
+is_enabled: True
+extract_sources: False
 wait: 10
 
 url:

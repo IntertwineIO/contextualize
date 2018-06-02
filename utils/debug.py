@@ -40,6 +40,13 @@ def derive_offset_space(offset=None, indent=4):
     return ' ' * new_offset * indent
 
 
+def loop_repr(self):
+    class_name, running, closed, debug = repr(self)[1:-1].split()
+    module = self.__class__.__module__
+    hex_id = hex(id(self))
+    return f'<{module}.{class_name} object at {hex_id} {running} {closed} {debug}>'
+
+
 def print_enter_info(wrapped, instance, args, kwargs,
                      printer, offset_space, loop=None, is_async=False):
     """Print enter info for wrapped function to be called/awaited"""
@@ -51,6 +58,7 @@ def print_enter_info(wrapped, instance, args, kwargs,
     format_text('args', printer.pformat(args), offset_space)
     format_text('kwargs', printer.pformat(kwargs), offset_space)
     loop = loop or asyncio.get_event_loop()
+    format_text('loop', loop_repr(loop), offset_space)
     start_time = loop.time()
     format_text('start', str(start_time), offset_space)
     print(SEPARATOR)
@@ -69,6 +77,7 @@ def print_exit_info(wrapped, instance, args, kwargs,
     format_text('kwargs', printer.pformat(kwargs), offset_space)
     format_text('return', printer.pformat(result), offset_space)
     loop = loop or asyncio.get_event_loop()
+    format_text('loop', loop_repr(loop), offset_space)
     format_text('end', str(end_time), offset_space)
     format_text('elapsed', str(elapsed_time), offset_space)
     print(SEPARATOR)

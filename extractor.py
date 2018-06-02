@@ -131,17 +131,10 @@ class BaseExtractor:
                 msg='Extractor disabled warning',
                 type='extractor_disabled_warning', extractor=repr(self)))
         try:
-            await self._provision_resources()
+            await self._provision_web_driver()
             return await self._perform_extraction(self.page_url)
         finally:
             await self._dispose_web_driver()
-
-    @async_debug()
-    async def _provision_resources(self):
-        futures = [self._provision_web_driver()]
-        if not self.cache.client:
-            futures.append(self.cache.connect())
-        await asyncio.gather(*futures)
 
     @async_debug()
     async def _provision_web_driver(self):
@@ -175,27 +168,29 @@ class BaseExtractor:
             await future_web_driver_quit
 
     @async_debug()
-    async def _extract_content(self, element, config, index=1):
-        self.content = content = OrderedDict()
+    async def _extract_content(self, element, config, index=1, **kwds):
+        self.content_map = content_map = OrderedDict(kwds)
         for field in self.model.fields():
             field_config = config.get(field)
             # Allow field to be set by other field without overwriting
-            if field_config is None and content.get(field):
+            if field_config is None and content_map.get(field):
                 continue
+
             elif not isinstance(field_config, (list, dict)):
-                content[field] = field_config
+                content_map[field] = field_config
                 continue
 
             try:
-                content[field] = await self._perform_operation(element, field_config, index)
+                content_map[field] = await self._perform_operation(element, field_config, index)
 
             except Exception as e:  # e.g. NoSuchElementException
                 PP.pprint(dict(
                     msg='Extract field failure', type='extract_field_failure',
-                    error=e, field=field, content=content, extractor=repr(self)))
+                    error=e, field=field, content_map=content_map, extractor=repr(self)))
 
-        self.content = None
-        return content
+        self.content_map = None
+        instance = self.model(**content_map)
+        return instance
 
     @async_debug()
     async def _perform_operation(self, target, config, index=1):
@@ -357,7 +352,7 @@ class BaseExtractor:
 
         if operation.format_method is self.FormatMethod.FORMAT:
             template = one(args)
-            fields = {} if self.content is None else self.content
+            fields = {} if self.content_map is None else self.content_map
             if self.VALUE_TAG in fields:
                 raise ValueError(
                     "Reserved word '{self.VALUE_TAG}' cannot be content field")
@@ -521,7 +516,7 @@ class BaseExtractor:
     def _get_by_reference(self, reference):
         components = reference.split(self.REFERENCE_DELIMITER)
         field_name = components[0]
-        value = self.content[field_name]
+        value = self.content_map[field_name]
         if value:
             for component in components[1:]:
                 value = getattr(value, component)
@@ -572,7 +567,7 @@ class BaseExtractor:
 
     def __init__(self, model, directory, web_driver_type=None, cache=None, loop=None):
         self.loop = loop or asyncio.get_event_loop()
-        self.cache = cache or AsyncCache()
+        self.cache = cache or AsyncCache(self.loop)
         self.created_timestamp = self.loop.time()
 
         self.model = model
@@ -588,7 +583,7 @@ class BaseExtractor:
         self.web_driver_kwargs = self._derive_web_driver_kwargs(self.web_driver_type)
         self.web_driver = None
 
-        self.content = None  # Temporary storage for content being extracted
+        self.content_map = None  # Temporary storage for content being extracted
 
 
 class SourceExtractor(BaseExtractor):
@@ -613,19 +608,17 @@ class SourceExtractor(BaseExtractor):
     async def _extract_page(self):
         content_config = self.configuration[self.CONTENT_TAG]
         try:
-            content = await self._extract_content(self.web_driver, content_config)
-            if not content:
-                raise ValueError('No content extracted')
-
+            content = await self._extract_content(self.web_driver, content_config,
+                                                  source_url=self.page_url)
         except Exception as e:
             PP.pprint(dict(
                 msg='Extract content failure', type='extract_content_failure',
                 error=e, extractor=repr(self), config=content_config))
             raise
         else:
-            content[self.SOURCE_URL_TAG] = self.page_url
             return content
 
+    # @sync_debug()
     @classmethod
     def provision_extractors(cls, model, urls=None, delay_configuration=None,
                              web_driver_type=None, cache=None, loop=None):
@@ -792,10 +785,8 @@ class MultiExtractor(BaseExtractor):
             for index, element in enumerate(elements, start=1):
                 try:
                     content = await self._extract_content(element, content_config, index)
-                    if not content:
-                        raise ValueError('No content extracted')
 
-                    unique_key = content.get(unique_field)
+                    unique_key = getattr(content, unique_field)
                     if not unique_key:
                         raise ValueError(f"Content missing unique key for '{unique_field}'")
 
@@ -832,7 +823,7 @@ class MultiExtractor(BaseExtractor):
 
     @async_debug()
     async def _extract_sources(self, item_results):
-        source_urls = [content[self.SOURCE_URL_TAG] for content in item_results.values()]
+        source_urls = [content.source_url for content in item_results.values()]
         source_extractors = SourceExtractor.provision_extractors(
             self.model, source_urls, self.delay_configuration,
             self.web_driver_type, self.cache, self.loop)
@@ -846,11 +837,11 @@ class MultiExtractor(BaseExtractor):
     @async_debug()
     async def _combine_results(self, item_results, source_results):
         for source_result in source_results:
-            source_url = source_result[self.SOURCE_URL_TAG]
+            source_url = source_result.source_url
             item_result = item_results[source_url]
             source_overrides = ((k, v) for k, v in source_result.items() if v is not None)
             for field, source_value in source_overrides:
-                item_value = item_result.get(field)
+                item_value = getattr(item_result, field)
                 if item_value is not None and item_value != source_value:
                     PP.pprint(dict(
                         msg='Overwriting item value from source',
@@ -858,8 +849,9 @@ class MultiExtractor(BaseExtractor):
                         extractor=repr(self), field=field,
                         item_value=item_value, source_value=source_value))
 
-                item_result[field] = source_value
+                setattr(item_result, field, source_value)
 
+    # @sync_debug()
     @classmethod
     def provision_extractors(cls, model, url_fragments=None, web_driver_type=None,
                              cache=None, loop=None):

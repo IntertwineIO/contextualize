@@ -5,17 +5,19 @@ import asyncio
 import uvloop
 
 from service import Service
+from utils.cache import AsyncCache
 
 
 def main():
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     loop = asyncio.get_event_loop()
+    cache = AsyncCache(loop)
 
     problem_name = 'Homelessness'
     org_name = None
     geo_name = 'Texas'
 
-    service = Service(loop, problem_name, org_name, geo_name)
+    service = Service(problem_name, org_name, geo_name, cache, loop)
 
     try:
         loop.run_until_complete(service.contextualize())
@@ -24,7 +26,7 @@ def main():
         print('One or more tasks have been canceled.')
 
     finally:
-        Service.shutdown(loop)
+        cache.shutdown(loop)
         loop.close()
 
 
