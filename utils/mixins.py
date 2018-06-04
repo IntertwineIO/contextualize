@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from collections import OrderedDict
 
-from utils.tools import derive_attributes
+from utils.tools import PP, derive_attributes
 
 
 class FieldMixin:
@@ -31,7 +31,7 @@ class FieldMixin:
         return f'{self.__class__.__name__}({arg_string})'
 
     def __str__(self):
-        return OrderedDict(self.items())
+        return PP.pformat(OrderedDict(self.items()))
 
 
 # TODO: Convert to Py3.7 Data Class and generalize unique field

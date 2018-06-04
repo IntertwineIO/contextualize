@@ -6,10 +6,11 @@ import inspect
 import wrapt
 from pprint import PrettyPrinter
 
-DEBUG_WRAPPERS = {'async_debug_wrapper', 'sync_debug_wrapper'}
+from utils.tools import WIDTH
+
 DELIMITER = '–'  # chr(8211)
-WIDTH = 200
 SEPARATOR = DELIMITER * WIDTH
+DEBUG_WRAPPERS = {'async_debug_wrapper', 'sync_debug_wrapper'}
 
 
 def offset_text(text, offset_space):

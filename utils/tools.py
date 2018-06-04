@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import inspect
-import math
-import random
 from collections import OrderedDict
 from functools import lru_cache
 from itertools import chain, islice
@@ -16,7 +14,7 @@ VALUE_DELIMITER = ', '
 MORE_VALUES = '...'
 
 INDENT = 4
-WIDTH = 160
+WIDTH = 200
 PP = PrettyPrinter(indent=INDENT, width=WIDTH)
 
 SELF_REFERENTIAL_PARAMS = {'self', 'cls', 'meta'}
