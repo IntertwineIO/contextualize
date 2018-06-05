@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import inspect
 from collections import OrderedDict
 from enum import Enum
 from functools import lru_cache
 from itertools import chain
+
+from utils.tools import is_class_name
 
 
 class FlexEnum(Enum):
@@ -12,6 +15,9 @@ class FlexEnum(Enum):
 
     Enum with helpful cast, accessor, and transformation methods.
     """
+    POST_CLASS_METHOD_NAME = '__call__'
+    PRE_CLASS_METHOD_NAME = '<module>'
+
     @classmethod
     def cast(cls, value):
         """Cast value to cls"""
@@ -98,6 +104,41 @@ class FlexEnum(Enum):
         return: OrderedDict of enum name/value pairs
         """
         return OrderedDict(cls.items(transform, labels=True, inverse=inverse))
+
+    def _derive_qualname(self):
+        """
+        Derive Qualname
+
+        Inspect stack to derive and set __qualname__ on the class.
+        """
+        classes = []
+        stack = frame = None
+        try:
+            is_eligible = False
+            stack = inspect.stack()
+            for frame in stack:
+                if frame.function == self.POST_CLASS_METHOD_NAME:
+                    is_eligible = True
+                elif frame.function == self.PRE_CLASS_METHOD_NAME:
+                    break
+                elif is_eligible:
+                    if not is_class_name(frame.function):
+                        continue
+                    classes.append(frame.function)
+        finally:
+            del frame
+            del stack
+
+        outer = '.'.join(reversed(classes))
+        qualname = self.__class__.__qualname__
+
+        if classes and not qualname.startswith(outer):
+            qualname = '.'.join((outer, qualname))
+            self.__class__.__qualname__ = qualname
+
+    def __init__(self, *args, **kwds):
+        super().__init__()
+        self._derive_qualname()
 
 
 class InfinIterator:

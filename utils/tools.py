@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import inspect
+import re
 from collections import OrderedDict
 from functools import lru_cache
 from itertools import chain, islice
@@ -16,6 +17,12 @@ MORE_VALUES = '...'
 INDENT = 4
 WIDTH = 200
 PP = PrettyPrinter(indent=INDENT, width=WIDTH)
+
+CLASS_NAME_PATTERN = re.compile(r'[A-Z][a-zA-Z0-9]*$')
+
+def is_class_name(name):
+    return CLASS_NAME_PATTERN.match(name)
+
 
 SELF_REFERENTIAL_PARAMS = {'self', 'cls', 'meta'}
 
