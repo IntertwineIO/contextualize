@@ -15,9 +15,6 @@ class FlexEnum(Enum):
 
     Enum with helpful cast, accessor, and transformation methods.
     """
-    POST_CLASS_METHOD_NAME = '__call__'
-    PRE_CLASS_METHOD_NAME = '<module>'
-
     @classmethod
     def cast(cls, value):
         """Cast value to cls"""
@@ -117,9 +114,9 @@ class FlexEnum(Enum):
             is_eligible = False
             stack = inspect.stack()
             for frame in stack:
-                if frame.function == self.POST_CLASS_METHOD_NAME:
+                if frame.function == '__call__':
                     is_eligible = True
-                elif frame.function == self.PRE_CLASS_METHOD_NAME:
+                elif frame.function == '<module>':
                     break
                 elif is_eligible:
                     if not is_class_name(frame.function):
