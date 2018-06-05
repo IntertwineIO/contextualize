@@ -46,7 +46,7 @@ class FlexEnum(Enum):
         """
         Generator of enum name/value 2-tuples
 
-        I/O
+        I/O:
         transform=None: function to be applied to each primary enum name
         labels=False: if True, values replaced with secondary enum names
         inverse=False: if True, values (or secondary names) then names
@@ -81,7 +81,7 @@ class FlexEnum(Enum):
         """
         Ordered enum name/value map
 
-        I/O
+        I/O:
         transform=None: function to be applied to each primary enum name
         labels=False: if True, values replaced with secondary enum names
         inverse=False: if True, values (or secondary names) then names
@@ -95,7 +95,7 @@ class FlexEnum(Enum):
         """
         Ordered enum primary/secondary name 2-tuples
 
-        I/O
+        I/O:
         transform=None: function to be applied to each primary enum name
         inverse=False: if True, primary and secondary names are swapped
         return: OrderedDict of enum name/value pairs
