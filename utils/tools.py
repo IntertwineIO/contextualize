@@ -3,6 +3,9 @@
 import inspect
 import re
 from collections import OrderedDict
+from datetime import datetime, date, time
+from decimal import Decimal
+from enum import Enum
 from functools import lru_cache
 from itertools import chain, islice
 from pprint import PrettyPrinter
@@ -111,6 +114,32 @@ def enlist(obj):
     if obj is None:
         return []
     return obj if isinstance(obj, list) else [obj]
+
+
+def json_serialize(obj):
+    """
+    JSON Serialize
+
+    Convert object to string; use as default in json.dumps
+    Supported types:
+    - datetime/date/time: isoformat
+    - Decimal: str
+    - Enum: module.qualname.name
+    """
+    if isinstance(obj, (datetime, date, time)):
+        return obj.isoformat()
+
+    if isinstance(obj, Decimal):
+        return str(obj)
+
+    if isinstance(obj, Enum):
+        enum_class = obj.__class__
+        module = enum_class.__module__
+        qualname = enum_class.__qualname__
+        name = obj.name
+        return f'{module}.{qualname}.{name}'
+
+    raise TypeError(f'Type {type(obj)} is not JSON serializable')
 
 
 def multi_parse(templates, string):
