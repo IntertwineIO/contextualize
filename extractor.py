@@ -171,17 +171,21 @@ class BaseExtractor:
     async def _extract_content(self, element, config, index=1, **kwds):
         self.content_map = content_map = OrderedDict(kwds)
         for field in self.model.fields():
-            field_config = config.get(field)
+            try:
+                field_config = config[field]
+
+            except KeyError as e:
+                field_config = None
+                PP.pprint(dict(
+                    msg='Extract field configuration missing', type='extract_field_config_missing',
+                    error=e, field=field, content_map=content_map, extractor=repr(self)))
+
             # Allow field to be set by other field without overwriting
             if field_config is None and content_map.get(field):
                 continue
 
-            elif not isinstance(field_config, (list, dict)):
-                content_map[field] = field_config
-                continue
-
             try:
-                content_map[field] = await self._perform_operation(element, field_config, index)
+                content_map[field] = await self._extract_field(element, field_config, index)
 
             except Exception as e:  # e.g. NoSuchElementException
                 PP.pprint(dict(
@@ -193,50 +197,58 @@ class BaseExtractor:
         return instance
 
     @async_debug()
-    async def _perform_operation(self, target, config, index=1):
+    async def _extract_field(self, element, config, index=1):
         if isinstance(config, list):
-            latest = prior = parent = target
-            for operation_config in config:
-                new_targets = self._select_targets(operation_config, latest, prior, parent)
-                prior = latest
-                if operation_config.get(self.IS_MULTIPLE_TAG, False):
-                    latest = await self._perform_operation(new_targets, operation_config, index)
-                    continue
-                for new_target in new_targets:
-                    latest = await self._perform_operation(new_target, operation_config, index)
-            return latest
-
+            return await self._perform_operation_series(element, config, index)
         if isinstance(config, dict):
-            operation = self._configure_operation(config)
+            return await self._perform_operation(element, config, index)
+        return config
 
-            if operation.find_method:
-                new_targets = await self._find_elements(operation, target, index)
-            else:
-                new_targets = enlist(target)
-                if operation.wait:
-                    await asyncio.sleep(operation.wait)
+    @async_debug()
+    async def _perform_operation_series(self, target, config, index=1):
+        latest = prior = parent = target
+        for operation_config in config:
+            new_targets = self._select_targets(operation_config, latest, prior, parent)
+            prior = latest
+            if operation_config.get(self.IS_MULTIPLE_TAG, False):
+                latest = await self._perform_operation(new_targets, operation_config, index)
+                continue
+            for new_target in new_targets:
+                latest = await self._perform_operation(new_target, operation_config, index)
+        return latest
 
-            if operation.click:
-                await self._click_elements(new_targets)
+    @async_debug()
+    async def _perform_operation(self, target, config, index=1):
+        operation = self._configure_operation(config)
 
-            if operation.extract_method:
-                values = await self._extract_values(operation, new_targets)
-            else:
-                values = new_targets
+        if operation.find_method:
+            new_targets = await self._find_elements(operation, target, index)
+        else:
+            new_targets = enlist(target)
+            if operation.wait:
+                await asyncio.sleep(operation.wait)
 
-            if operation.get_method:
-                values = await self._get_values(operation, values)
+        if operation.click:
+            await self._click_elements(new_targets)
 
-            if operation.parse_method:
-                values = await self._parse_values(operation, values)
+        if operation.extract_method:
+            values = await self._extract_values(operation, new_targets)
+        else:
+            values = new_targets
 
-            if operation.format_method:
-                values = await self._format_values(operation, values)
+        if operation.get_method:
+            values = await self._get_values(operation, values)
 
-            if operation.transform_method:
-                values = await self._transform_values(operation, values)
+        if operation.parse_method:
+            values = await self._parse_values(operation, values)
 
-            return delist(values)
+        if operation.format_method:
+            values = await self._format_values(operation, values)
+
+        if operation.transform_method:
+            values = await self._transform_values(operation, values)
+
+        return delist(values)
 
     @async_debug()
     async def _find_elements(self, operation, element, index=1):
@@ -397,11 +409,13 @@ class BaseExtractor:
 
         return transformed_values
 
-    # @async_debug()
-    # def _cache_content(self, unique_key, content):
-    #     redis = self.cache.client
-    #     keys_and_values = chain(*content.items())
-    #     await redis.mset(*keys_and_values)
+    @async_debug()
+    async def _cache_content(self, unique_key, content):
+        redis = self.cache.client
+        # keys_and_values = chain(*content.items())
+        # await redis.mset(unique_key, *keys_and_values)
+        content_json_bytes = content.to_json()
+        await redis.set(unique_key, content_json_bytes)
 
     @sync_debug()
     def _select_targets(self, config, latest, prior, parent):
@@ -616,6 +630,7 @@ class SourceExtractor(BaseExtractor):
                 error=e, extractor=repr(self), config=content_config))
             raise
         else:
+            await self._cache_content(self.page_url, content)
             return content
 
     # @sync_debug()
@@ -757,7 +772,7 @@ class MultiExtractor(BaseExtractor):
         page = 1
         while page < pages:
             try:
-                next_page_result = await self._perform_operation(self.web_driver, config, page)
+                next_page_result = await self._extract_field(self.web_driver, config, page)
             except NoSuchElementException:
                 break  # Last page always fails to find next element
 
@@ -779,7 +794,7 @@ class MultiExtractor(BaseExtractor):
         items_config = content_config[self.ITEMS_TAG]
         unique_field = self.model.UNIQUE_FIELD
 
-        elements = await self._perform_operation(self.web_driver, items_config)
+        elements = await self._extract_field(self.web_driver, items_config)
 
         if elements is not None:
             for index, element in enumerate(elements, start=1):
@@ -788,7 +803,7 @@ class MultiExtractor(BaseExtractor):
 
                     unique_key = getattr(content, unique_field)
                     if not unique_key:
-                        raise ValueError(f"Content missing unique key for '{unique_field}'")
+                        raise ValueError(f"Content missing value for '{unique_field}'")
 
                 except Exception as e:
                     PP.pprint(dict(
@@ -802,9 +817,8 @@ class MultiExtractor(BaseExtractor):
                         old_content=self.item_results[unique_key], new_content=content,
                         index=index, extractor=repr(self), config=content_config))
 
+                await self._cache_content(unique_key, content)
                 self.item_results[unique_key] = content
-
-                # await self._cache_content(unique_key, content)
 
         else:
             PP.pprint(dict(
@@ -948,18 +962,6 @@ class MultiExtractor(BaseExtractor):
         del encoded_fragments[self.CLAUSE_INDEX_TAG]
         clause_delimiter = url_config[self.CLAUSE_DELIMITER_TAG]
         return clause_delimiter.join(clauses)
-
-    def _template_keys(self, template):
-        length = len(template)
-        start = end = -1
-        while end < length:
-            start = template.find('{', start + 1)
-            end = template.find('}', end + 1)
-            if start == -1 and end == -1:
-                break
-            if start == -1 or start > end:
-                raise ValueError(f"Invalid template format: '{template}'")
-            yield template[start + 1:end]
 
     def __repr__(self):
         class_name = self.__class__.__name__

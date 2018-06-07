@@ -2,7 +2,7 @@
 ---
 page_type: MULTI
 is_enabled: True
-extract_sources: False
+extract_sources: True
 wait: 10
 
 url:
