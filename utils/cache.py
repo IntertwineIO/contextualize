@@ -151,7 +151,7 @@ class CacheKey:
 
     @property
     def key(self):
-        """Form key string from CacheKey instance"""
+        """Form key byte string from CacheKey instance"""
         return self.to_key(is_display=False)
 
     def __repr__(self):
