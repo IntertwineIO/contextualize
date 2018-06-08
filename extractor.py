@@ -391,10 +391,10 @@ class BaseExtractor:
         if operation.transform_method is self.TransformMethod.EXCISE:
             snippets = one_min(args)
             for value in values:
-                excised_value = value
+                cleansed_value = value
                 for snippet in snippets:
-                    excised_value = value.replace(snippet, '')
-                transformed_values.append(excised_value)
+                    cleansed_value = cleansed_value.replace(snippet, '')
+                transformed_values.append(cleansed_value)
 
         elif operation.transform_method is self.TransformMethod.JOIN:
             delimiter = one(args)

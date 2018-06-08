@@ -61,6 +61,9 @@ content:
   summary:
     xpath: "(//*[text()[contains(.,'Abstract')]])[1]/.."
     getattr: text
+    excise:
+      - 'Go to:\nAbstract\n'
+      - 'Go to:\n'
   full_text:
     # is_multiple: True
     # xpath: ".//div[contains(concat(' ', @class, ' '), ' article ')]/div[1]/div[position() > 2]"
