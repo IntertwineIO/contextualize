@@ -40,8 +40,8 @@ def flex_strptime(string, formats):
 
     I/O:
     string:     datetime string to be converted to a DateTimeWrapper
-    formats:    sequence of formats, where each format supports
-                the following strptime directives:
+    formats:    sequence of formats, where each supports the following
+                strptime directives:
                 %Y/%y   Year with/without century as zero-padded number
                 %B/%b   Month as locale’s full/abbreviated name
                 %d      Day of the month as a zero-padded decimal number
