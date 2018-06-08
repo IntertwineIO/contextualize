@@ -32,7 +32,7 @@ content:
     attribute: content
     strptime: ['%B %d, %Y', '%B %Y', '%Y']
   issue_date_granularity:
-    get: '<issue_date.granularity.name>'
+    get: '<issue_date.granularity>'
   first_page:
     name: citation_firstpage
     attribute: content
@@ -53,7 +53,7 @@ content:
       - 'Published online %Y %b.'
       - 'Published online %Y.'
   granularity_published:
-    get: '<published_timestamp.granularity.name>'
+    get: '<published_timestamp.granularity>'
   tzinfo_published:
   publisher:
     name: DC.Publisher
