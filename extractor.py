@@ -412,10 +412,7 @@ class BaseExtractor:
     @async_debug(context="self.content_map.get('source_url')")
     async def _cache_content(self, unique_key, content):
         redis = self.cache.client
-        # keys_and_values = chain(*content.items())
-        # await redis.mset(unique_key, *keys_and_values)
-        content_json_bytes = content.to_json()
-        await redis.set(unique_key, content_json_bytes)
+        await redis.hmset_dict(unique_key, content.jsonify())
 
     @sync_debug(context="self.content_map.get('source_url')")
     def _select_targets(self, config, latest, prior, parent):

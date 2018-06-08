@@ -3,7 +3,7 @@
 import json
 from collections import OrderedDict
 
-from utils.tools import PP, derive_attributes, json_serialize
+from utils.tools import PP, derive_attributes, default_serialize, serialize
 
 ENCODING_DEFAULT = 'utf-8'
 
@@ -33,10 +33,16 @@ class FieldMixin:
             cls._fields[cls.__name__] = derive_attributes(cls)
             return cls._fields[cls.__name__]
 
-    def to_json(self, encoding=ENCODING_DEFAULT):
+    def jsonify(self, encoding=ENCODING_DEFAULT):
+        """Convert to encoded JSON-safe ordered dict (default UTF-8)"""
+        serialized = ((k, serialize(v)) for k, v in self.items())
+        encoded = ((k.encode(encoding), v.encode(encoding)) for k, v in serialized)
+        return OrderedDict(encoded)
+
+    def to_json_bytes(self, encoding=ENCODING_DEFAULT):
         """Convert and encode object to JSON bytes (default UTF-8)"""
         od = OrderedDict(self.items())
-        json_unicode = json.dumps(od, ensure_ascii=False, default=json_serialize)
+        json_unicode = json.dumps(od, ensure_ascii=False, default=default_serialize)
         return json_unicode.encode(encoding)
 
     def __repr__(self):

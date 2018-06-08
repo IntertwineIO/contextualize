@@ -116,15 +116,16 @@ def enlist(obj):
     return obj if isinstance(obj, list) else [obj]
 
 
-def json_serialize(obj):
+def default_serialize(obj):
     """
-    JSON Serialize
+    Default Serialize
 
-    Convert object to string; use as default in json.dumps
+    Convert object to unicode string; use as default in json.dumps
     Supported types:
     - datetime/date/time: isoformat
     - Decimal: str
     - Enum: module.qualname.name
+    Raise TypeError for all other types
     """
     if isinstance(obj, (datetime, date, time)):
         return obj.isoformat()
@@ -140,6 +141,16 @@ def json_serialize(obj):
         return f'{module}.{qualname}.{name}'
 
     raise TypeError(f'Type {type(obj)} is not JSON serializable')
+
+
+def serialize(obj):
+    """Serialize object to unicode string"""
+    if hasattr(obj, 'jsonify'):
+        return obj.jsonify()
+    try:
+        return default_serialize(obj)
+    except TypeError:
+        return str(obj)
 
 
 def multi_parse(templates, string):
