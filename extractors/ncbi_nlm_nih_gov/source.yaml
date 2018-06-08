@@ -62,7 +62,7 @@ content:
     xpath: "(//*[text()[contains(.,'Abstract')]])[1]/.."
     getattr: text
     excise:
-      - 'Go to:\nAbstract\n'
+      - 'Abstract\n'
       - 'Go to:\n'
   full_text:
     # is_multiple: True
