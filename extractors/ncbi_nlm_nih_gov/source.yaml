@@ -59,11 +59,11 @@ content:
     name: DC.Publisher
     attribute: content
   summary:
-    xpath: ".//div[contains(concat(' ', @class, ' '), ' article ')]/div[1]/div[3]/div[2]"
+    xpath: "(//*[text()[contains(.,'Abstract')]])[1]/.."
     getattr: text
   full_text:
-    is_multiple: True
-    xpath: ".//div[contains(concat(' ', @class, ' '), ' article ')]/div[1]/div[position() > 2]"
-    getattr: text
-    parse: ["Go to:\n{value}", "{value}"]
-    join: "\n"
+    # is_multiple: True
+    # xpath: ".//div[contains(concat(' ', @class, ' '), ' article ')]/div[1]/div[position() > 2]"
+    # getattr: text
+    # parse: ["Go to:\n{value}", "{value}"]
+    # join: "\n"
