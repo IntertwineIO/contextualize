@@ -25,7 +25,7 @@ from utils.async import run_in_executor
 from utils.cache import AsyncCache
 from utils.debug import async_debug, sync_debug
 from utils.structures import FlexEnum
-from utils.time import flex_strptime
+from utils.time import DateTimeWrapper
 from utils.statistics import HumanDwellTime, human_dwell_time, human_selection_shuffle
 from utils.tools import (
     PP, delist, enlist, multi_parse, one, one_max, one_min, xor_constrain
@@ -352,7 +352,7 @@ class BaseExtractor:
                 if value is None:
                     parsed_values.append(None)
                     continue
-                parsed = flex_strptime(value, templates)
+                parsed = DateTimeWrapper.strptime(value, *templates)
                 parsed_values.append(parsed)
 
         return parsed_values
