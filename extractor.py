@@ -35,9 +35,9 @@ from utils.tools import (
 class BaseExtractor:
 
     FILE_NAME = NotImplementedError
+    ENCODING = 'utf-8'
 
     OPTIONS_TAG = 'options'
-
     IS_ENABLED_TAG = 'is_enabled'
     SOURCE_URL_TAG = 'source_url'
     CONTENT_TAG = 'content'
@@ -412,7 +412,8 @@ class BaseExtractor:
     @async_debug(context="self.content_map.get('source_url')")
     async def _cache_content(self, unique_key, content):
         redis = self.cache.client
-        await redis.hmset_dict(unique_key, content.jsonify())
+        content_hash = content.to_hash()
+        await redis.hmset_dict(unique_key, content_hash)
 
     @sync_debug(context="self.content_map.get('source_url')")
     def _select_targets(self, config, latest, prior, parent):
