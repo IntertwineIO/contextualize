@@ -17,9 +17,9 @@ def safe_decode(val, encoding):
 
 def serialize_nonstandard(obj):
     """
-    Default Serialize
+    Serialize Nonstandard
 
-    Convert object to unicode string; use as default in json.dumps
+    Convert nonstandard object to unicode string; default for json.dumps
     Supported types:
     - datetime/date/time: isoformat
     - Decimal: str
