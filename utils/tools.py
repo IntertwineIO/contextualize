@@ -61,8 +61,8 @@ def derive_attributes(cls, _mro=None):
         if len_mro > 2:
             super_attributes = derive_attributes(mro[1], mro[1:])
             attributes.update(super_attributes)
-        else:
-            return attributes
+
+        return attributes
 
     for line in lines:
         line = line.strip()
