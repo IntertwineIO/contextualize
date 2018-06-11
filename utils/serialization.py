@@ -5,16 +5,18 @@ from decimal import Decimal
 from enum import Enum
 
 ENCODING_DEFAULT = 'utf-8'
+NULL = chr(0)
 
 
 def safe_encode(val, encoding):
-    """Encode value unless null"""
-    return None if val is None else val.encode(encoding)
+    """Encode value, unless null"""
+    return NULL.encode(encoding) if val is None else val.encode(encoding)
 
 
 def safe_decode(val, encoding):
     """Decode value unless null"""
-    return None if val is None else val.decode(encoding)
+    null_byte = NULL.encode(encoding)
+    return None if val == null_byte or val is None else val.decode(encoding)
 
 
 def serialize_nonstandard(obj):
@@ -47,8 +49,8 @@ def serialize_nonstandard(obj):
 def serialize(obj, encoding=None):
     """Serialize object, optionally encoded as well"""
     if obj is None:
-        return
-    if hasattr(obj, 'to_json'):
+        serialized = NULL
+    elif hasattr(obj, 'to_json'):
         serialized = obj.to_json()
     else:
         try:

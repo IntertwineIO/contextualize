@@ -4,7 +4,7 @@ import json
 from collections import OrderedDict
 from itertools import chain
 
-from utils.serialization import safe_decode, safe_encode, serialize_nonstandard, serialize
+from utils.serialization import NULL, serialize_nonstandard, serialize
 from utils.time import STANDARD_DATETIME_FORMATS, DateTimeWrapper
 from utils.tools import PP, derive_attributes, load_class
 
@@ -39,7 +39,7 @@ class FieldMixin:
         return f'{self.__class__.__name__}({arg_string})'
 
     def __str__(self):
-        return PP.pformat(self.to_hash())
+        return PP.pformat(OrderedDict(self.items()))
 
 
 class Hashable(FieldMixin):
@@ -60,7 +60,7 @@ class Hashable(FieldMixin):
 
         if is_encoded:
             encoding = encoding or cls.ENCODING_DEFAULT
-            field_data = ((k.decode(encoding), safe_decode(v, encoding)) for k, v in field_data)
+            field_data = ((k.decode(encoding), v.decode(encoding)) for k, v in field_data)
 
         field_hash = dict(field_data)
         init_kwds = OrderedDict()
@@ -68,7 +68,7 @@ class Hashable(FieldMixin):
         for field in cls.fields():
             if field in field_hash:
                 value = field_hash[field]
-                if value is None:
+                if value == NULL or value is None:
                     init_kwds[field] = None
                     continue
                 custom_method_name = f'deserialize_{field}'
@@ -87,7 +87,7 @@ class Hashable(FieldMixin):
         field_data = ((k, serialize(v)) for k, v in self.items())
         serialized = chain(model_data, field_data)
         if encoding:
-            serialized = ((k.encode(encoding), safe_encode(v, encoding)) for k, v in serialized)
+            serialized = ((k.encode(encoding), v.encode(encoding)) for k, v in serialized)
         return OrderedDict(serialized)
 
     def to_json(self, encoding=None):
@@ -105,6 +105,9 @@ class Hashable(FieldMixin):
     @classmethod
     def deserialize_enum(cls, enum_specifier):
         return load_class(enum_specifier)
+
+    def __str__(self):
+        return PP.pformat(self.to_hash())
 
 
 # TODO: Convert to Py3.7 Data Class and generalize unique field
