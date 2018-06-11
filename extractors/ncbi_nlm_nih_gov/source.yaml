@@ -32,7 +32,7 @@ content:
     attribute: content
     strptime: ['%B %d, %Y', '%B %Y', '%Y']
   issue_date_granularity:
-    get: '<issue_date.granularity.name>'
+    get: '<issue_date.granularity>'
   first_page:
     name: citation_firstpage
     attribute: content
@@ -53,17 +53,20 @@ content:
       - 'Published online %Y %b.'
       - 'Published online %Y.'
   granularity_published:
-    get: '<published_timestamp.granularity.name>'
+    get: '<published_timestamp.granularity>'
   tzinfo_published:
   publisher:
     name: DC.Publisher
     attribute: content
   summary:
-    xpath: ".//div[contains(concat(' ', @class, ' '), ' article ')]/div[1]/div[3]/div[2]"
+    xpath: "(//*[text()[contains(.,'Abstract')]])[1]/.."
     getattr: text
+    excise:
+      - "Abstract\n"
+      - "Go to:\n"
   full_text:
-    is_multiple: True
-    xpath: ".//div[contains(concat(' ', @class, ' '), ' article ')]/div[1]/div[position() > 2]"
-    getattr: text
-    parse: ["Go to:\n{value}", "{value}"]
-    join: "\n"
+    # is_multiple: True
+    # xpath: ".//div[contains(concat(' ', @class, ' '), ' article ')]/div[1]/div[position() > 2]"
+    # getattr: text
+    # parse: ["Go to:\n{value}", "{value}"]
+    # join: "\n"

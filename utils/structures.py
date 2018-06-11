@@ -1,8 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import inspect
 from collections import OrderedDict
 from enum import Enum
 from functools import lru_cache
+from itertools import chain
+
+from utils.tools import is_class_name
 
 
 class FlexEnum(Enum):
@@ -42,7 +46,7 @@ class FlexEnum(Enum):
         """
         Generator of enum name/value 2-tuples
 
-        I/O
+        I/O:
         transform=None: function to be applied to each primary enum name
         labels=False: if True, values replaced with secondary enum names
         inverse=False: if True, values (or secondary names) then names
@@ -77,7 +81,7 @@ class FlexEnum(Enum):
         """
         Ordered enum name/value map
 
-        I/O
+        I/O:
         transform=None: function to be applied to each primary enum name
         labels=False: if True, values replaced with secondary enum names
         inverse=False: if True, values (or secondary names) then names
@@ -91,12 +95,47 @@ class FlexEnum(Enum):
         """
         Ordered enum primary/secondary name 2-tuples
 
-        I/O
+        I/O:
         transform=None: function to be applied to each primary enum name
         inverse=False: if True, primary and secondary names are swapped
         return: OrderedDict of enum name/value pairs
         """
         return OrderedDict(cls.items(transform, labels=True, inverse=inverse))
+
+    def _derive_qualname(self):
+        """
+        Derive Qualname
+
+        Inspect stack to derive and set __qualname__ on the class.
+        """
+        classes = []
+        stack = frame = None
+        try:
+            is_eligible = False
+            stack = inspect.stack()
+            for frame in stack:
+                if frame.function == '__call__':
+                    is_eligible = True
+                elif frame.function == '<module>':
+                    break
+                elif is_eligible:
+                    if not is_class_name(frame.function):
+                        continue
+                    classes.append(frame.function)
+        finally:
+            del frame
+            del stack
+
+        outer = '.'.join(reversed(classes))
+        qualname = self.__class__.__qualname__
+
+        if classes and not qualname.startswith(outer):
+            qualname = '.'.join((outer, qualname))
+            self.__class__.__qualname__ = qualname
+
+    def __init__(self, *args, **kwds):
+        super().__init__()
+        self._derive_qualname()
 
 
 class InfinIterator:
@@ -121,3 +160,50 @@ class InfinIterator:
     def __init__(self, iterable):
         self.values = iterable if isinstance(iterable, (list, tuple)) else list(iterable)
         self.index = 0
+
+
+class Singleton:
+    """
+    Singleton
+
+    A base class to ensure only a single instance is created. Several
+    measures are taken to encourage responsible usage:
+    - The instance is only initialized once upon initial creation and
+      arguments are permitted but not required
+    - The constructor prohibits arguments on subsequent calls unless
+      they match the initial ones as state must not change
+    - Modifying __new__ in subclasses is not permitted to guard against
+      side-stepping the aforementioned restrictions
+
+    Adapted from Guido van Rossum's Singleton:
+    https://www.python.org/download/releases/2.2/descrintro/#__new__
+    """
+    __instance = None
+    __arguments = None
+
+    def __new__(cls, *args, **kwds):
+
+        if cls.__new__ is not Singleton.__new__:
+            raise ValueError('Singletons may not modify __new__')
+
+        if cls.__instance is not None:
+            if args or kwds:
+                if (args != cls.__arguments['args'] or kwds != cls.__arguments['kwds']):
+                    raise ValueError('Singleton initialization may not change')
+            return cls.__instance
+
+        cls.__instance = instance = object.__new__(cls)
+        cls.__arguments = {'args': args, 'kwds': kwds}
+        instance.initialize(*args, **kwds)
+        return instance
+
+    def initialize(self, *args, **kwds):
+        pass
+
+    def __repr__(self):
+        class_name = self.__class__.__name__
+        args, kwds = self.__arguments['args'], self.__arguments['kwds']
+        arg_strings = (str(arg) for arg in args)
+        kwd_strings = (f'{k}={v}' for k, v in kwds.items()) if kwds else ()
+        full_arg_string = ', '.join(chain(arg_strings, kwd_strings))
+        return f'{class_name}({full_arg_string})'

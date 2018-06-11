@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import importlib
 import inspect
-import math
-import random
+import re
 from collections import OrderedDict
 from functools import lru_cache
 from itertools import chain, islice
@@ -12,12 +12,23 @@ from parse import parse
 
 from exceptions import TooFewValuesError, TooManyValuesError
 
+INDENT = 4
+WIDTH = 200
+
+PP = PrettyPrinter(indent=INDENT, width=WIDTH)
+
 VALUE_DELIMITER = ', '
 MORE_VALUES = '...'
 
-INDENT = 4
-WIDTH = 160
-PP = PrettyPrinter(indent=INDENT, width=WIDTH)
+CLASS_NAME_PATTERN = re.compile(r'[A-Z][a-zA-Z0-9]*$')
+
+def is_class_name(name):
+    return CLASS_NAME_PATTERN.match(name)
+
+MODULE_NAME_PATTERN = re.compile(r'[a-z][a-z_0-9]*[a-z0-9]$')
+
+def is_module_name(name):
+    return MODULE_NAME_PATTERN.match(name)
 
 SELF_REFERENTIAL_PARAMS = {'self', 'cls', 'meta'}
 
@@ -53,8 +64,8 @@ def derive_attributes(cls, _mro=None):
         if len_mro > 2:
             super_attributes = derive_attributes(mro[1], mro[1:])
             attributes.update(super_attributes)
-        else:
-            return attributes
+
+        return attributes
 
     for line in lines:
         line = line.strip()
@@ -106,6 +117,51 @@ def enlist(obj):
     if obj is None:
         return []
     return obj if isinstance(obj, list) else [obj]
+
+
+def load_class(specifier):
+    """
+    Load Class
+
+    Load class based on the given specifier.
+
+    I/O:
+    specifier:  absolute path to class, where an inner class can be
+                specified via dot notation:
+                module.path.to.OuterClass.InnerClass
+    return:     class object
+    raise:      ValueError if invalid specifier
+    """
+    module_names, class_names = [], []
+    components = specifier.split('.')
+
+    for component in components:
+        if is_module_name(component):
+            module_names.append(component)
+        elif is_class_name(component):
+            class_names.append(component)
+        else:
+            raise ValueError(f'Invalid class specifier component: {component}')
+
+    if not module_names:
+        raise ValueError(f'Class specifier missing module: {specifier}')
+    if not class_names:
+        raise ValueError(f'Class specifier missing class: {specifier}')
+
+    module_path = '.'.join(module_names)
+    first_class = class_names[0]
+
+    importlib.invalidate_caches()
+    module = importlib.import_module(module_path)
+
+    cls = module
+    for class_name in class_names:
+        try:
+            cls = getattr(cls, class_name)
+        except AttributeError:
+            raise ValueError(f'Class not found: {class_name}')
+
+    return cls
 
 
 def multi_parse(templates, string):
@@ -267,9 +323,8 @@ def one_min(iterable):
     One Min
 
     Given an iterable, confirm there is at least one value. Return the
-    iterable if it has a length; if not, convert it to a list first
-    (i.e. the iterable is an iterator). If there are no values, raise
-    TooFewValuesError.
+    iterable if it has a length; if not (i.e. it's an iterator), convert
+    it to a list first. If there are no values, raise TooFewValuesError.
     """
     values = iterable if hasattr(iterable, '__len__') else list(iterable)
     if not values:

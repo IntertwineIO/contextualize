@@ -75,7 +75,7 @@ content:
         - '{}. {value};{}'
     - strptime: ['%Y %b %d', '%Y %b', '%Y']
   issue_date_granularity:
-    get: '<issue_date.granularity.name>'
+    get: '<issue_date.granularity>'
   first_page:
     class_name: details
     getattr: text
@@ -109,7 +109,7 @@ content:
         - '{}. {value};{}'
     - strptime: ['%Y %b %d', '%Y %b']
   granularity_published:
-    get: '<published_timestamp.granularity.name>'
+    get: '<published_timestamp.granularity>'
   tzinfo_published:
   publisher:
   summary:

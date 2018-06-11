@@ -7,6 +7,28 @@ class ResearchArticle(Extractable):
     """ResearchArticle"""
     BASE_DIRECTORY = 'extractors'
 
+    @classmethod
+    def deserialize_issue_date(cls, dt_string, **field_hash):
+        dt = cls.deserialize_datetime(dt_string)
+        granularity_string = field_hash.get('issue_date_granularity')
+        dt.granularity = cls.deserialize_enum(granularity_string)
+        return dt
+
+    @classmethod
+    def deserialize_issue_date_granularity(cls, granularity_string, **field_hash):
+        return cls.deserialize_enum(granularity_string)
+
+    @classmethod
+    def deserialize_published_timestamp(cls, dt_string, **field_hash):
+        dt = cls.deserialize_datetime(dt_string)
+        granularity_string = field_hash.get('granularity_published')
+        dt.granularity = cls.deserialize_enum(granularity_string)
+        return dt
+
+    @classmethod
+    def deserialize_granularity_published(cls, granularity_string, **field_hash):
+        return cls.deserialize_enum(granularity_string)
+
     def __init__(self, source_url=None, title=None, author_names=None, publication=None,
                  volume=None, issue=None, issue_date=None, issue_date_granularity=None,
                  first_page=None, last_page=None, doi=None, published_timestamp=None,

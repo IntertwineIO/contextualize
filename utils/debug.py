@@ -6,10 +6,11 @@ import inspect
 import wrapt
 from pprint import PrettyPrinter
 
-DEBUG_WRAPPERS = {'async_debug_wrapper', 'sync_debug_wrapper'}
-DELIMITER = '–'
-WIDTH = 160
+from utils.tools import WIDTH
+
+DELIMITER = '–'  # chr(8211)
 SEPARATOR = DELIMITER * WIDTH
+DEBUG_WRAPPERS = {'async_debug_wrapper', 'sync_debug_wrapper'}
 
 
 def offset_text(text, offset_space):
@@ -30,6 +31,7 @@ def format_text(label, text, offset_space):
 
 
 def derive_offset_space(offset=None, indent=4):
+    """Derive offset by counting wrapped stack frames if not given"""
     if offset is None:
         frame_records = inspect.stack()
         new_offset = sum(1 for f in frame_records
@@ -39,39 +41,62 @@ def derive_offset_space(offset=None, indent=4):
     return ' ' * new_offset * indent
 
 
-def print_enter_info(wrapped, instance, args, kwargs,
+def evaluate_context(self, context):
+    try:
+        evaluated_context = eval(context)
+    except Exception:
+        evaluated_context = None
+    return str(evaluated_context)
+
+
+def loop_repr(loop):
+    class_name, running, closed, debug = repr(loop)[1:-1].split()
+    module = loop.__class__.__module__
+    hex_id = hex(id(loop))
+    return f'<{module}.{class_name} object at {hex_id} {running} {closed} {debug}>'
+
+
+def print_enter_info(wrapped, context, instance, args, kwargs,
                      printer, offset_space, loop=None, is_async=False):
+    """Print enter info for wrapped function to be called/awaited"""
     print(SEPARATOR)
     async_ = 'async ' if is_async else ''
     print(f'{offset_space}Entering {async_}{wrapped.__name__}')
     if instance is not None:
+        if context is not None:
+            format_text('context', evaluate_context(instance, context), offset_space)
         format_text('instance', repr(instance), offset_space)
     format_text('args', printer.pformat(args), offset_space)
     format_text('kwargs', printer.pformat(kwargs), offset_space)
     loop = loop or asyncio.get_event_loop()
+    format_text('loop', loop_repr(loop), offset_space)
     start_time = loop.time()
     format_text('start', str(start_time), offset_space)
     print(SEPARATOR)
 
 
-def print_exit_info(wrapped, instance, args, kwargs,
+def print_exit_info(wrapped, context, instance, args, kwargs,
                     result, end_time, elapsed_time,
                     printer, offset_space, loop=None, is_async=False):
+    """Print exit info for wrapped function to be called/awaited"""
     print(SEPARATOR)
     async_ = 'async ' if is_async else ''
     print(f'{offset_space}Returning from {async_}{wrapped.__name__}')
     if instance is not None:
+        if context is not None:
+            format_text('context', evaluate_context(instance, context), offset_space)
         format_text('instance', repr(instance), offset_space)
     format_text('args', printer.pformat(args), offset_space)
     format_text('kwargs', printer.pformat(kwargs), offset_space)
     format_text('return', printer.pformat(result), offset_space)
     loop = loop or asyncio.get_event_loop()
+    format_text('loop', loop_repr(loop), offset_space)
     format_text('end', str(end_time), offset_space)
     format_text('elapsed', str(elapsed_time), offset_space)
     print(SEPARATOR)
 
 
-def sync_debug(offset=None, indent=4):
+def sync_debug(offset=None, indent=4, context=None):
     """
     Sync Debug
 
@@ -94,9 +119,10 @@ def sync_debug(offset=None, indent=4):
     @wrapt.decorator
     def sync_debug_wrapper(wrapped, instance, args, kwargs):
         loop = asyncio.get_event_loop()
-        printer = PrettyPrinter(indent=indent, width=WIDTH)
         offset_space = derive_offset_space(offset, indent)
-        print_enter_info(wrapped, instance, args, kwargs,
+        width = WIDTH - len(offset_space)
+        printer = PrettyPrinter(indent=indent, width=width)
+        print_enter_info(wrapped, context, instance, args, kwargs,
                          printer, offset_space, loop)
 
         true_start_time = loop.time()
@@ -104,7 +130,7 @@ def sync_debug(offset=None, indent=4):
         end_time = loop.time()
         elapsed_time = end_time - true_start_time
 
-        print_exit_info(wrapped, instance, args, kwargs,
+        print_exit_info(wrapped, context, instance, args, kwargs,
                         result, end_time, elapsed_time,
                         printer, offset_space, loop)
         return result
@@ -112,7 +138,7 @@ def sync_debug(offset=None, indent=4):
     return sync_debug_wrapper
 
 
-def async_debug(offset=None, indent=4):
+def async_debug(offset=None, indent=4, context=None):
     """
     Async Debug
 
@@ -135,9 +161,10 @@ def async_debug(offset=None, indent=4):
     @wrapt.decorator
     async def async_debug_wrapper(wrapped, instance, args, kwargs):
         loop = asyncio.get_event_loop()
-        printer = PrettyPrinter(indent=indent, width=WIDTH)
         offset_space = derive_offset_space(offset, indent)
-        print_enter_info(wrapped, instance, args, kwargs,
+        width = WIDTH - len(offset_space)
+        printer = PrettyPrinter(indent=indent, width=width)
+        print_enter_info(wrapped, context, instance, args, kwargs,
                          printer, offset_space, loop, is_async=True)
 
         true_start_time = loop.time()
@@ -145,7 +172,7 @@ def async_debug(offset=None, indent=4):
         end_time = loop.time()
         elapsed_time = end_time - true_start_time
 
-        print_exit_info(wrapped, instance, args, kwargs,
+        print_exit_info(wrapped, context, instance, args, kwargs,
                         result, end_time, elapsed_time,
                         printer, offset_space, loop, is_async=True)
         return result

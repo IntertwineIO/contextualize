@@ -111,8 +111,7 @@ class SecretService:
         self.get_saved_data.cache_clear()
 
     def load_data(self, file_path=None):
-        # import ipdb; ipdb.set_trace()
-
+        """Load data from the given file and store it on the service"""
         file_path = file_path or self.file_path
         try:
             self._data[self.browser] = self.get_saved_data(self.file_path)
@@ -126,7 +125,7 @@ class SecretService:
     @classmethod
     @lru_cache(maxsize=None)
     def get_saved_data(cls, file_path=None):
-        """Load data from the given file path and cache it"""
+        """Get saved data from the given file and cache it"""
         file_path = file_path or cls._form_file_path(cls.DEFAULT_BROWSER)
         with open(file_path, 'r', newline='') as csv_file:
             csv_reader = csv.reader(csv_file, **cls.CSV_FORMAT)
