@@ -8,10 +8,12 @@ ENCODING_DEFAULT = 'utf-8'
 
 
 def safe_encode(val, encoding):
+    """Encode value unless null"""
     return None if val is None else val.encode(encoding)
 
 
 def safe_decode(val, encoding):
+    """Decode value unless null"""
     return None if val is None else val.decode(encoding)
 
 

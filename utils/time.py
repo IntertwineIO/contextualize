@@ -5,6 +5,11 @@ from datetime import datetime
 from utils.structures import FlexEnum
 
 
+STANDARD_DATETIME_FORMATS = [
+    '%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%S.%f',
+    '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M:%S.%f'
+]
+
 TZINFO_TAG = 'tzinfo'
 
 DateTimeInfo = namedtuple(

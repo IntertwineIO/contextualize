@@ -5,6 +5,7 @@ from collections import OrderedDict
 from itertools import chain
 
 from utils.serialization import safe_decode, safe_encode, serialize_nonstandard, serialize
+from utils.time import STANDARD_DATETIME_FORMATS, DateTimeWrapper
 from utils.tools import PP, derive_attributes, load_class
 
 
@@ -45,42 +46,46 @@ class Hashable(FieldMixin):
     ENCODING_DEFAULT = 'utf-8'
 
     @classmethod
-    def from_hash(cls, content_hash, encoding=None):
-        is_encoded = isinstance(next(iter(content_hash.values())), bytes)
+    def from_hash(cls, hashed, encoding=None):
+        """Instantiate from hashed object, optionally decoding too"""
+        is_encoded = isinstance(next(iter(hashed.values())), bytes)
         model_key = b'__model__' if is_encoded else '__model__'
 
         if cls is Hashable:
-            model_specifier = content_hash[model_key]
+            model_specifier = hashed[model_key]
             model = load_class(model_specifier)
-            return model.from_hash(content_hash, encoding)
+            return model.from_hash(hashed, encoding)
 
-        field_info = ((k, v) for k, v in content_hash.items() if k != model_key)
+        field_data = ((k, v) for k, v in hashed.items() if k != model_key)
 
         if is_encoded:
             encoding = encoding or cls.ENCODING_DEFAULT
-            field_info = ((k.decode(encoding), safe_decode(v, encoding)) for k, v in field_info)
+            field_data = ((k.decode(encoding), safe_decode(v, encoding)) for k, v in field_data)
 
-        field_info_map = dict(field_info)
-        kwds = OrderedDict()
+        field_hash = dict(field_data)
+        init_kwds = OrderedDict()
 
         for field in cls.fields():
-            if field in field_info_map:
-                raw_value = field_info_map[field]
+            if field in field_hash:
+                value = field_hash[field]
+                if value is None:
+                    init_kwds[field] = None
+                    continue
                 custom_method_name = f'deserialize_{field}'
                 if hasattr(cls, custom_method_name):
                     custom_method = getattr(cls, custom_method_name)
-                    kwds[field] = custom_method(raw_value)
+                    init_kwds[field] = custom_method(value, **field_hash)
                 else:
-                    kwds[field] = raw_value
+                    init_kwds[field] = value
 
-        return cls(**kwds)
+        return cls(**init_kwds)
 
     def to_hash(self, encoding=None):
         """Convert to ordered dict, optionally encoding as well"""
         cls = self.__class__
-        model_info = (('__model__', f'{cls.__module__}.{cls.__qualname__}'),)
-        field_info = ((k, serialize(v)) for k, v in self.items())
-        serialized = chain(model_info, field_info)
+        model_data = (('__model__', f'{cls.__module__}.{cls.__qualname__}'),)
+        field_data = ((k, serialize(v)) for k, v in self.items())
+        serialized = chain(model_data, field_data)
         if encoding:
             serialized = ((k.encode(encoding), safe_encode(v, encoding)) for k, v in serialized)
         return OrderedDict(serialized)
@@ -92,6 +97,14 @@ class Hashable(FieldMixin):
         if encoding:
             rendered_json = rendered_json.encode(encoding)
         return rendered_json
+
+    @classmethod
+    def deserialize_datetime(cls, dt_string):
+        return DateTimeWrapper.strptime(dt_string, *STANDARD_DATETIME_FORMATS)
+
+    @classmethod
+    def deserialize_enum(cls, enum_specifier):
+        return load_class(enum_specifier)
 
 
 # TODO: Convert to Py3.7 Data Class and generalize unique field
