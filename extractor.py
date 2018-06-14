@@ -22,7 +22,7 @@ from url_normalize import url_normalize
 
 from secret_service.agency import SecretService
 from utils.async import run_in_executor
-from utils.cache import AsyncCache
+from utils.cache import AsyncCache, CacheKey
 from utils.debug import async_debug, sync_debug
 from utils.structures import FlexEnum
 from utils.time import DateTimeWrapper
@@ -410,10 +410,12 @@ class BaseExtractor:
         return transformed_values
 
     @async_debug(context="self.content_map.get('source_url')")
-    async def _cache_content(self, unique_key, content):
+    async def _cache_content(self, content):
         redis = self.cache.client
         content_hash = content.to_hash()
-        await redis.hmset_dict(unique_key, content_hash)
+        unique_key = getattr(content, self.model.UNIQUE_FIELD)
+        cache_key = CacheKey(unique_key)
+        await redis.hmset_dict(cache_key.key, content_hash)
 
     @sync_debug(context="self.content_map.get('source_url')")
     def _select_targets(self, config, latest, prior, parent):
@@ -629,7 +631,7 @@ class SourceExtractor(BaseExtractor):
                 error=e, extractor=repr(self), config=content_config))
             raise
         else:
-            await self._cache_content(self.page_url, content)
+            await self._cache_content(content)
             return content
 
     @sync_debug()
@@ -818,7 +820,7 @@ class MultiExtractor(BaseExtractor):
                         old_content=self.item_results[unique_key], new_content=content,
                         index=index, extractor=repr(self), config=content_config))
 
-                await self._cache_content(unique_key, content)
+                await self._cache_content(content)
                 self.item_results[unique_key] = content
 
         else:
