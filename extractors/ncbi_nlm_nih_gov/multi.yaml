@@ -16,6 +16,7 @@ url:
 
 pagination:
   pages: 2
+  page_size: 20
   next_page_click:
     - xpath: "//div[contains(concat(' ', @class, ' '), ' pagination ')]/a[text()='Next >']"
       click: True
@@ -24,10 +25,11 @@ pagination:
       is_multiple: True
       class_name: rprt
 
+items:
+  is_multiple: True
+  class_name: rprt
+
 content:
-  items:
-    is_multiple: True
-    class_name: rprt
   source_url:
     xpath: ".//div[contains(concat(' ', @class, ' '), ' title ')]/a"
     attribute: href

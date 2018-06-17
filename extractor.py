@@ -130,10 +130,13 @@ class BaseExtractor:
             PP.pprint(dict(
                 msg='Extractor disabled warning',
                 type='extractor_disabled_warning', extractor=repr(self)))
+            return
         try:
+            # STARTED
             await self._provision_web_driver()
             return await self._perform_extraction(self.page_url)
         finally:
+            # COMPLETED
             await self._dispose_web_driver()
 
     @async_debug()
@@ -147,10 +150,10 @@ class BaseExtractor:
         self.web_driver.implicitly_wait(max_implicit_wait)
 
     @async_debug()
-    async def _perform_extraction(self, url=None):
+    async def _perform_extraction(self, url=None, page=1):
         if url:
             await self._fetch_page(url)
-        return await self._extract_page()
+        return await self._extract_page(page=page)
 
     @async_debug()
     async def _fetch_page(self, url):
@@ -158,7 +161,7 @@ class BaseExtractor:
         await future_page
 
     @async_debug()
-    async def _extract_page(self):
+    async def _extract_page(self, *args, **kwds):
         raise NotImplementedError
 
     @async_debug()
@@ -414,8 +417,24 @@ class BaseExtractor:
         redis = self.cache.client
         content_hash = content.to_hash()
         unique_key = getattr(content, self.model.UNIQUE_FIELD)
-        cache_key = CacheKey(unique_key)
-        await redis.hmset_dict(cache_key.key, content_hash)
+        content_key = CacheKey(unique_key).key
+        await redis.hmset_dict(content_key, content_hash)
+
+    @async_debug(context="self.content_map.get('source_url')")
+    async def _cache_search_result(self, content, rank):
+        redis = self.cache.client
+        pipe = redis.pipeline()
+
+        content_hash = content.to_hash()
+        unique_key = getattr(content, self.model.UNIQUE_FIELD)
+        content_key = CacheKey(unique_key).key
+        cache_content = pipe.hmset_dict(content_key, content_hash)
+
+        results_key = CacheKey('results', **self.search_terms).key
+        cache_result = pipe.zadd(results_key, rank, content_key)
+
+        result = await pipe.execute()
+        await asyncio.gather(cache_content, cache_result)
 
     @sync_debug(context="self.content_map.get('source_url')")
     def _select_targets(self, config, latest, prior, parent):
@@ -586,6 +605,7 @@ class BaseExtractor:
         self.configuration = self._marshall_configuration(self.file_path)
         self.is_enabled = self.configuration.get(self.IS_ENABLED_TAG, True)
         self.delay_configuration = self._configure_delay(self.configuration)
+        self.content_configuration = self.configuration[self.CONTENT_TAG]
 
         self.web_driver_type = web_driver_type or self.WEB_DRIVER_TYPE_DEFAULT
         self.web_driver_class = self._derive_web_driver_class(self.web_driver_type)
@@ -596,6 +616,7 @@ class BaseExtractor:
 
     def __repr__(self):
         class_name = self.__class__.__name__
+        # getattr in case not yet set, e.g. logging during construction
         directory = getattr(self, 'directory', None)
         created_timestamp = getattr(self, 'created_timestamp', None)
         return (f'<{class_name}: {directory}, {created_timestamp}>')
@@ -620,15 +641,15 @@ class SourceExtractor(BaseExtractor):
         return await super().extract()
 
     @async_debug()
-    async def _extract_page(self):
-        content_config = self.configuration[self.CONTENT_TAG]
+    async def _extract_page(self, *args, **kwds):
         try:
-            content = await self._extract_content(self.web_driver, content_config,
+            content = await self._extract_content(self.web_driver,
+                                                  self.content_configuration,
                                                   source_url=self.page_url)
         except Exception as e:
             PP.pprint(dict(
                 msg='Extract content failure', type='extract_content_failure',
-                error=e, extractor=repr(self), config=content_config))
+                error=e, extractor=repr(self), config=self.content_configuration))
             raise
         else:
             await self._cache_content(content)
@@ -739,6 +760,7 @@ class MultiExtractor(BaseExtractor):
     # Pagination keys
     PAGINATION_TAG = 'pagination'
     PAGES_TAG = 'pages'
+    PAGE_SIZE_TAG = 'page_size'
     NEXT_PAGE_TAG = 'next_page'
     NEXT_PAGE_CLICK_TAG = 'next_page_click'
     NEXT_PAGE_URL_TAG = 'next_page_url'
@@ -749,29 +771,25 @@ class MultiExtractor(BaseExtractor):
     @async_debug()
     async def _perform_extraction(self, url=None):
         url = url or self.page_url
-        results = await super()._perform_extraction(url)
+        results = await super()._perform_extraction(url, page=1)
 
         pagination_config = self.configuration.get(self.PAGINATION_TAG)
         if not pagination_config:
             return results
 
-        pages = pagination_config.get(self.PAGES_TAG, float('Inf'))
-        if pages < 2:
+        if self.pages < 2:
             return results
 
-        click_config = pagination_config.get(self.NEXT_PAGE_CLICK_TAG)
-        url_config = pagination_config.get(self.NEXT_PAGE_URL_TAG)
-        next_page_operation_config = xor_constrain(click_config, url_config)
-        via_url = bool(url_config)
+        next_page_via_url = bool(self.next_page_url_configuration)
         updated_results = await self._extract_following_pages(
-            next_page_operation_config, pages, via_url)
+            self.next_page_configuration, next_page_via_url)
 
         return updated_results if updated_results else results
 
     @async_debug()
-    async def _extract_following_pages(self, config, pages, via_url=False):
+    async def _extract_following_pages(self, config, via_url=False):
         updated_results = None
-        page = 1
+        page, pages = 1, self.pages
         while page < pages:
             try:
                 next_page_result = await self._extract_field(
@@ -783,24 +801,25 @@ class MultiExtractor(BaseExtractor):
             delay = human_dwell_time(**self.delay_configuration)
             await asyncio.sleep(delay)
             url = next_page_result if via_url else None
-            updated_results = await super()._perform_extraction(url)
+            updated_results = await super()._perform_extraction(url, page=page)
 
         return updated_results
 
     @async_debug()
-    async def _extract_page(self):
-        return await self._extract_multiple()
+    async def _extract_page(self, page=1):
+        return await self._extract_multiple(page=page)
 
     @async_debug()
-    async def _extract_multiple(self):
-        content_config = self.configuration[self.CONTENT_TAG]
-        items_config = content_config[self.ITEMS_TAG]
+    async def _extract_multiple(self, page=1):
+        content_config = self.content_configuration
+        items_config = self.items_configuration
         unique_field = self.model.UNIQUE_FIELD
 
         elements = await self._extract_field(self.ELEMENTS_TAG, self.web_driver, items_config)
 
         if elements is not None:
             for index, element in enumerate(elements, start=1):
+                rank = (page - 1) * self.page_size + index
                 try:
                     content = await self._extract_content(element, content_config, index)
 
@@ -811,16 +830,18 @@ class MultiExtractor(BaseExtractor):
                 except Exception as e:
                     PP.pprint(dict(
                         msg='Extract content failure', type='extract_content_failure',
-                        error=e, index=index, extractor=repr(self), config=content_config))
+                        error=e, page=page, index=index, rank=rank,
+                        extractor=repr(self), config=content_config))
 
                 if unique_key in self.item_results:
                     PP.pprint(dict(
                         msg='Unique key collision', type='unique_key_collision',
                         field=unique_field, unique_key=unique_key,
                         old_content=self.item_results[unique_key], new_content=content,
-                        index=index, extractor=repr(self), config=content_config))
+                        page=page, index=index, rank=rank,
+                        extractor=repr(self), config=content_config))
 
-                await self._cache_content(content)
+                await self._cache_search_result(content, rank)
                 self.item_results[unique_key] = content
 
         else:
@@ -832,7 +853,7 @@ class MultiExtractor(BaseExtractor):
             if unique_field != self.SOURCE_URL_TAG:
                 raise ValueError('Unique field must be '
                                  f"'{self.SOURCE_URL_TAG}' to extract sources")
-            # TODO: Store preliminary results in redis
+            # PRELIMINARY
             source_results = await self._extract_sources(self.item_results)
             await self._combine_results(self.item_results, source_results)
 
@@ -870,27 +891,27 @@ class MultiExtractor(BaseExtractor):
 
     @sync_debug()
     @classmethod
-    def provision_extractors(cls, model, url_fragments=None, web_driver_type=None,
+    def provision_extractors(cls, model, search_terms=None, web_driver_type=None,
                              cache=None, loop=None):
         """
         Provision Extractors
 
         Instantiate and yield all multi extractors configured with the
-        given model and url fragments.
+        given model and search terms.
 
         I/O:
         model:                  Any Extractable content class (via
                                 Extractable mixin); defines base config
                                 directory and fields to extract.
 
-        url_fragments=None:     Dictionary of all url fragments required
-                                to render a complete url, as defined by
-                                each url configuration.
+        search_terms=None:      Ordered dictionary of all search terms
+                                defined by url configurations. Used to
+                                render urls and form hash keys.
 
                                 Example:
-                                    dict(problem='Homelessness',
-                                         org=None,
-                                         geo='Texas')
+                                    OrderedDict(problem='Homelessness',
+                                                org=None,
+                                                geo='Texas')
 
         web_driver_type=None:   WebDriverType, e.g. CHROME (default)
         cache=None:             AsyncCache singleton (optional)
@@ -908,7 +929,7 @@ class MultiExtractor(BaseExtractor):
 
         for directory in directories:
             try:
-                extractor = cls(model, directory, url_fragments, web_driver_type, cache, loop)
+                extractor = cls(model, directory, search_terms, web_driver_type, cache, loop)
                 if extractor.is_enabled:
                     yield extractor
             # FileNotFoundError, ruamel.yaml.scanner.ScannerError, ValueError
@@ -923,36 +944,50 @@ class MultiExtractor(BaseExtractor):
         directory = path.replace(base, '', 1)
         return directory
 
-    @sync_debug()
-    def _encode_url_fragments(self, url_fragments):
-        return {k: urllib.parse.quote(v) for k, v in url_fragments.items()
-                if v is not None}
+    @staticmethod
+    def _prepare_search_terms(search_terms):
+        if isinstance(search_terms, OrderedDict):
+            return search_terms
+
+        if search_terms is None:
+            return OrderedDict()
+
+        if len(search_terms) < 2:
+            return OrderedDict(search_terms)
+
+        raise TypeError(f"search_terms of type '{type(search_terms)} '"
+                        "is not an instance of OrderedDict")
 
     @sync_debug()
-    def _form_page_url(self, configuration, url_fragments):
+    def _form_page_url(self, configuration, search_terms):
         url_config = self.configuration[self.URL_TAG]
         # Support shorthand form for hard-coded urls
         if isinstance(url_config, str):
             return url_config
 
-        encoded_fragments = self._encode_url_fragments(url_fragments)
+        encoded_url_fragments = self._encode_search_terms(search_terms)
         url_template = url_config[self.URL_TEMPLATE_TAG]
         if self.CLAUSE_SERIES_TOKEN in url_template:
-            encoded_fragments[self.CLAUSE_SERIES_TAG] = self._form_clause_series(
-                url_config, encoded_fragments)
+            encoded_url_fragments[self.CLAUSE_SERIES_TAG] = self._form_clause_series(
+                url_config, encoded_url_fragments)
 
-        return url_template.format(**encoded_fragments)
+        return url_template.format(**encoded_url_fragments)
 
     @sync_debug()
-    def _form_clause_series(self, url_config, encoded_fragments):
+    def _encode_search_terms(self, search_terms):
+        return {k: urllib.parse.quote(v) for k, v in search_terms.items()
+                if v is not None}
+
+    @sync_debug()
+    def _form_clause_series(self, url_config, encoded_url_fragments):
         clauses = []
         clause_keys = url_config[self.CLAUSE_SERIES_TAG]
         clause_index = 1
         for clause_key in clause_keys:
             clause_template = url_config[clause_key]
-            encoded_fragments[self.CLAUSE_INDEX_TAG] = str(clause_index)
+            encoded_url_fragments[self.CLAUSE_INDEX_TAG] = str(clause_index)
             try:
-                rendered_clause = clause_template.format(**encoded_fragments)
+                rendered_clause = clause_template.format(**encoded_url_fragments)
             except KeyError:
                 continue
             else:
@@ -960,23 +995,36 @@ class MultiExtractor(BaseExtractor):
                 clause_index += 1
 
         if not clauses:
-            raise ValueError(f'No clauses rendered in series: {encoded_fragments}')
+            raise ValueError(f'No clauses rendered in series: {encoded_url_fragments}')
 
-        del encoded_fragments[self.CLAUSE_INDEX_TAG]
+        del encoded_url_fragments[self.CLAUSE_INDEX_TAG]
         clause_delimiter = url_config[self.CLAUSE_DELIMITER_TAG]
         return clause_delimiter.join(clauses)
 
-    def __init__(self, model, directory, url_fragments=None,
+    def __init__(self, model, directory, search_terms=None,
                  web_driver_type=None, cache=None, loop=None):
-        self.url_fragments = {k: v for k, v in url_fragments.items()
-                              if v is not None} if url_fragments else {}
+        self.search_terms = self._prepare_search_terms(search_terms)
         super().__init__(model, directory, web_driver_type, cache, loop)
-        self.page_url = self._form_page_url(self.configuration, self.url_fragments)
+        self.page_url = self._form_page_url(self.configuration, self.search_terms)
+
+        pagination_config = self.configuration.get(self.PAGINATION_TAG)
+        if pagination_config:
+            self.pages = pagination_config.get(self.PAGES_TAG, float('Inf'))
+            self.page_size = pagination_config[self.PAGE_SIZE_TAG]
+            self.next_page_click_configuration = pagination_config.get(self.NEXT_PAGE_CLICK_TAG)
+            self.next_page_url_configuration = pagination_config.get(self.NEXT_PAGE_URL_TAG)
+            self.next_page_configuration = xor_constrain(
+                self.next_page_click_configuration, self.next_page_url_configuration)
+        else:
+            self.pages = self.page_size = self.next_page_configuration = None
+            self.next_page_click_configuration = self.next_page_url_configuration = None
+
+        self.items_configuration = self.configuration[self.ITEMS_TAG]
         self.item_results = OrderedDict()  # Store results after extraction
 
     def __repr__(self):
         class_name = self.__class__.__name__
         directory = getattr(self, 'directory', None)
-        url_fragments = getattr(self, 'url_fragments', None)
+        search_terms = getattr(self, 'search_terms', None)
         created_timestamp = getattr(self, 'created_timestamp', None)
-        return (f'<{class_name} | {directory} | {url_fragments!r} | {created_timestamp}>')
+        return (f'<{class_name} | {directory} | {search_terms!r} | {created_timestamp}>')

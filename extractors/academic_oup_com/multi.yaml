@@ -17,6 +17,7 @@ url:
 
 pagination:
   pages: 5
+  page_size: 20
   next_page_url:
     id: pagination-next
     attribute: data-url
@@ -30,10 +31,11 @@ delay:
   minimum: 1
   maximum: 4
 
+items:
+  is_multiple: True
+  class_name: al-article-box
+
 content:
-  items:
-    is_multiple: True
-    class_name: al-article-box
   source_url:
     class_name: article-link
     attribute: href
