@@ -164,7 +164,7 @@ class CacheKey:
 
     def __init__(self, *qualifiers, encoding=ENCODING_DEFAULT, **fields):
         self.qualifiers = qualifiers
-        self.fields = fields
+        self.fields = OrderedDict(fields)
         self.encoding = encoding
 
     def __eq__(self, other):
