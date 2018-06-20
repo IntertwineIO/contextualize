@@ -57,7 +57,8 @@ class CacheKey:
 
     There are two types of supported terms:
     Qualifiers are strings.
-    Fields consist of name/value pairs, where names/values are strings.
+    Fields consist of name/value pairs, where names are strings and
+    values are either strings or non-string sequences of strings.
 
     Cache keys may include any number of qualifiers and fields, provided
     there is at least one term. Any/all qualifiers always precede any/all
@@ -65,14 +66,20 @@ class CacheKey:
 
     Terms (qualifiers/fields) are delimited by Start of Header (1: SOH).
     For display purposes, Ampersand ('&') is used instead. As such,
-    SOH may not be used within qualifiers or field names/values.
-    Ampersand is permitted, but when used, `from_key` will not work on
+    SOH may not be used within qualifiers or field names/values. While
+    Ampersand is permitted, it will prevent `from_key` from working on
     the display version of the key.
 
-    Field names and values are delimited by Start of Text (2: STX). For
+    Field names are assigned values via Start of Text (2: STX). For
     display purposes, Equals ('=') is used instead. As such, STX may not
     be used within field names/values or qualifiers. Equals is allowed,
     but when used, `from_key` will not work on display keys.
+
+    Field values that are non-string sequences (lists/tuples/etc.) are
+    serialized via concatenation with End of Text (ETX) as delimiter.
+    For display purposes, Vertical Bar ('|') is used instead. While ETX
+    and Vertical Bar are permitted, usage within field values will
+    prevent `from_key` from working as expected.
 
     Field values of None are converted to the Null (0: NUL) character.
     For display, Tilde ('~') is used instead. This means field values
@@ -86,16 +93,17 @@ class CacheKey:
     https://www.python.org/dev/peps/pep-0468/
 
     I/O:
-    *qualifiers     strings to be included in key in order
+    *qualifiers     strings to be included in key in positional order
     encoding='utf8' encoding for serialization; key not encoded if None
-    **fields        name/value strings to be included in key in order
+    **fields        name/value pairs to be included in key in keyword
+                    order, where values are strings or string sequences
     return          CacheKey instance
     """
     TERM_DELIMITER = chr(1)  # Start of Header (SOH)
     TERM_DELIMITER_DISPLAY = '&'
 
-    PAIR_DESIGNATOR = chr(2)  # Start of Text (STX)
-    PAIR_DESIGNATOR_DISPLAY = '='
+    FIELD_ASSIGNER = chr(2)  # Start of Text (STX)
+    FIELD_ASSIGNER_DISPLAY = '='
 
     VALUE_SEPARATOR = chr(3)  # End of Text (ETX)
     VALUE_SEPARATOR_DISPLAY = '|'
@@ -113,19 +121,19 @@ class CacheKey:
             key = str(key, encoding)
 
         if is_display is None:
-            is_display = (cls.TERM_DELIMITER not in key and cls.PAIR_DESIGNATOR not in key)
+            is_display = (cls.TERM_DELIMITER not in key and cls.FIELD_ASSIGNER not in key)
 
-        term_delimiter, pair_designator, value_separator, null = cls.special_characters(is_display)
+        term_delimiter, field_assigner, value_separator, null = cls.special_characters(is_display)
 
         terms = key.split(term_delimiter)
         for i, term in enumerate(terms):
-            if pair_designator in term:
+            if field_assigner in term:
                 break
 
         qualifiers = terms[:i]
 
         def unpack_field(field):
-            unpacked = field.split(pair_designator)
+            unpacked = field.split(field_assigner)
             value = unpacked[-1]
             if value == null:
                 unpacked[-1] = None
@@ -145,7 +153,7 @@ class CacheKey:
         if not (self.fields or self.qualifiers):
             raise ValueError('Attempting to form empty cache key')
 
-        term_delimiter, pair_designator, value_separator, null = self.special_characters(is_display)
+        term_delimiter, field_assigner, value_separator, null = self.special_characters(is_display)
 
         def pack_field(name, value):
             # serialized_value = null if value is None else str(value)
@@ -155,7 +163,7 @@ class CacheKey:
                 serialized_value = value_separator.join(str(v) for v in value)
             else:
                 serialized_value = str(value)
-            return f'{name}{pair_designator}{serialized_value}'
+            return f'{name}{field_assigner}{serialized_value}'
 
         packed_fields = (pack_field(name, value) for name, value in self.fields.items())
         terms = chain(self.qualifiers, packed_fields)
@@ -166,12 +174,12 @@ class CacheKey:
     def special_characters(cls, is_display=False):
         if is_display:
             return (cls.TERM_DELIMITER_DISPLAY,
-                    cls.PAIR_DESIGNATOR_DISPLAY,
+                    cls.FIELD_ASSIGNER_DISPLAY,
                     cls.VALUE_SEPARATOR_DISPLAY,
                     cls.NULL_DISPLAY)
         else:
             return (cls.TERM_DELIMITER,
-                    cls.PAIR_DESIGNATOR,
+                    cls.FIELD_ASSIGNER,
                     cls.VALUE_SEPARATOR,
                     cls.NULL)
 
