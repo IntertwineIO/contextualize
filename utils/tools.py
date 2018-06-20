@@ -6,6 +6,7 @@ import re
 from collections import OrderedDict
 from functools import lru_cache
 from itertools import chain, islice
+from past.builtins import basestring
 from pprint import PrettyPrinter
 
 from parse import parse
@@ -117,6 +118,13 @@ def enlist(obj):
     if obj is None:
         return []
     return obj if isinstance(obj, list) else [obj]
+
+
+def isnonstringsequence(obj):
+    '''Determine if an object is a non-string sequence, e.g. list, tuple'''
+    cls = obj.__class__
+    return (hasattr(cls, '__iter__') and hasattr(cls, '__getitem__') and
+            not isinstance(obj, basestring) and not hasattr(obj, 'items'))
 
 
 def load_class(specifier):

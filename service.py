@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import asyncio
+from collections import OrderedDict
 
 from content import ResearchArticle
 from extractor import MultiExtractor
@@ -13,8 +14,8 @@ class Service:
 
     @async_debug()
     async def contextualize(self):
-        url_fragments = dict(problem=self.problem_name, org=self.org_name, geo=self.geo_name)
-        extractors = MultiExtractor.provision_extractors(ResearchArticle, url_fragments,
+        search_terms = OrderedDict(problem=self.problem_name, org=self.org_name, geo=self.geo_name)
+        extractors = MultiExtractor.provision_extractors(ResearchArticle, search_terms,
                                                          cache=self.cache, loop=self.loop)
         futures = {extractor.extract() for extractor in extractors}
         done, pending = await asyncio.wait(futures)

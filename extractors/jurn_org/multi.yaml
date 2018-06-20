@@ -16,10 +16,11 @@ url:
   org_clause: '{org}'
   geo_clause: '{geo}'
 
+items:
+  is_multiple: True
+  xpath: '//td[2]/div[1]/a[@class="gs-title"]'
+
 content:
-  items:
-    is_multiple: True
-    xpath: '//td[2]/div[1]/a[@class="gs-title"]'
   source_url:
     attribute: href
   title:

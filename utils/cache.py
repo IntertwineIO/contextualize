@@ -8,6 +8,7 @@ import aioredis
 
 from utils.debug import async_debug, sync_debug
 from utils.structures import Singleton
+from utils.tools import isnonstringsequence
 
 ENCODING_DEFAULT = 'utf-8'
 
@@ -55,44 +56,59 @@ class CacheKey:
     A class for composing cache keys from one or more terms.
 
     There are two types of supported terms:
-    Fields consist of name/value pairs, where names/values are strings.
     Qualifiers are strings.
+    Fields consist of name/value pairs, where names are strings and
+    values are either strings or non-string sequences of strings.
 
-    Cache keys may include any number of fields and qualifiers, provided
-    there is at least one term. Any/all fields always precede any/all
-    qualifiers within the key.
+    Cache keys may include any number of qualifiers and fields, provided
+    there is at least one term. Any/all qualifiers always precede any/all
+    fields within the key.
 
-    Terms (fields/qualifiers) are delimited by Start of Header (1: SOH).
+    Terms (qualifiers/fields) are delimited by Start of Header (1: SOH).
     For display purposes, Ampersand ('&') is used instead. As such,
-    SOH may not be used within field names/values or qualifiers.
-    Ampersand is permitted, but when used, `from_key` will not work on
+    SOH may not be used within qualifiers or field names/values. While
+    Ampersand is permitted, it will prevent `from_key` from working on
     the display version of the key.
 
-    Field names and values are delimited by Start of Text (2: STX). For
+    Field names are assigned values via Start of Text (2: STX). For
     display purposes, Equals ('=') is used instead. As such, STX may not
     be used within field names/values or qualifiers. Equals is allowed,
     but when used, `from_key` will not work on display keys.
 
+    Field values that are non-string sequences (lists/tuples/etc.) are
+    serialized via concatenation with End of Text (ETX) as delimiter.
+    For display purposes, Vertical Bar ('|') is used instead. While ETX
+    and Vertical Bar are permitted, usage within field values will
+    prevent `from_key` from working as expected.
+
     Field values of None are converted to the Null (0: NUL) character.
-    This means field values that are strings consisting of just Null
-    will be indistinguishable from None. Null characters may be used as
-    part of longer strings without any such collision risk.
+    For display, Tilde ('~') is used instead. This means field values
+    consisting of just NUL will be indistinguishable from None. NUL may
+    be used as part of longer strings without any such collision risk.
 
     All other characters may be used, including but not limited to any
     printable character and File/Group/Record/Unit Separators (28-31).
 
+    Python 3.6+ required to preserve order in fields parameter:
+    https://www.python.org/dev/peps/pep-0468/
+
     I/O:
-    fields=None      Ordered dictionary of name/value string pairs
-    qualifiers=None  Sequence of strings
-    return           CacheKey instance
+    *qualifiers     strings to be included in key in positional order
+    encoding='utf8' encoding for serialization; key not encoded if None
+    **fields        name/value pairs to be included in key in keyword
+                    order, where values are strings or string sequences
+    return          CacheKey instance
     """
-    TERM_DELIMITER = chr(1)  # Start of Header (1: SOH)
+    TERM_DELIMITER = chr(1)  # Start of Header (SOH)
     TERM_DELIMITER_DISPLAY = '&'
 
-    NAME_VALUE_DELIMITER = chr(2)  # Start of Text (2: STX)
-    NAME_VALUE_DELIMITER_DISPLAY = '='
+    FIELD_ASSIGNER = chr(2)  # Start of Text (STX)
+    FIELD_ASSIGNER_DISPLAY = '='
 
-    NULL = chr(0)
+    VALUE_SEPARATOR = chr(3)  # End of Text (ETX)
+    VALUE_SEPARATOR_DISPLAY = '|'
+
+    NULL = chr(0)  # Null (NUL)
     NULL_DISPLAY = '~'
 
     @classmethod
@@ -101,53 +117,71 @@ class CacheKey:
         if not key:
             raise ValueError('Attempting to instantiate empty CacheKey')
 
-        if encoding:
+        if encoding and isinstance(key, bytes):
             key = str(key, encoding)
 
         if is_display is None:
-            is_display = (cls.TERM_DELIMITER not in key and
-                          cls.NAME_VALUE_DELIMITER not in key)
+            is_display = (cls.TERM_DELIMITER not in key and cls.FIELD_ASSIGNER not in key)
 
-        term_delimiter, name_value_delimiter, null = (
-            (cls.TERM_DELIMITER_DISPLAY, cls.NAME_VALUE_DELIMITER_DISPLAY, cls.NULL_DISPLAY)
-            if is_display else (cls.TERM_DELIMITER, cls.NAME_VALUE_DELIMITER, cls.NULL))
+        term_delimiter, field_assigner, value_separator, null = cls.special_characters(is_display)
 
         terms = key.split(term_delimiter)
-        i = len(terms)
-        while i and name_value_delimiter not in terms[i - 1]:
-            i -= 1
+        for i, term in enumerate(terms):
+            if field_assigner in term:
+                break
+
+        qualifiers = terms[:i]
 
         def unpack_field(field):
-            unpacked = field.split(name_value_delimiter)
-            if unpacked[-1] == null:
+            unpacked = field.split(field_assigner)
+            value = unpacked[-1]
+            if value == null:
                 unpacked[-1] = None
+            elif value_separator in value:
+                unpacked[-1] = value.split(value_separator)
             return unpacked
 
         try:
-            fields = OrderedDict(unpack_field(field) for field in terms[:i])
+            fields = OrderedDict(unpack_field(field) for field in terms[i:])
         except ValueError:
             raise ValueError('CacheKey fields must precede all qualifiers')
 
-        qualifiers = terms[i:]
-        return cls(fields, qualifiers, encoding)
+        return cls(*qualifiers, encoding=encoding, **fields)
 
     def to_key(self, is_display=False):
         """Form key from CacheKey instance, optionally for display"""
         if not (self.fields or self.qualifiers):
             raise ValueError('Attempting to form empty cache key')
 
-        term_delimiter, name_value_delimiter, null = (
-            (self.TERM_DELIMITER_DISPLAY, self.NAME_VALUE_DELIMITER_DISPLAY, self.NULL_DISPLAY)
-            if is_display else (self.TERM_DELIMITER, self.NAME_VALUE_DELIMITER, self.NULL))
+        term_delimiter, field_assigner, value_separator, null = self.special_characters(is_display)
 
         def pack_field(name, value):
-            serialized_value = null if value is None else str(value)
-            return f'{name}{name_value_delimiter}{serialized_value}'
+            # serialized_value = null if value is None else str(value)
+            if value is None:
+                serialized_value = null
+            elif isnonstringsequence(value):
+                serialized_value = value_separator.join(str(v) for v in value)
+            else:
+                serialized_value = str(value)
+            return f'{name}{field_assigner}{serialized_value}'
 
         packed_fields = (pack_field(name, value) for name, value in self.fields.items())
-        terms = chain(packed_fields, self.qualifiers)
+        terms = chain(self.qualifiers, packed_fields)
         key = term_delimiter.join(terms)
         return key if is_display or not self.encoding else key.encode(self.encoding)
+
+    @classmethod
+    def special_characters(cls, is_display=False):
+        if is_display:
+            return (cls.TERM_DELIMITER_DISPLAY,
+                    cls.FIELD_ASSIGNER_DISPLAY,
+                    cls.VALUE_SEPARATOR_DISPLAY,
+                    cls.NULL_DISPLAY)
+        else:
+            return (cls.TERM_DELIMITER,
+                    cls.FIELD_ASSIGNER,
+                    cls.VALUE_SEPARATOR,
+                    cls.NULL)
 
     @property
     def key(self):
@@ -157,21 +191,21 @@ class CacheKey:
     def __repr__(self):
         return self.to_key(is_display=True)
 
-    def __init__(self, fields=None, qualifiers=None, encoding=ENCODING_DEFAULT):
-        self.fields = OrderedDict() if fields is None else fields
-        self.qualifiers = [] if qualifiers is None else qualifiers
+    def __init__(self, *qualifiers, encoding=ENCODING_DEFAULT, **fields):
+        self.qualifiers = qualifiers
+        self.fields = OrderedDict(fields)
         self.encoding = encoding
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
-            return (self.fields == other.fields and
-                    self.qualifiers == other.qualifiers and
+            return (self.qualifiers == other.qualifiers and
+                    self.fields == other.fields and
                     self.encoding == other.encoding)
         return NotImplemented
 
     def __ne__(self, other):
         if isinstance(other, self.__class__):
-            return (self.fields != other.fields or
-                    self.qualifiers != other.qualifiers or
+            return (self.qualifiers != other.qualifiers or
+                    self.fields != other.fields or
                     self.encoding != other.encoding)
         return NotImplemented
