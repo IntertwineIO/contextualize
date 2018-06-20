@@ -8,6 +8,7 @@ import aioredis
 
 from utils.debug import async_debug, sync_debug
 from utils.structures import Singleton
+from utils.tools import isnonstringsequence
 
 ENCODING_DEFAULT = 'utf-8'
 
@@ -90,13 +91,16 @@ class CacheKey:
     **fields        name/value strings to be included in key in order
     return          CacheKey instance
     """
-    TERM_DELIMITER = chr(1)  # Start of Header (1: SOH)
+    TERM_DELIMITER = chr(1)  # Start of Header (SOH)
     TERM_DELIMITER_DISPLAY = '&'
 
-    NAME_VALUE_DELIMITER = chr(2)  # Start of Text (2: STX)
-    NAME_VALUE_DELIMITER_DISPLAY = '='
+    PAIR_DESIGNATOR = chr(2)  # Start of Text (STX)
+    PAIR_DESIGNATOR_DISPLAY = '='
 
-    NULL = chr(0)
+    VALUE_SEPARATOR = chr(3)  # End of Text (ETX)
+    VALUE_SEPARATOR_DISPLAY = '|'
+
+    NULL = chr(0)  # Null (NUL)
     NULL_DISPLAY = '~'
 
     @classmethod
@@ -109,24 +113,24 @@ class CacheKey:
             key = str(key, encoding)
 
         if is_display is None:
-            is_display = (cls.TERM_DELIMITER not in key and
-                          cls.NAME_VALUE_DELIMITER not in key)
+            is_display = (cls.TERM_DELIMITER not in key and cls.PAIR_DESIGNATOR not in key)
 
-        term_delimiter, name_value_delimiter, null = (
-            (cls.TERM_DELIMITER_DISPLAY, cls.NAME_VALUE_DELIMITER_DISPLAY, cls.NULL_DISPLAY)
-            if is_display else (cls.TERM_DELIMITER, cls.NAME_VALUE_DELIMITER, cls.NULL))
+        term_delimiter, pair_designator, value_separator, null = cls.special_characters(is_display)
 
         terms = key.split(term_delimiter)
         for i, term in enumerate(terms):
-            if name_value_delimiter in term:
+            if pair_designator in term:
                 break
 
         qualifiers = terms[:i]
 
         def unpack_field(field):
-            unpacked = field.split(name_value_delimiter)
-            if unpacked[-1] == null:
+            unpacked = field.split(pair_designator)
+            value = unpacked[-1]
+            if value == null:
                 unpacked[-1] = None
+            elif value_separator in value:
+                unpacked[-1] = value.split(value_separator)
             return unpacked
 
         try:
@@ -141,18 +145,35 @@ class CacheKey:
         if not (self.fields or self.qualifiers):
             raise ValueError('Attempting to form empty cache key')
 
-        term_delimiter, name_value_delimiter, null = (
-            (self.TERM_DELIMITER_DISPLAY, self.NAME_VALUE_DELIMITER_DISPLAY, self.NULL_DISPLAY)
-            if is_display else (self.TERM_DELIMITER, self.NAME_VALUE_DELIMITER, self.NULL))
+        term_delimiter, pair_designator, value_separator, null = self.special_characters(is_display)
 
         def pack_field(name, value):
-            serialized_value = null if value is None else str(value)
-            return f'{name}{name_value_delimiter}{serialized_value}'
+            # serialized_value = null if value is None else str(value)
+            if value is None:
+                serialized_value = null
+            elif isnonstringsequence(value):
+                serialized_value = value_separator.join(str(v) for v in value)
+            else:
+                serialized_value = str(value)
+            return f'{name}{pair_designator}{serialized_value}'
 
         packed_fields = (pack_field(name, value) for name, value in self.fields.items())
         terms = chain(self.qualifiers, packed_fields)
         key = term_delimiter.join(terms)
         return key if is_display or not self.encoding else key.encode(self.encoding)
+
+    @classmethod
+    def special_characters(cls, is_display=False):
+        if is_display:
+            return (cls.TERM_DELIMITER_DISPLAY,
+                    cls.PAIR_DESIGNATOR_DISPLAY,
+                    cls.VALUE_SEPARATOR_DISPLAY,
+                    cls.NULL_DISPLAY)
+        else:
+            return (cls.TERM_DELIMITER,
+                    cls.PAIR_DESIGNATOR,
+                    cls.VALUE_SEPARATOR,
+                    cls.NULL)
 
     @property
     def key(self):

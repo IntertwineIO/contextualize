@@ -31,6 +31,9 @@ from utils.tools import (
     PP, delist, enlist, multi_parse, one, one_max, one_min, xor_constrain
 )
 
+ExtractionStatus = FlexEnum('ExtractionStatus',
+                            'INITIALIZED STARTED PRELIMINARY COMPLETED')
+
 
 class BaseExtractor:
 
@@ -58,6 +61,15 @@ class BaseExtractor:
     DELAY_TAG = 'delay'
     DELAY_DEFAULTS = HumanDwellTime(
         mu=0, sigma=0.5, base=1, multiplier=1, minimum=1, maximum=3)
+
+    # Cache Keys
+    CONTENT_KEY = 'content'
+    EXTRACTION_KEY = 'extraction'
+    RESULTS_KEY = 'results'
+    INFO_KEY = 'info'
+    STATUS_KEY = 'status'
+
+    Status = ExtractionStatus
 
     ####################################################################
     # TODO: Make ExtractOperation a class & encapsulate relevant methods
@@ -132,11 +144,11 @@ class BaseExtractor:
                 type='extractor_disabled_warning', extractor=repr(self)))
             return
         try:
-            # STARTED
             await self._provision_web_driver()
+            await self._update_status(ExtractionStatus.STARTED)
             return await self._perform_extraction(self.page_url)
         finally:
-            # COMPLETED
+            await self._update_status(ExtractionStatus.COMPLETED)
             await self._dispose_web_driver()
 
     @async_debug()
@@ -415,26 +427,24 @@ class BaseExtractor:
     @async_debug(context="self.content_map.get('source_url')")
     async def _cache_content(self, content):
         redis = self.cache.client
-        content_hash = content.to_hash()
-        unique_key = getattr(content, self.model.UNIQUE_FIELD)
-        content_key = CacheKey(unique_key).key
+        content_key, content_hash = await self._prepare_cache_content(content)
         await redis.hmset_dict(content_key, content_hash)
 
     @async_debug(context="self.content_map.get('source_url')")
-    async def _cache_search_result(self, content, rank):
-        redis = self.cache.client
-        pipe = redis.pipeline()
-
+    async def _prepare_cache_content(self, content):
+        unique_field = self.model.UNIQUE_FIELD
+        fields = OrderedDict()
+        fields[unique_field] = getattr(content, unique_field)
+        content_key = CacheKey(self.CONTENT_KEY, **fields).key
         content_hash = content.to_hash()
-        unique_key = getattr(content, self.model.UNIQUE_FIELD)
-        content_key = CacheKey(unique_key).key
-        cache_content = pipe.hmset_dict(content_key, content_hash)
+        return content_key, content_hash
 
-        results_key = CacheKey('results', **self.search_terms).key
-        cache_result = pipe.zadd(results_key, rank, content_key)
-
-        result = await pipe.execute()
-        await asyncio.gather(cache_content, cache_result)
+    @async_debug(context="self.content_map.get('source_url')")
+    async def _update_status(self, status):
+        if status is self.status:
+            return False
+        self.status = ExtractionStatus(status)
+        return True
 
     @sync_debug(context="self.content_map.get('source_url')")
     def _select_targets(self, config, latest, prior, parent):
@@ -594,6 +604,7 @@ class BaseExtractor:
             raise NotImplementedError('Firefox not yet supported')
 
     def __init__(self, model, directory, web_driver_type=None, cache=None, loop=None):
+        self.status = None
         self.loop = loop or asyncio.get_event_loop()
         self.cache = cache or AsyncCache(self.loop)
         self.created_timestamp = self.loop.time()
@@ -742,6 +753,7 @@ class SourceExtractor(BaseExtractor):
         self.page_url = url_normalize(page_url)
         directory = self._derive_directory(model, self.page_url)
         super().__init__(model, directory, web_driver_type, cache, loop)
+        self.status = self.ExtractionStatus.INITIALIZED
 
 
 class MultiExtractor(BaseExtractor):
@@ -889,6 +901,75 @@ class MultiExtractor(BaseExtractor):
 
                 setattr(item_result, field, source_value)
 
+    @async_debug(context="self.content_map.get('source_url')")
+    async def _cache_search_result(self, content, rank):
+        """Cache search result scored by rank and cache content too"""
+        redis = self.cache.client
+        pipe = redis.pipeline()
+
+        content_key, content_hash = await self._prepare_cache_content(content)
+        cache_content = pipe.hmset_dict(content_key, content_hash)
+
+        results_key = CacheKey(self.EXTRACTION_KEY, self.RESULTS_KEY, **self.search_terms).key
+        cache_result = pipe.zadd(results_key, rank, content_key)
+
+        result = await pipe.execute()
+        await asyncio.gather(cache_content, cache_result)
+
+    @async_debug(context="self.content_map.get('source_url')")
+    async def _update_status(self, status):
+        """Update & cache status for extractor and overall if changed"""
+        if status.value < self.status.value:
+            raise ValueError(f'Invalid status change: {self.status} -> {status}')
+
+        if status is self.status:
+            return False
+
+        info_hash = {}
+        extractor_status_key = CacheKey(self.STATUS_KEY, extractor=self.directory).key
+        info_hash[extractor_status_key] = status.name
+
+        overall_status, has_changed = await self._apply_status_change(status)
+        if has_changed:
+            status_key = CacheKey(self.STATUS_KEY).key
+            info_hash[status_key] = overall_status.name
+
+        redis = self.cache.client
+        info_key = CacheKey(self.EXTRACTION_KEY, self.INFO_KEY, **self.search_terms).key
+        await redis.hmset_dict(info_key, info_hash)
+
+        return True
+
+    @async_debug(context="self.content_map.get('source_url')")
+    async def _apply_status_change(self, status):
+        """Apply status change; return overall status & has_changed"""
+        old_overall_status = await self._determine_overall_status()
+        if old_overall_status is ExtractionStatus.COMPLETED:
+            return ExtractionStatus.COMPLETED, False
+
+        self.status = ExtractionStatus(status)
+        new_overall_status = await self._determine_overall_status()
+        has_changed = new_overall_status is not old_overall_status
+        return new_overall_status, has_changed
+
+    @async_debug(context="self.content_map.get('source_url')")
+    async def _determine_overall_status(self):
+        """Determine overall extraction status of the cohort"""
+        minimum = min(self.cohort_status_values)
+        if ExtractionStatus(minimum) is ExtractionStatus.COMPLETED:
+            return ExtractionStatus.COMPLETED
+
+        maximum = max(self.cohort_status_values)
+        if maximum >= ExtractionStatus.PRELIMINARY.value:
+            return ExtractionStatus.PRELIMINARY
+
+        return ExtractionStatus(maximum)
+
+    @property
+    def cohort_status_values(self):
+        """Cohort status values are emitted by the returned generator"""
+        return (extractor.status.value for extractor in self.cohort.values())
+
     @sync_debug()
     @classmethod
     def provision_extractors(cls, model, search_terms=None, web_driver_type=None,
@@ -897,7 +978,9 @@ class MultiExtractor(BaseExtractor):
         Provision Extractors
 
         Instantiate and yield all multi extractors configured with the
-        given model and search terms.
+        given model and search terms. All extractors provisioned
+        together are part of the same cohort, a dictionary of extractors
+        keyed by directory.
 
         I/O:
         model:                  Any Extractable content class (via
@@ -927,14 +1010,19 @@ class MultiExtractor(BaseExtractor):
         directories = (cls._debase_directory(base, dn[0]) for dn in dir_nodes
                        if cls.FILE_NAME in dn[2])
 
+        extractors = {}
         for directory in directories:
             try:
                 extractor = cls(model, directory, search_terms, web_driver_type, cache, loop)
                 if extractor.is_enabled:
-                    yield extractor
+                    extractors[directory] = extractor
             # FileNotFoundError, ruamel.yaml.scanner.ScannerError, ValueError
             except Exception as e:
                 print(e)  # TODO: Replace with logging
+
+        for extractor in extractors.values():
+            extractor._set_cohort(extractors)
+            yield extractor
 
     @classmethod
     def _debase_directory(cls, base, path):
@@ -943,6 +1031,9 @@ class MultiExtractor(BaseExtractor):
             raise ValueError(f"'{path}' must start with '{base}'")
         directory = path.replace(base, '', 1)
         return directory
+
+    def _set_cohort(self, extractors):
+        self.extractors = extractors
 
     @staticmethod
     def _prepare_search_terms(search_terms):
@@ -1021,6 +1112,9 @@ class MultiExtractor(BaseExtractor):
 
         self.items_configuration = self.configuration[self.ITEMS_TAG]
         self.item_results = OrderedDict()  # Store results after extraction
+
+        self.cohort = None  # Only set after instantiation
+        self.status = self.ExtractionStatus.INITIALIZED
 
     def __repr__(self):
         class_name = self.__class__.__name__
