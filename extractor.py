@@ -753,7 +753,7 @@ class SourceExtractor(BaseExtractor):
         self.page_url = url_normalize(page_url)
         directory = self._derive_directory(model, self.page_url)
         super().__init__(model, directory, web_driver_type, cache, loop)
-        self.status = self.ExtractionStatus.INITIALIZED
+        self.status = ExtractionStatus.INITIALIZED
 
 
 class MultiExtractor(BaseExtractor):
@@ -1033,7 +1033,7 @@ class MultiExtractor(BaseExtractor):
         return directory
 
     def _set_cohort(self, extractors):
-        self.extractors = extractors
+        self.cohort = extractors
 
     @staticmethod
     def _prepare_search_terms(search_terms):
@@ -1114,7 +1114,7 @@ class MultiExtractor(BaseExtractor):
         self.item_results = OrderedDict()  # Store results after extraction
 
         self.cohort = None  # Only set after instantiation
-        self.status = self.ExtractionStatus.INITIALIZED
+        self.status = ExtractionStatus.INITIALIZED
 
     def __repr__(self):
         class_name = self.__class__.__name__
