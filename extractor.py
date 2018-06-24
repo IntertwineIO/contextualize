@@ -904,7 +904,7 @@ class MultiExtractor(BaseExtractor):
 
     @async_debug(context="self.content_map.get('source_url')")
     async def _cache_search_result(self, content, rank):
-        """Cache search result scored by rank and cache content too"""
+        """Cache search result scored by rank and associated content"""
         redis = self.cache.client
         pipe = redis.pipeline()
 
@@ -919,7 +919,7 @@ class MultiExtractor(BaseExtractor):
 
     @async_debug(context="self.content_map.get('source_url')")
     async def _update_status(self, status):
-        """Update & cache status for extractor and overall if changed"""
+        """Update extractor/overall status, caching as necessary"""
         if status.value < self.status.value:
             raise ValueError(f'Invalid status change: {self.status} -> {status}')
 
@@ -1027,6 +1027,7 @@ class MultiExtractor(BaseExtractor):
 
     @classmethod
     def _debase_directory(cls, base, path):
+        """Remove base from directory path"""
         base = os.path.join(base, '')  # Add slash
         if not path.startswith(base):
             raise ValueError(f"'{path}' must start with '{base}'")
@@ -1034,10 +1035,12 @@ class MultiExtractor(BaseExtractor):
         return directory
 
     def _set_cohort(self, extractors):
+        """Set cohort to dictionary of extractors keyed by directory"""
         self.cohort = extractors
 
     @staticmethod
     def _prepare_search_terms(search_terms):
+        """Prepare search terms by ensuring they are an ordered dict"""
         if isinstance(search_terms, OrderedDict):
             return search_terms
         if search_terms is None:
@@ -1052,6 +1055,7 @@ class MultiExtractor(BaseExtractor):
 
     @sync_debug()
     def _form_page_url(self, configuration, search_terms):
+        """Form page URL given extractor configuration & search terms"""
         url_config = self.configuration[self.URL_TAG]
         # Support shorthand form for hard-coded urls
         if isinstance(url_config, str):
@@ -1065,6 +1069,7 @@ class MultiExtractor(BaseExtractor):
 
     @sync_debug()
     def _encode_search_terms(self, key, value):
+        """URL Encode search value, ensuring it is None/str/list"""
         if value is None:
             return key, None
         if isinstance(value, str):
@@ -1076,6 +1081,23 @@ class MultiExtractor(BaseExtractor):
 
     @sync_debug()
     def _form_url_clause(self, template, url_config, terms, index=1, is_term_index=False):
+        """
+        Form URL clause
+
+        Form URL clause by recursing depth-first to replace template
+        tokens via URL configuration, search terms & clause index.
+
+        I/O:
+        template:             string with 1+ tokens specified via {}
+        url_config:           value of 'url' key in configuration
+        terms:                encoded search terms, an ordered dict
+        index=1:              index specified by a URL clause series
+        is_term_index=False:  if True, select term by index if multiple
+        return:               rendered URL template
+        raise:                NoneValueError if token value is None term
+                              ValueError if unknown token
+                              TypeError if unexpected type in config
+        """
         rendered = template
         tokens = self._find_tokens(template)
         for token in tokens:
@@ -1114,6 +1136,7 @@ class MultiExtractor(BaseExtractor):
 
     @sync_debug()
     def _form_url_template_series(self, series_config, url_config, terms):
+        """Form URL template series based on template list/delimiter"""
         templates = series_config[self.SERIES_TAG]
         delimiter = series_config[self.DELIMITER_TAG]
         clauses = []
@@ -1131,6 +1154,7 @@ class MultiExtractor(BaseExtractor):
 
     @sync_debug()
     def _form_url_term_series(self, series_config, url_config, terms):
+        """Form URL term series based on template, terms & delimiter"""
         template = series_config[self.SERIES_TAG]
         delimiter = series_config[self.DELIMITER_TAG]
         search_token = one(token for token in self._find_tokens(template) if token in terms)
@@ -1144,6 +1168,7 @@ class MultiExtractor(BaseExtractor):
 
     @sync_debug()
     def _find_tokens(self, template):
+        """Find & yield tokens in template as defined by {}"""
         length = len(template)
         start = end = -1
         while end < length:
