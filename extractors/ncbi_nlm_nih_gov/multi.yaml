@@ -6,13 +6,20 @@ extract_sources: True
 wait: 10
 
 url:
-  # https://www.ncbi.nlm.nih.gov/pmc/?term=(Homelessness%5BTitle%5D)+AND+Texas%5BText+Word%5D
-  url_template: "https://www.ncbi.nlm.nih.gov/pmc/?term={clause_series}"
-  clause_series: ['problem_clause', 'org_clause', 'geo_clause']
-  clause_delimiter: '+AND+'
-  problem_clause: '({problem}%5BTitle%5D)'
-  org_clause: '{org}%5BText+Word%5D'
-  geo_clause: '{geo}%5BText+Word%5D'
+  # https://www.ncbi.nlm.nih.gov/pmc/?term=(Homelessness%5BTitle%5D)+AND+(Austin%2C+TX+OR+Austin%2C+Texas)
+  url_template: "https://www.ncbi.nlm.nih.gov/pmc/?term={query}"
+  query:
+    series: ['({problem_clause})', '({org_clause})', '({geo_clause})']
+    delimiter: '+AND+'
+  problem_clause:
+    series: '{problem}'
+    delimiter: '+OR+'
+  org_clause:
+    series: '{org}%5BText+Word%5D'
+    delimiter: '+OR+'
+  geo_clause:
+    series: '{geo}'
+    delimiter: '+OR+'
 
 pagination:
   pages: 2
