@@ -12,13 +12,13 @@ url:
     series: ['({problem_clause})', '({org_clause})', '({geo_clause})']
     delimiter: '+AND+'
   problem_clause:
-    series: '{problem}'
+    series: '{problem}%5BAbstract%5D'
     delimiter: '+OR+'
   org_clause:
-    series: '{org}%5BText+Word%5D'
+    series: '{org}%5BAbstract%5D'
     delimiter: '+OR+'
   geo_clause:
-    series: '{geo}'
+    series: '{geo}%5BAbstract%5D'
     delimiter: '+OR+'
 
 pagination:
