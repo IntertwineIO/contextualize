@@ -7,14 +7,11 @@ wait: 0
 
 url:
   # http://www.jurn.org/#gsc.tab=0&gsc.q=university%20of%20texas%20austin%2C%20texas%20intitle%3A%22substance%20abuse%22&gsc.sort=
-  url_template: "http://www.jurn.org/#gsc.tab=0\
-                 &gsc.q={clause_series}&gsc.sort="
-  clause_series: ['problem_clause', 'org_clause', 'geo_clause']
-  clause_delimiter: '%20'
-  problem_clause: 'intitle%3A%22{problem}%22'
-  # wrapping org/geo in quotes (%22) narrows search too much
-  org_clause: '{org}'
-  geo_clause: '{geo}'
+  url_template: "http://www.jurn.org/#gsc.tab=0&gsc.q={query}&gsc.sort="
+  query:
+    # wrapping org/geo in quotes (%22) narrows search too much
+    series: ['intitle%3A%22{problem}%22', '{org}', '{geo}']
+    delimiter: '%20'
 
 items:
   is_multiple: True

@@ -191,10 +191,10 @@ class CacheKey:
     def __repr__(self):
         return self.to_key(is_display=True)
 
-    def __init__(self, *qualifiers, encoding=ENCODING_DEFAULT, **fields):
+    def __init__(self, *qualifiers, _encoding=ENCODING_DEFAULT, **fields):
         self.qualifiers = qualifiers
         self.fields = OrderedDict(fields)
-        self.encoding = encoding
+        self.encoding = _encoding
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):

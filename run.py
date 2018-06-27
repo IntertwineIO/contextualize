@@ -13,11 +13,11 @@ def main():
     loop = asyncio.get_event_loop()
     cache = AsyncCache(loop)
 
-    problem_name = 'Homelessness'
-    org_name = None
-    geo_name = 'Texas'
+    problems = ['Homelessness', 'Homeless']
+    orgs = None
+    geos = ['Texas', 'TX']
 
-    service = Service(problem_name, org_name, geo_name, cache, loop)
+    service = Service(problems, orgs, geos, cache, loop)
 
     try:
         loop.run_until_complete(service.contextualize())

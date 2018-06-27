@@ -20,6 +20,7 @@ from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait
 from url_normalize import url_normalize
 
+from exceptions import NoneValueError
 from secret_service.agency import SecretService
 from utils.async import run_in_executor
 from utils.cache import AsyncCache, CacheKey
@@ -28,8 +29,9 @@ from utils.structures import FlexEnum
 from utils.time import DateTimeWrapper
 from utils.statistics import HumanDwellTime, human_dwell_time, human_selection_shuffle
 from utils.tools import (
-    PP, delist, enlist, multi_parse, one, one_max, one_min, xor_constrain
+    PP, delist, enlist, isnonstringsequence, multi_parse, one, one_max, one_min, xor_constrain
 )
+
 
 ExtractionStatus = FlexEnum('ExtractionStatus',
                             'INITIALIZED STARTED PRELIMINARY COMPLETED')
@@ -140,7 +142,7 @@ class BaseExtractor:
     async def extract(self):
         if not self.is_enabled:
             PP.pprint(dict(
-                msg='Extractor disabled warning',
+                msg='WARNING: extracting with disabled extractor',
                 type='extractor_disabled_warning', extractor=repr(self)))
             return
         try:
@@ -763,11 +765,10 @@ class MultiExtractor(BaseExtractor):
     # URL keys
     URL_TAG = 'url'
     URL_TEMPLATE_TAG = 'url_template'
-    CLAUSE_SERIES_TAG = 'clause_series'
-    CLAUSE_SERIES_TOKEN = f'{{{CLAUSE_SERIES_TAG}}}'
-    CLAUSE_DELIMITER_TAG = 'clause_delimiter'
-    CLAUSE_INDEX_TAG = 'clause_index'
-    # PAGE_INDEX_TAG = 'page_index'
+    INDEX_TAG = 'index'
+    SERIES_TAG = 'series'
+    DELIMITER_TAG = 'delimiter'
+    TOKEN_TEMPLATE = '{{{}}}'
 
     # Pagination keys
     PAGINATION_TAG = 'pagination'
@@ -903,7 +904,7 @@ class MultiExtractor(BaseExtractor):
 
     @async_debug(context="self.content_map.get('source_url')")
     async def _cache_search_result(self, content, rank):
-        """Cache search result scored by rank and cache content too"""
+        """Cache search result scored by rank and associated content"""
         redis = self.cache.client
         pipe = redis.pipeline()
 
@@ -918,7 +919,7 @@ class MultiExtractor(BaseExtractor):
 
     @async_debug(context="self.content_map.get('source_url')")
     async def _update_status(self, status):
-        """Update & cache status for extractor and overall if changed"""
+        """Update extractor/overall status, caching as necessary"""
         if status.value < self.status.value:
             raise ValueError(f'Invalid status change: {self.status} -> {status}')
 
@@ -1026,6 +1027,7 @@ class MultiExtractor(BaseExtractor):
 
     @classmethod
     def _debase_directory(cls, base, path):
+        """Remove base from directory path"""
         base = os.path.join(base, '')  # Add slash
         if not path.startswith(base):
             raise ValueError(f"'{path}' must start with '{base}'")
@@ -1033,64 +1035,154 @@ class MultiExtractor(BaseExtractor):
         return directory
 
     def _set_cohort(self, extractors):
+        """Set cohort to dictionary of extractors keyed by directory"""
         self.cohort = extractors
 
     @staticmethod
     def _prepare_search_terms(search_terms):
+        """Prepare search terms by ensuring they are an ordered dict"""
         if isinstance(search_terms, OrderedDict):
             return search_terms
-
         if search_terms is None:
             return OrderedDict()
-
-        if len(search_terms) < 2:
-            return OrderedDict(search_terms)
-
-        raise TypeError(f"search_terms of type '{type(search_terms)} '"
-                        "is not an instance of OrderedDict")
+        try:
+            if not isinstance(search_terms, dict) or len(search_terms) < 2:
+                return OrderedDict(search_terms)
+            raise TypeError  # length 2+ dict
+        except (TypeError, ValueError):
+            raise TypeError(f"Expected OrderedDict or iterable of 2-tuples for search_terms; "
+                            f"received '{type(search_terms)}': {search_terms}")
 
     @sync_debug()
     def _form_page_url(self, configuration, search_terms):
+        """Form page URL given extractor configuration & search terms"""
         url_config = self.configuration[self.URL_TAG]
         # Support shorthand form for hard-coded urls
         if isinstance(url_config, str):
             return url_config
 
-        encoded_url_fragments = self._encode_search_terms(search_terms)
+        encoded_terms = OrderedDict(self._encode_search_terms(k, v)
+                                    for k, v in search_terms.items())
         url_template = url_config[self.URL_TEMPLATE_TAG]
-        if self.CLAUSE_SERIES_TOKEN in url_template:
-            encoded_url_fragments[self.CLAUSE_SERIES_TAG] = self._form_clause_series(
-                url_config, encoded_url_fragments)
 
-        return url_template.format(**encoded_url_fragments)
+        return self._form_url_clause(url_template, url_config, encoded_terms)
 
     @sync_debug()
-    def _encode_search_terms(self, search_terms):
-        return {k: urllib.parse.quote(v) for k, v in search_terms.items()
-                if v is not None}
+    def _encode_search_terms(self, key, value):
+        """URL Encode search value, ensuring it is None/str/list"""
+        if value is None:
+            return key, None
+        if isinstance(value, str):
+            return key, urllib.parse.quote(value)
+        if isnonstringsequence(value):
+            return key, [urllib.parse.quote(v) for v in value]
+        raise TypeError(f"Expected string or list/tuple for '{key}'; "
+                        f"received '{type(value)}': {value}")
 
     @sync_debug()
-    def _form_clause_series(self, url_config, encoded_url_fragments):
-        clauses = []
-        clause_keys = url_config[self.CLAUSE_SERIES_TAG]
-        clause_index = 1
-        for clause_key in clause_keys:
-            clause_template = url_config[clause_key]
-            encoded_url_fragments[self.CLAUSE_INDEX_TAG] = str(clause_index)
-            try:
-                rendered_clause = clause_template.format(**encoded_url_fragments)
-            except KeyError:
-                continue
+    def _form_url_clause(self, template, url_config, terms, index=1, is_term_index=False):
+        """
+        Form URL clause
+
+        Form URL clause by recursing depth-first to replace template
+        tokens via URL configuration, search terms & clause index.
+
+        I/O:
+        template:             string with 1+ tokens specified via {}
+        url_config:           value of 'url' key in configuration
+        terms:                encoded search terms, an ordered dict
+        index=1:              index specified by a URL clause series
+        is_term_index=False:  if True, select term by index if multiple
+        return:               rendered URL template
+        raise:                NoneValueError if token value is None term
+                              ValueError if unknown token
+                              TypeError if unexpected type in config
+        """
+        rendered = template
+        tokens = self._find_tokens(template)
+        for token in tokens:
+            if token == self.INDEX_TAG:
+                value = str(index)
+
+            elif token in terms:
+                term_values = terms[token]
+                if term_values is None:
+                    raise NoneValueError
+                term_index = index - 1 if is_term_index else 0
+                value = term_values if isinstance(term_values, str) else term_values[term_index]
+
+            elif token in url_config:
+                token_config = url_config[token]
+                if isinstance(token_config, str):
+                    value = self._form_url_clause(token_config, url_config, terms, index)
+                elif isinstance(token_config, dict):
+                    series_config = token_config[self.SERIES_TAG]
+                    if isinstance(series_config, list):
+                        value = self._form_url_template_series(token_config, url_config, terms)
+                    elif isinstance(series_config, str):
+                        value = self._form_url_term_series(token_config, url_config, terms)
+                    else:
+                        raise TypeError(f"Expected str or list for '{token}[{self.SERIES_TAG}]'; "
+                                        f"received '{type(series_config)}': {series_config}")
+                else:
+                    raise TypeError(f"Expected str or dict for '{token}'; "
+                                    f"received '{type(token_config)}': {token_config}")
             else:
-                clauses.append(rendered_clause)
-                clause_index += 1
+                raise ValueError(f'Unknown token: {token}')
 
-        if not clauses:
-            raise ValueError(f'No clauses rendered in series: {encoded_url_fragments}')
+            rendered = rendered.replace(self.TOKEN_TEMPLATE.format(token), value)
 
-        del encoded_url_fragments[self.CLAUSE_INDEX_TAG]
-        clause_delimiter = url_config[self.CLAUSE_DELIMITER_TAG]
-        return clause_delimiter.join(clauses)
+        return rendered
+
+    @sync_debug()
+    def _form_url_template_series(self, series_config, url_config, terms):
+        """Form URL template series based on template list/delimiter"""
+        templates = series_config[self.SERIES_TAG]
+        delimiter = series_config[self.DELIMITER_TAG]
+        clauses = []
+        index = 1
+        for template in templates:
+            try:
+                clause = self._form_url_clause(template, url_config, terms, index)
+            except NoneValueError:
+                continue  # skip clauses with missing search terms
+            else:
+                clauses.append(clause)
+                index += 1
+
+        return delimiter.join(clauses)
+
+    @sync_debug()
+    def _form_url_term_series(self, series_config, url_config, terms):
+        """Form URL term series based on template, terms & delimiter"""
+        template = series_config[self.SERIES_TAG]
+        delimiter = series_config[self.DELIMITER_TAG]
+        search_token = one(token for token in self._find_tokens(template) if token in terms)
+        term_value = terms[search_token]
+        if term_value is None:
+            raise NoneValueError
+        term_count = 1 if isinstance(term_value, str) else len(term_value)
+        clauses = (self._form_url_clause(template, url_config, terms, i, is_term_index=True)
+                   for i in range(1, term_count + 1))
+        return delimiter.join(clauses)
+
+    @sync_debug()
+    def _find_tokens(self, template):
+        """Find & yield tokens in template as defined by {}"""
+        length = len(template)
+        start = end = -1
+        while end < length:
+            start = template.find('{', start + 1)
+            if start == -1:
+                break
+            end = template.find('}', start + 1)
+            if end == -1:
+                break
+            # tokens may not contain tokens, so find innermost
+            new_start = template.rfind('{', start + 1, end)
+            if new_start > start:
+                start = new_start
+            yield template[start + 1:end]
 
     def __init__(self, model, directory, search_terms=None,
                  web_driver_type=None, cache=None, loop=None):

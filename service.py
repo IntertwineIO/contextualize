@@ -14,7 +14,7 @@ class Service:
 
     @async_debug()
     async def contextualize(self):
-        search_terms = OrderedDict(problem=self.problem_name, org=self.org_name, geo=self.geo_name)
+        search_terms = OrderedDict(problem=self.problems, org=self.orgs, geo=self.geos)
         extractors = MultiExtractor.provision_extractors(ResearchArticle, search_terms,
                                                          cache=self.cache, loop=self.loop)
         futures = {extractor.extract() for extractor in extractors}
@@ -22,9 +22,9 @@ class Service:
         PP.pprint([task.result() for task in done])
         return [task.result() for task in done]
 
-    def __init__(self, problem_name=None, org_name=None, geo_name=None, cache=None, loop=None):
+    def __init__(self, problems=None, orgs=None, geos=None, cache=None, loop=None):
         self.loop = loop or asyncio.get_event_loop()
         self.cache = cache or AsyncCache(self.loop)
-        self.problem_name = problem_name
-        self.org_name = org_name
-        self.geo_name = geo_name
+        self.problems = problems
+        self.orgs = orgs
+        self.geos = geos
