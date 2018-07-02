@@ -9,16 +9,12 @@ url:
   # https://www.ncbi.nlm.nih.gov/pmc/?term=(Homelessness%5BTitle%5D)+AND+(Austin%2C+TX+OR+Austin%2C+Texas)
   url_template: "https://www.ncbi.nlm.nih.gov/pmc/?term={query}"
   query:
-    series: ['({problem_clause})', '({org_clause})', '({geo_clause})']
+    series: TOPIC
+    templates: ['({topic})']
     delimiter: '+AND+'
-  problem_clause:
-    series: '{problem}%5BAbstract%5D'
-    delimiter: '+OR+'
-  org_clause:
-    series: '{org}%5BAbstract%5D'
-    delimiter: '+OR+'
-  geo_clause:
-    series: '{geo}%5BAbstract%5D'
+  topic:
+    series: TERM
+    templates: ['{term}%5BAbstract%5D']
     delimiter: '+OR+'
 
 pagination:

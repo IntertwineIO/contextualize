@@ -14,8 +14,8 @@ class Service:
 
     @async_debug()
     async def contextualize(self):
-        search_terms = OrderedDict(problem=self.problems, org=self.orgs, geo=self.geos)
-        extractors = MultiExtractor.provision_extractors(ResearchArticle, search_terms,
+        search_data = OrderedDict(problem=self.problems, org=self.orgs, geo=self.geos)
+        extractors = MultiExtractor.provision_extractors(ResearchArticle, search_data,
                                                          cache=self.cache, loop=self.loop)
         futures = {extractor.extract() for extractor in extractors}
         done, pending = await asyncio.wait(futures)
