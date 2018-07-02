@@ -9,11 +9,11 @@ url:
   # https://academic.oup.com/journals/search-results?page=1&fl_SiteID=5567&qb={%22Keywords1%22:%22Homelessness%22,%22FullText2%22:%22Veteran%20Affairs%22,%22FullText3%22:%22Texas%22}
   url_template: "https://academic.oup.com/journals/search-results?page=1&qb={{query}}"
   query:
-    series: ['{problem_clause}', '{org_clause}', '{geo_clause}']
+    series: TOPIC
+    templates: ['{primary_clause}', '{qualifier_clause}']
     delimiter: ','
-  problem_clause: '%22Keywords{index}%22:%22{problem}%22'
-  org_clause: '%22FullText{index}%22:%22{org}%22'
-  geo_clause: '%22FullText{index}%22:%22{geo}%22'
+  primary_clause: '%22Keywords{index}%22:%22{term}%22'
+  qualifier_clause: '%22FullText{index}%22:%22{term}%22'
 
 pagination:
   pages: 5
