@@ -4,6 +4,7 @@ import asyncio
 
 import uvloop
 
+from api import app
 from service import Service
 from utils.cache import AsyncCache
 
@@ -29,6 +30,9 @@ def main():
         cache.shutdown(loop)
         loop.close()
 
+def run():
+    app.run(host="0.0.0.0", port=8000)
 
 if __name__ == '__main__':
-    main()
+    # main()
+    run()
