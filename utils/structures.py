@@ -17,7 +17,7 @@ class FlexEnum(Enum):
     """
     @classmethod
     def cast(cls, value):
-        """Cast value to cls"""
+        """Cast value to enum, where value may be name or value"""
         if value in cls:
             return value
         if isinstance(value, int):
@@ -28,79 +28,85 @@ class FlexEnum(Enum):
             return cls(value)
 
     @classmethod
-    def names(cls, transform=None):
+    def names(cls, iterable=None, transform=None):
         """Generator of enum names, transformed if function provided"""
+        enums = cls if iterable is None else (cls.cast(i) for i in iterable)
         if transform:
-            return (transform(en.name) for en in cls)
-        return (en.name for en in cls)
+            return (transform(en.name) for en in enums)
+        return (en.name for en in enums)
 
     @classmethod
-    def values(cls, transform=None):
+    def values(cls, iterable=None, transform=None):
         """Generator of enum values, transformed if function provided"""
+        enums = cls if iterable is None else (cls.cast(i) for i in iterable)
         if transform:
-            return (transform(en.value) for en in cls)
-        return (en.values for en in cls)
+            return (transform(en.value) for en in enums)
+        return (en.value for en in enums)
 
     @classmethod
-    def items(cls, transform=None, labels=False, inverse=False):
+    def items(cls, iterable=None, transform=None, labels=False, inverse=False):
         """
         Generator of enum name/value 2-tuples
 
         I/O:
+        iterable=None:  iterable of enum castables; if None, use all
         transform=None: function to be applied to each primary enum name
-        labels=False: if True, values replaced with secondary enum names
-        inverse=False: if True, values (or secondary names) then names
-        return: generator of enum name/value 2-tuples
+        labels=False:   if True, replace values with 2nd enum names
+        inverse=False:  if True, swap names and values (or 2nd names)
+        return:         generator of enum name/value 2-tuples
         """
+        enums = cls if iterable is None else (cls.cast(i) for i in iterable)
         secondary = 'name' if labels else 'value'
 
         if transform:
             if inverse:
-                return ((getattr(en, secondary), transform(en.name)) for en in cls)
-            return ((transform(en.name), getattr(en, secondary)) for en in cls)
+                return ((getattr(en, secondary), transform(en.name)) for en in enums)
+            return ((transform(en.name), getattr(en, secondary)) for en in enums)
 
         if inverse:
-            return ((getattr(en, secondary), en.name) for en in cls)
-        return ((en.name, getattr(en, secondary)) for en in cls)
+            return ((getattr(en, secondary), en.name) for en in enums)
+        return ((en.name, getattr(en, secondary)) for en in enums)
 
     @classmethod
     @lru_cache(maxsize=None)
-    def list(cls, transform=None):
+    def list(cls, iterable=None, transform=None):
         """List of enum names, transformed if function provided"""
-        return list(cls.names(transform))
+        return list(cls.names(iterable, transform))
 
     @classmethod
     @lru_cache(maxsize=None)
-    def set(cls, transform=None):
+    def set(cls, iterable=None, transform=None):
         """Set of enum names, transformed if function provided"""
-        return set(cls.names(transform))
+        return set(cls.names(iterable, transform))
 
     @classmethod
     @lru_cache(maxsize=None)
-    def map(cls, transform=None, labels=False, inverse=False):
+    def map(cls, iterable=None, transform=None, labels=False, inverse=False):
         """
         Ordered enum name/value map
 
         I/O:
+        iterable=None:  iterable of enum castables; if None, use all
         transform=None: function to be applied to each primary enum name
-        labels=False: if True, values replaced with secondary enum names
-        inverse=False: if True, values (or secondary names) then names
-        return: OrderedDict of enum name/value pairs
+        labels=False:   if True, replace values with 2nd enum names
+        inverse=False:  if True, swap names and values (or 2nd names)
+        return:         OrderedDict of enum name/value pairs
         """
-        return OrderedDict(cls.items(transform, labels=labels, inverse=inverse))
+        return OrderedDict(cls.items(iterable, transform, labels, inverse))
 
     @classmethod
     @lru_cache(maxsize=None)
-    def labels(cls, transform=None, inverse=False):
+    def labels(cls, iterable=None, transform=None, inverse=False):
         """
         Ordered enum primary/secondary name 2-tuples
 
         I/O:
+        iterable=None:  iterable of enum castables; if None, use all
         transform=None: function to be applied to each primary enum name
-        inverse=False: if True, primary and secondary names are swapped
-        return: OrderedDict of enum name/value pairs
+        inverse=False:  if True, swap names and values (or 2nd names)
+        return:         OrderedDict of enum name/value pairs
         """
-        return OrderedDict(cls.items(transform, labels=True, inverse=inverse))
+        return OrderedDict(cls.items(iterable, transform, labels=True, inverse=inverse))
 
     def _derive_qualname(self):
         """
@@ -140,7 +146,7 @@ class FlexEnum(Enum):
 
 class InfinIterator:
     """
-    InfinIterator, the infinite iterator class
+    InfinIterator, the infinite iterator
 
     Useful for testing functions that work on iterators, since unlike
     most other iterators, this one can be used any number of times.
