@@ -497,7 +497,7 @@ class BaseExtractor:
                                      transform_method, transform_args)
 
     def _configure_method(self, config, method_enum):
-        method_keys = method_enum.set(str.lower)
+        method_keys = method_enum.set(transform=str.lower)
         method_key = one_max(k for k in config if k in method_keys)
         if not method_key:
             return None, None
