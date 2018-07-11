@@ -13,8 +13,7 @@ from utils.tools import PP
 class Service:
 
     @async_debug()
-    async def contextualize(self):
-        search_data = OrderedDict(problem=self.problems, org=self.orgs, geo=self.geos)
+    async def contextualize(self, **search_data):
         extractors = MultiExtractor.provision_extractors(ResearchArticle, search_data,
                                                          cache=self.cache, loop=self.loop)
         futures = {extractor.extract() for extractor in extractors}
@@ -22,9 +21,6 @@ class Service:
         PP.pprint([task.result() for task in done])
         return [task.result() for task in done]
 
-    def __init__(self, problems=None, orgs=None, geos=None, cache=None, loop=None):
+    def __init__(self, cache=None, loop=None):
         self.loop = loop or asyncio.get_event_loop()
         self.cache = cache or AsyncCache(self.loop)
-        self.problems = problems
-        self.orgs = orgs
-        self.geos = geos

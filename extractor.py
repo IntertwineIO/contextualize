@@ -497,7 +497,7 @@ class BaseExtractor:
                                      transform_method, transform_args)
 
     def _configure_method(self, config, method_enum):
-        method_keys = method_enum.set(str.lower)
+        method_keys = method_enum.set(transform=str.lower)
         method_key = one_max(k for k in config if k in method_keys)
         if not method_key:
             return None, None
@@ -1048,13 +1048,7 @@ class MultiExtractor(BaseExtractor):
             return search_data
         if search_data is None:
             return OrderedDict()
-        try:
-            if not isinstance(search_data, dict) or len(search_data) < 2:
-                return OrderedDict(search_data)
-            raise TypeError  # length 2+ dict
-        except (TypeError, ValueError):
-            raise TypeError(f"Expected OrderedDict or iterable of 2-tuples for search_data; "
-                            f"received '{type(search_data)}': {search_data}")
+        return OrderedDict(search_data)
 
     @sync_debug()
     def _form_page_url(self, configuration, search_data):

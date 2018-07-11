@@ -20,7 +20,10 @@ class AsyncCache(Singleton):
         """Initialize AsyncCache singleton"""
         self.client = None
         loop = loop or asyncio.get_event_loop()
-        loop.run_until_complete(self.connect(loop))
+        if loop.is_running():
+            loop.create_task(self.connect(loop))
+        else:
+            loop.run_until_complete(self.connect(loop))
 
     @async_debug()
     async def connect(self, loop):
@@ -43,8 +46,8 @@ class AsyncCache(Singleton):
             self.client = None
 
     @sync_debug()
-    def shutdown(self, loop=None):
-        """Shutdown AsyncCache from outside the event loop"""
+    def terminate(self, loop=None):
+        """Terminate AsyncCache from outside the event loop"""
         loop = loop or asyncio.get_event_loop()
         loop.run_until_complete(self.disconnect())
 
