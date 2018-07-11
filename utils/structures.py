@@ -44,30 +44,6 @@ class FlexEnum(Enum):
         return (en.value for en in enums)
 
     @classmethod
-    def items(cls, *enumables, labels=False, transform=None, inverse=False):
-        """
-        Generator of enum name/value 2-tuples
-
-        I/O:
-        *enumables:     values to cast to enum cls; if None, use all
-        labels=False:   if True, replace values with secondary names
-        transform=None: function to apply to each value (or 2nd name)
-        inverse=False:  if True, swap names and (transformed) values
-        return:         generator of enum name/value 2-tuples
-        """
-        enums = (cls.cast(x) for x in enumables) if enumables else cls
-        secondary = 'name' if labels else 'value'
-
-        if transform:
-            if inverse:
-                return ((transform(getattr(en, secondary)), en.name) for en in enums)
-            return ((en.name, transform(getattr(en, secondary))) for en in enums)
-
-        if inverse:
-            return ((getattr(en, secondary), en.name) for en in enums)
-        return ((en.name, getattr(en, secondary)) for en in enums)
-
-    @classmethod
     @lru_cache(maxsize=None)
     def list(cls, *enumables, transform=None):
         """List of enum names, transformed if function provided"""
@@ -86,34 +62,67 @@ class FlexEnum(Enum):
         return set(cls.names(*enumables, transform=transform))
 
     @classmethod
-    @lru_cache(maxsize=None)
-    def map(cls, *enumables, labels=False, transform=None, inverse=False):
+    def items(cls, *enumables, swap=False, labels=False, transform=None, inverse=False):
         """
-        Ordered enum name/value map
+        Generator of enum pair 2-tuples, (name, value) by default
 
         I/O:
         *enumables:     values to cast to enum cls; if None, use all
-        labels=False:   if True, replace values with secondary names
+        swap=False:     if True, swap names and values first
+        labels=False:   if True, replace values with names
         transform=None: function to apply to each value (or 2nd name)
-        inverse=False:  if True, swap names and (transformed) values
-        return:         OrderedDict of enum name/transformed value pairs
+        inverse=False:  if True, invert (a, b) pair last
+        return:         generator of enum pair 2-tuples
         """
-        return OrderedDict(
-            cls.items(*enumables, labels=labels, transform=transform, inverse=inverse))
+        enums = (cls.cast(x) for x in enumables) if enumables else cls
+
+        if swap:
+            pairs = ((en.value, en.name) for en in enums)
+        elif labels:
+            pairs = ((en.name, en.name) for en in enums)
+        else:
+            pairs = ((en.name, en.value) for en in enums)
+
+        if transform:
+            pairs = ((a, transform(b)) for a, b in pairs)
+
+        if inverse:
+            pairs = ((b, a) for a, b in pairs)
+
+        return pairs
 
     @classmethod
     @lru_cache(maxsize=None)
-    def labels(cls, *enumables, transform=None, inverse=False):
+    def map(cls, *enumables, swap=False, labels=False, transform=None, inverse=False):
         """
-        List of enum name/transformed name 2-tuples
+        Ordered enum map of pair 2-tuples, (name, value) by default
 
         I/O:
         *enumables:     values to cast to enum cls; if None, use all
-        transform=None: function to apply to each secondary name
-        inverse=False:  if True, swap 1st and (transformed) 2nd names
-        return:         List of enum name/transformed name pairs
+        swap=False:     if True, swap names and values first
+        labels=False:   if True, replace values with names
+        transform=None: function to apply to each value (or 2nd name)
+        inverse=False:  if True, invert (a, b) pair last
+        return:         OrderedDict of enum pair 2-tuples
         """
-        return tuple(cls.items(*enumables, labels=True, transform=transform, inverse=inverse))
+        return OrderedDict(
+            cls.items(*enumables, swap=swap, labels=labels, transform=transform, inverse=inverse))
+
+    @classmethod
+    @lru_cache(maxsize=None)
+    def labels(cls, *enumables, swap=False, transform=None, inverse=False):
+        """
+        Tuple of labeled enum 2-tuples, (name, transformed(name)) by default
+
+        I/O:
+        *enumables:     values to cast to enum cls; if None, use all
+        swap=False:     if True, swap names and values first
+        transform=None: function to apply to each name to produce label
+        inverse=False:  if True, invert (a, b) pair last
+        return:         tuple of labeled enum pair 2-tuples
+        """
+        return tuple(
+            cls.items(*enumables, swap=swap, labels=True, transform=transform, inverse=inverse))
 
     def _derive_qualname(self):
         """Derive and set __qualname__ on the class"""
