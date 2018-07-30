@@ -25,9 +25,9 @@ from secret_service.agency import SecretService
 from utils.async import run_in_executor
 from utils.cache import AsyncCache, CacheKey
 from utils.debug import async_debug, sync_debug
-from utils.structures import FlexEnum
-from utils.time import DateTimeWrapper
+from utils.enum import FlexEnum
 from utils.statistics import HumanDwellTime, human_dwell_time, human_selection_shuffle
+from utils.time import DateTimeWrapper
 from utils.tools import (
     PP, delist, enlist, isnonstringsequence, multi_parse, one, one_max, one_min, xor_constrain
 )
