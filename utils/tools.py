@@ -120,6 +120,41 @@ def enlist(obj):
     return obj if isinstance(obj, list) else [obj]
 
 
+def derive_qualname(obj):
+    """Derive __qualname__; must be called on self from __init__"""
+    classes = []
+    stack = frame = None
+    is_eligible = False
+    try:
+        stack = inspect.stack()
+        for frame in stack:
+            if frame.function == '__call__':
+                is_eligible = True
+            elif frame.function == '<module>':
+                break
+            elif is_eligible:
+                if not is_class_name(frame.function):
+                    continue
+                classes.append(frame.function)
+    finally:
+        del frame
+        del stack
+
+    outer = '.'.join(reversed(classes))
+    qualname = obj.__class__.__qualname__
+
+    if classes and not qualname.startswith(f'{outer}.'):
+        qualname = '.'.join((outer, qualname))
+
+    return qualname
+
+
+def isiterator(obj):
+    """Check if object is an iterator (not just iterable)"""
+    cls = obj.__class__
+    return hasattr(cls, '__next__') and not hasattr(cls, '__len__')
+
+
 def isnonstringsequence(obj):
     '''Determine if an object is a non-string sequence, e.g. list, tuple'''
     cls = obj.__class__

@@ -5,7 +5,7 @@ from collections import OrderedDict
 from enum import Enum
 from functools import lru_cache
 
-from utils.tools import is_class_name
+from utils.tools import derive_qualname, is_class_name
 
 
 class FlexEnum(Enum):
@@ -15,16 +15,16 @@ class FlexEnum(Enum):
     Enum with helpful cast, accessor, and transformation methods.
     """
     @classmethod
-    def cast(cls, value):
-        """Cast name (case-insensitive) or value to enum"""
-        if value in cls:
-            return value
-        if isinstance(value, int):
-            return cls(value)
+    def cast(cls, option):
+        """Cast option name (case-insensitive) or value to enum"""
+        if option in cls:
+            return option
+        if isinstance(option, int):
+            return cls(option)
         try:
-            return cls[value.upper()]
+            return cls[option.upper()]
         except (AttributeError, KeyError):
-            return cls(value)
+            return cls(option)
 
     @classmethod
     def names(cls, *enumables, transform=None):
@@ -67,10 +67,10 @@ class FlexEnum(Enum):
 
         I/O:
         *enumables:     values to cast to enum cls; if None, use all
-        swap=False:     if True, swap names and values first
-        labels=False:   if True, replace values with names
-        transform=None: function to apply to each value (or 2nd name)
-        inverse=False:  if True, invert (a, b) pair last
+        swap=False:     if True, swap a & b: (a, b) = (value, name)
+        labels=False:   if True, replace b in each (a, b) pair with name
+        transform=None: function to apply to a in each (a, b) pair
+        inverse=False:  if True, invert a & b at end: (b, a)
         return:         generator of enum pair 2-tuples
         """
         enums = (cls.cast(x) for x in enumables) if enumables else cls
@@ -83,7 +83,7 @@ class FlexEnum(Enum):
             pairs = ((en.name, en.value) for en in enums)
 
         if transform:
-            pairs = ((a, transform(b)) for a, b in pairs)
+            pairs = ((transform(a), b) for a, b in pairs)
 
         if inverse:
             pairs = ((b, a) for a, b in pairs)
@@ -100,8 +100,8 @@ class FlexEnum(Enum):
         *enumables:     values to cast to enum cls; if None, use all
         swap=False:     if True, swap names and values first
         labels=False:   if True, replace values with names
-        transform=None: function to apply to each value (or 2nd name)
-        inverse=False:  if True, invert (a, b) pair last
+        transform=None: function to apply to a in each (a, b) pair
+        inverse=False:  if True, invert a & b at end: (b, a)
         return:         OrderedDict of enum pair 2-tuples
         """
         return OrderedDict(
@@ -109,47 +109,19 @@ class FlexEnum(Enum):
 
     @classmethod
     @lru_cache(maxsize=None)
-    def labels(cls, *enumables, swap=False, transform=None, inverse=False):
+    def labels(cls, *enumables, transform=None, inverse=True):
         """
         Tuple of labeled enum 2-tuples, (name, transformed(name)) by default
 
         I/O:
         *enumables:     values to cast to enum cls; if None, use all
-        swap=False:     if True, swap names and values first
-        transform=None: function to apply to each name to produce label
-        inverse=False:  if True, invert (a, b) pair last
+        transform=None: function to apply to a in each (a, b) pair
+        inverse=True:   if True (default), invert a & b at end: (b, a)
         return:         tuple of labeled enum pair 2-tuples
         """
         return tuple(
-            cls.items(*enumables, swap=swap, labels=True, transform=transform, inverse=inverse))
-
-    def _derive_qualname(self):
-        """Derive and set __qualname__ on the class"""
-        classes = []
-        stack = frame = None
-        is_eligible = False
-        try:
-            stack = inspect.stack()
-            for frame in stack:
-                if frame.function == '__call__':
-                    is_eligible = True
-                elif frame.function == '<module>':
-                    break
-                elif is_eligible:
-                    if not is_class_name(frame.function):
-                        continue
-                    classes.append(frame.function)
-        finally:
-            del frame
-            del stack
-
-        outer = '.'.join(reversed(classes))
-        qualname = self.__class__.__qualname__
-
-        if classes and not qualname.startswith(outer):
-            qualname = '.'.join((outer, qualname))
-            self.__class__.__qualname__ = qualname
+            cls.items(*enumables, swap=False, labels=True, transform=transform, inverse=inverse))
 
     def __init__(self, *args, **kwds):
         super().__init__()
-        self._derive_qualname()
+        self.__class__.__qualname__ = derive_qualname(self)
