@@ -3,8 +3,39 @@
 import math
 import pytest
 
-from utils.statistics import HUMAN_SELECTION_LAMBDA, human_selection_shuffle
+from utils.statistics import HUMAN_SELECTION_LAMBDA, human_dwell_time, human_selection_shuffle
 
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ('mu', 'sigma', 'base', 'multiplier', 'minimum', 'maximum'), [
+    (0, 0.5, 1, 1, 1, 4),
+    (0, 0.25, 1, 2, 1, 4),
+    (0, 0.5, 1, 2, 1, None),
+    (0, 0.25, 1, 4, 1, None),
+])
+def test_human_dwell_time(mu, sigma, base, multiplier, minimum, maximum):
+    """Test that human dwell times are unique and within expected ranges"""
+    lower = minimum
+    upper = float('Inf') if maximum is None else maximum
+    iterations = 10
+
+    unique_dwell_times = set()
+    unique_threshold = 0.9
+
+    cumulative_dwell_time = 0
+    lognormal_mean = math.exp(mu + (sigma ** 2) / 2)
+    dwell_threshold = base + lognormal_mean * multiplier * (2 / sigma)
+
+    for _ in range(iterations):
+        dwell_time = human_dwell_time(mu, sigma, base, multiplier, minimum, maximum)
+        assert dwell_time >= lower
+        assert dwell_time <= upper
+        unique_dwell_times.add(dwell_time)
+        cumulative_dwell_time += dwell_time
+
+    assert len(unique_dwell_times) / iterations >= unique_threshold
+    assert cumulative_dwell_time / iterations <= dwell_threshold
 
 def average_by_group(array, group_size):
     length = len(array)
