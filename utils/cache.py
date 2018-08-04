@@ -7,7 +7,7 @@ from itertools import chain
 import aioredis
 
 from utils.debug import async_debug, sync_debug
-from utils.structures import Singleton
+from utils.singleton import Singleton
 from utils.tools import isnonstringsequence
 
 ENCODING_DEFAULT = 'utf-8'

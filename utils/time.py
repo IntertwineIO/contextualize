@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 from collections import namedtuple
 from datetime import datetime
-from utils.structures import FlexEnum
+
+from utils.enum import FlexEnum
 
 
 STANDARD_DATETIME_FORMATS = [

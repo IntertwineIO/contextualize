@@ -104,7 +104,7 @@ def human_dwell_time(mu=0, sigma=1, base=0, multiplier=1,
     - https://en.wikipedia.org/wiki/Log-normal_distribution
     """
     lognormal_min = (minimum - base) / multiplier
-    lognormal_max = (maximum - base) / multiplier
+    lognormal_max = (maximum - base) / multiplier if maximum is not None else None
     lognormal_value = random_lognormal(
         mu=mu, sigma=sigma, minimum=lognormal_min, maximum=lognormal_max, attempts=attempts)
     return base + lognormal_value * multiplier
