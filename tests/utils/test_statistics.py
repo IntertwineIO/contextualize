@@ -37,7 +37,9 @@ def test_human_dwell_time(mu, sigma, base, multiplier, minimum, maximum):
     assert len(unique_dwell_times) / iterations >= unique_threshold
     assert cumulative_dwell_time / iterations <= dwell_threshold
 
+
 def average_by_group(array, group_size):
+    """Calculate array averages per group, given a group size"""
     length = len(array)
     num_groups = math.ceil(length / group_size)
     averages = []
