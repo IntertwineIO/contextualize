@@ -138,10 +138,12 @@ class FlexEnum(Enum):
         self.__class__.__qualname__ = derive_qualname(self)
 
     def __repr__(self):
+        """Repr contains qualname/name/value and evals to self"""
         qualname = self.__class__.__qualname__
         name, value = self.name, self.value
         value = value if isinstance(value, int) else f"'{value}'"
         return f"{qualname}.option('{name}', {value})"
 
     def __str__(self):
+        """Str contains qualname/name"""
         return f'{self.__class__.__qualname__}.{self.name}'
