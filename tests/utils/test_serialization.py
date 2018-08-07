@@ -12,7 +12,7 @@ from utils.serialization import NULL, serialize, serialize_nonstandard
 
 
 class Color:
-
+    """Dummy class for testing serialization"""
     AdditivePrimary = FlexEnum('AdditivePrimary', 'RED GREEN BLUE')
 
     class SubtractivePrimary(Enum):
@@ -23,6 +23,7 @@ class Color:
     mix_types = {AdditivePrimary, SubtractivePrimary}
 
     def to_json(self):
+        """Invoked by serialize"""
         return f"Color(Color.{self.mix_type.__name__}, '{self.color.name}')"
 
     def __init__(self, mix_type, color):
@@ -51,13 +52,14 @@ def test_serialize_nonstandard(value, check):
 @pytest.mark.unit
 @pytest.mark.parametrize(
     ('value', 'check'), [
-    (None, NULL),
     (Color(Color.AdditivePrimary, 'GREEN'), "Color(Color.AdditivePrimary, 'GREEN')"),
     (Color(Color.SubtractivePrimary, 'YELLOW'), "Color(Color.SubtractivePrimary, 'YELLOW')"),
     (Color.AdditivePrimary.GREEN, 'test_serialization.Color.AdditivePrimary.GREEN'),
     (Color.SubtractivePrimary.YELLOW, 'test_serialization.Color.SubtractivePrimary.YELLOW'),
-    (Color.AdditivePrimary, str(Color.AdditivePrimary))
+    (Color.AdditivePrimary, str(Color.AdditivePrimary)),
+    (None, NULL),
 ])
 def test_serialize(value, check):
+    """Test serialize"""
     serialized = serialize(value)
     assert serialized == check
