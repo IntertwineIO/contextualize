@@ -7,10 +7,12 @@ from utils.enum import FlexEnum
 from utils.tools import isiterator
 
 
+# Functional enum declaration
 Fruit = FlexEnum('Fruit', 'APPLE BANANA CANTALOUPE')
 
 
 class Roshambo(FlexEnum):
+    """Enum with values that are strings and rotating"""
     ROCK = 'SCISSORS'
     PAPER = 'ROCK'
     SCISSORS = 'PAPER'
@@ -52,7 +54,7 @@ def test_flex_enum_cast(enum_class, value, enum_option, exception):
     (Roshambo, 'ROCK', 'SCISSORZ', None, ValueError),
 ])
 def test_flex_enum_option(enum_class, name, value, enum_option, exception):
-    """Test FlexEnum cast"""
+    """Confirm FlexEnum option creates enums or raises as expected"""
     if enum_option:
         assert enum_class.option(name, value) is enum_option
     elif exception:
@@ -190,7 +192,7 @@ class First:
     (First.Second.Third.Roshambo, 'First.Second.Third.Roshambo'),
 ])
 def test_flex_enum_qualname(enum_class, qualname):
-    """Test that FlexEnum qualname is properly set"""
+    """Confirm FlexEnum qualname is properly set"""
     assert enum_class.__qualname__ == qualname
 
 
