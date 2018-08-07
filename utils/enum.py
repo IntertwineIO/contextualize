@@ -27,6 +27,17 @@ class FlexEnum(Enum):
             return cls(option)
 
     @classmethod
+    def option(cls, name, value):
+        """Construct option with given name/value, ensuring validity"""
+        try:
+            option = cls[name]
+        except KeyError:
+            raise KeyError(f"Invalid {cls.__qualname__} name '{name}'")
+        if option.value != value:
+            raise ValueError(f"Invalid {cls.__qualname__} value in option '{name}: {value}'")
+        return option
+
+    @classmethod
     def names(cls, *enumables, transform=None):
         """Generator of enum names, transformed if function provided"""
         enums = (cls.cast(x) for x in enumables) if enumables else cls
@@ -125,3 +136,14 @@ class FlexEnum(Enum):
     def __init__(self, *args, **kwds):
         super().__init__()
         self.__class__.__qualname__ = derive_qualname(self)
+
+    def __repr__(self):
+        """Repr contains qualname/name/value and evals to self"""
+        qualname = self.__class__.__qualname__
+        name, value = self.name, self.value
+        value = value if isinstance(value, int) else f"'{value}'"
+        return f"{qualname}.option('{name}', {value})"
+
+    def __str__(self):
+        """Str contains qualname/name"""
+        return f'{self.__class__.__qualname__}.{self.name}'

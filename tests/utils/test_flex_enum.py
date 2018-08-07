@@ -7,10 +7,12 @@ from utils.enum import FlexEnum
 from utils.tools import isiterator
 
 
+# Functional enum declaration
 Fruit = FlexEnum('Fruit', 'APPLE BANANA CANTALOUPE')
 
 
 class Roshambo(FlexEnum):
+    """Enum with values that are strings and rotating"""
     ROCK = 'SCISSORS'
     PAPER = 'ROCK'
     SCISSORS = 'PAPER'
@@ -18,7 +20,7 @@ class Roshambo(FlexEnum):
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    'enum_class, value, enum_value, exception', [
+    'enum_class, value, enum_option, exception', [
     (Fruit, 'APPLE', Fruit.APPLE, None),
     (Fruit, 'banana', Fruit.BANANA, None),
     (Fruit, 3, Fruit.CANTALOUPE, None),
@@ -26,13 +28,38 @@ class Roshambo(FlexEnum):
     (Roshambo, 'STONE', None, ValueError),
     (Roshambo, 1, None, ValueError),
 ])
-def test_flex_enum_cast(enum_class, value, enum_value, exception):
+def test_flex_enum_cast(enum_class, value, enum_option, exception):
     """Test FlexEnum cast"""
-    if enum_value:
-        assert enum_class.cast(value) is enum_value
+    if enum_option:
+        assert enum_class.cast(value) is enum_option
     elif exception:
         with pytest.raises(exception):
             enum_class.cast(value)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    'enum_class, name, value, enum_option, exception', [
+    (Fruit, 'APPLE', 1, Fruit.APPLE, None),
+    (Fruit, 'BANANA', 2, Fruit.BANANA, None),
+    (Fruit, 'CANTALOUPE', 3, Fruit.CANTALOUPE, None),
+    (Fruit, 'DRAGONFRUIT', 1, None, KeyError),
+    (Fruit, 'DRAGONFRUIT', 4, None, KeyError),
+    (Fruit, 'APPLE', 0, None, ValueError),
+    (Roshambo, 'ROCK', 'SCISSORS', Roshambo.ROCK, None),
+    (Roshambo, 'PAPER', 'ROCK', Roshambo.PAPER, None),
+    (Roshambo, 'SCISSORS', 'PAPER', Roshambo.SCISSORS, None),
+    (Roshambo, 'STONE', 'SCISSORS', None, KeyError),
+    (Roshambo, 'STONE', 'SCISSORZ', None, KeyError),
+    (Roshambo, 'ROCK', 'SCISSORZ', None, ValueError),
+])
+def test_flex_enum_option(enum_class, name, value, enum_option, exception):
+    """Confirm FlexEnum option creates enums or raises as expected"""
+    if enum_option:
+        assert enum_class.option(name, value) is enum_option
+    elif exception:
+        with pytest.raises(exception):
+            enum_class.option(name, value)
 
 
 @pytest.mark.unit
@@ -165,5 +192,41 @@ class First:
     (First.Second.Third.Roshambo, 'First.Second.Third.Roshambo'),
 ])
 def test_flex_enum_qualname(enum_class, qualname):
-    """Test FlexEnum qualname"""
+    """Confirm FlexEnum qualname is properly set"""
     assert enum_class.__qualname__ == qualname
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    'enum_option', [
+    First.Fruit.APPLE,
+    First.Roshambo.ROCK,
+    First.Second.Fruit.BANANA,
+    First.Second.Roshambo.PAPER,
+    First.Second.Third.Fruit.CANTALOUPE,
+    First.Second.Third.Roshambo.SCISSORS
+])
+def test_flex_enum_repr(enum_option):
+    """Confirm FlexEnum repr has qualname/name/value & evals to self"""
+    option_repr = repr(enum_option)
+    assert enum_option.__class__.__qualname__ in option_repr
+    assert enum_option.name in option_repr
+    assert str(enum_option.value) in option_repr
+    assert eval(option_repr) is enum_option
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    'enum_option', [
+    First.Fruit.APPLE,
+    First.Roshambo.ROCK,
+    First.Second.Fruit.BANANA,
+    First.Second.Roshambo.PAPER,
+    First.Second.Third.Fruit.CANTALOUPE,
+    First.Second.Third.Roshambo.SCISSORS
+])
+def test_flex_enum_str(enum_option):
+    """Confirm FlexEnum str contains qualname and name"""
+    option_str = str(enum_option)
+    assert enum_option.__class__.__qualname__ in option_str
+    assert enum_option.name in option_str
