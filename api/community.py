@@ -19,7 +19,7 @@ async def test(request):
     return response.json({'hello': 'world'})
 
 
-@bp.route(f'/{BLUEPRINT}', methods=HTTP.list('POST'))
+@bp.route(f'/{BLUEPRINT}/content/extraction', methods=HTTP.list('POST'))
 async def extract(request):
     '''
     Extract community content
@@ -42,7 +42,7 @@ async def extract(request):
             "path_parent": "/geos/us"
         },
         "root": "/communities/homelessness/us/tx?org=None"
-    }' 'http://127.0.0.1:5001/community'
+    }' 'http://127.0.0.1:5001/community/content/extraction'
     '''
     app = request.app
     loop = app.loop
