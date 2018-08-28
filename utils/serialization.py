@@ -47,7 +47,7 @@ def serialize_nonstandard(obj):
 
 
 def serialize(obj, encoding=None):
-    """Serialize object, optionally encoded as well"""
+    """Serialize object, optionally encoding as well"""
     if obj is None:
         serialized = NULL
     elif hasattr(obj, 'to_json'):
