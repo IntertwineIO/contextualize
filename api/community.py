@@ -6,7 +6,7 @@ from collections import OrderedDict
 from sanic import Blueprint
 from sanic import response
 
-from service import Service
+from services.community_service import CommunityService
 from utils.api import HTTPMethod as HTTP
 from utils.cache import AsyncCache
 
@@ -49,22 +49,8 @@ async def extract(request):
     cache = AsyncCache()
     payload = json.loads(request.body, object_pairs_hook=OrderedDict)
 
-    community_key = payload['root']
-    community = payload[community_key]
-    problem_key = community['problem']
-    problem_terms = payload[problem_key]['name'] if problem_key else None
-    org_key = community['org']
-    org_terms = payload[org_key]['name'] if org_key else None
-    geo_key = community['geo']
-    if geo_key:
-        geo = payload[geo_key]
-        geo_terms = [geo['name'], geo['abbrev']] if geo['abbrev'] else geo['name']
-    else:
-        geo_terms = None
-
-    search_data = OrderedDict(problem=problem_terms, org=org_terms, geo=geo_terms)
-    service = Service(cache, loop)
-    extract_community_content = service.extract_content(**search_data)
+    community_service = CommunityService(payload)
+    extract_community_content = community_service.extract_content()
 
     loop.create_task(extract_community_content)
 
