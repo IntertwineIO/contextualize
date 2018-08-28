@@ -19,15 +19,16 @@ class AsyncCache(Singleton):
     def initialize(self, loop=None):
         """Initialize AsyncCache singleton"""
         self.client = None
-        loop = loop or asyncio.get_event_loop()
+        self.loop = loop = loop or asyncio.get_event_loop()
         if loop.is_running():
             loop.create_task(self.connect(loop))
         else:
             loop.run_until_complete(self.connect(loop))
 
     @async_debug()
-    async def connect(self, loop):
+    async def connect(self, loop=None):
         """Connect to Redis via pool, set client, and return it"""
+        loop = loop or self.loop
         redis = self.client
         if not redis:
             redis = await aioredis.create_redis_pool('redis://localhost',
@@ -48,7 +49,7 @@ class AsyncCache(Singleton):
     @sync_debug()
     def terminate(self, loop=None):
         """Terminate AsyncCache from outside the event loop"""
-        loop = loop or asyncio.get_event_loop()
+        loop = loop or self.loop or asyncio.get_event_loop()
         loop.run_until_complete(self.disconnect())
 
 
@@ -212,3 +213,4 @@ class CacheKey:
                     self.fields != other.fields or
                     self.encoding != other.encoding)
         return NotImplemented
+
