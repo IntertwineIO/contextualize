@@ -64,6 +64,7 @@ class BaseExtractor:
     DELAY_DEFAULTS = HumanDwellTime(
         mu=0, sigma=0.5, base=1, multiplier=1, minimum=1, maximum=3)
 
+    # TODO: Refactor out to cache class?
     # Cache Keys
     CONTENT_KEY = 'content'
     EXTRACTION_KEY = 'extraction'
@@ -426,12 +427,14 @@ class BaseExtractor:
 
         return transformed_values
 
+    # TODO: Refactor out to cache class?
     @async_debug(context="self.content_map.get('source_url')")
     async def _cache_content(self, content):
         redis = self.cache.client
         content_key, content_hash = await self._prepare_cache_content(content)
         await redis.hmset_dict(content_key, content_hash)
 
+    # TODO: Refactor out to cache class?
     @async_debug(context="self.content_map.get('source_url')")
     async def _prepare_cache_content(self, content):
         unique_field = self.model.UNIQUE_FIELD
@@ -905,6 +908,7 @@ class MultiExtractor(BaseExtractor):
 
                 setattr(item_result, field, source_value)
 
+    # TODO: Refactor out to cache class?
     @async_debug(context="self.content_map.get('source_url')")
     async def _cache_search_result(self, content, rank):
         """Cache search result scored by rank and associated content"""
@@ -929,11 +933,14 @@ class MultiExtractor(BaseExtractor):
         if status is self.status:
             return False
 
+        overall_status, has_changed = await self._apply_status_change(status)
+
+        # TODO: Begin refactor out to cache class?
+        # await self.cache.store_extraction_status(status, overall_status, has_changed)
         info_hash = {}
         extractor_status_key = CacheKey(self.STATUS_KEY, extractor=self.directory).key
         info_hash[extractor_status_key] = status.name
 
-        overall_status, has_changed = await self._apply_status_change(status)
         if has_changed:
             status_key = CacheKey(self.STATUS_KEY).key
             info_hash[status_key] = overall_status.name
@@ -941,6 +948,7 @@ class MultiExtractor(BaseExtractor):
         redis = self.cache.client
         info_key = CacheKey(self.EXTRACTION_KEY, self.INFO_KEY, **self.search_data).key
         await redis.hmset_dict(info_key, info_hash)
+        # TODO: End refactor out to cache class?
 
         return True
 
