@@ -64,8 +64,8 @@ async def extract(request):
 
     search_data = OrderedDict(problem=problem_terms, org=org_terms, geo=geo_terms)
     service = Service(cache, loop)
-    contextualize_community = service.contextualize(**search_data)
+    extract_community_content = service.extract_content(**search_data)
 
-    loop.create_task(contextualize_community)
+    loop.create_task(extract_community_content)
 
     return response.json({"search_data": search_data})

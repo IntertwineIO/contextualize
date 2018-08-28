@@ -13,7 +13,7 @@ from utils.tools import PP
 class Service:
 
     @async_debug()
-    async def contextualize(self, **search_data):
+    async def extract_content(self, **search_data):
         extractors = MultiExtractor.provision_extractors(ResearchArticle, search_data,
                                                          cache=self.cache, loop=self.loop)
         futures = {extractor.extract() for extractor in extractors}
