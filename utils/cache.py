@@ -97,11 +97,11 @@ class CacheKey:
     https://www.python.org/dev/peps/pep-0468/
 
     I/O:
-    *qualifiers     strings to be included in key in positional order
-    encoding='utf8' encoding for serialization; key not encoded if None
-    **fields        name/value pairs to be included in key in keyword
-                    order, where values are strings or string sequences
-    return          CacheKey instance
+    *qualifiers      strings to be included in key in positional order
+    encoding_='utf8' encoding for serialization; key not encoded if None
+    **fields         name/value pairs to be included in key in keyword
+                     order, where values are strings or string sequences
+    return           CacheKey instance
     """
     TERM_DELIMITER = chr(1)  # Start of Header (SOH)
     TERM_DELIMITER_DISPLAY = '&'
@@ -150,7 +150,7 @@ class CacheKey:
         except ValueError:
             raise ValueError('CacheKey fields must precede all qualifiers')
 
-        return cls(*qualifiers, encoding=encoding, **fields)
+        return cls(*qualifiers, encoding_=encoding, **fields)
 
     def to_key(self, is_display=False):
         """Form key from CacheKey instance, optionally for display"""
@@ -195,10 +195,10 @@ class CacheKey:
     def __repr__(self):
         return self.to_key(is_display=True)
 
-    def __init__(self, *qualifiers, _encoding=ENCODING_DEFAULT, **fields):
+    def __init__(self, *qualifiers, encoding_=ENCODING_DEFAULT, **fields):
         self.qualifiers = qualifiers
         self.fields = OrderedDict(fields)
-        self.encoding = _encoding
+        self.encoding = encoding_
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
