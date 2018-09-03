@@ -2,13 +2,17 @@
 # -*- coding: utf-8 -*-
 from collections import OrderedDict
 
-from service import Service
+from extraction.caching import ContentCache
+from services.extraction import ExtractionService
+
+ENCODING_DEFAULT = 'utf-8'
 
 
-class CommunityService(Service):
+class CommunityService(ExtractionService):
 
-    def derive_search_data(self):
-        payload = self.community_payload
+    @classmethod
+    def _derive_search_data(cls, payload):
+        """Derive search data from a community payload"""
         community_key = payload['root']
         community = payload[community_key]
         problem_key = community['problem']
@@ -25,10 +29,13 @@ class CommunityService(Service):
         search_data = OrderedDict(problem=problem_terms, org=org_terms, geo=geo_terms)
         return search_data
 
-    async def extract_content(self):
-        return await super().extract_content(**self.search_data)
+    @classmethod
+    def from_payload(cls, payload, loop=None):
+        """Construct CommunityService instance from a community payload"""
+        search_data = cls._derive_search_data(payload)
+        return cls(search_data, loop)
 
-    def __init__(self, community_payload, cache=None, loop=None):
-        super().__init__(cache, loop)
-        self.community_payload = community_payload
-        self.search_data = self.derive_search_data()
+
+    def __init__(self, search_data, loop=None):
+        super().__init__(search_data, loop)
+        self.cache = ContentCache(self.search_data, self.loop)

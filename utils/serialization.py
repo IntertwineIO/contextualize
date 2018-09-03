@@ -5,7 +5,7 @@ from decimal import Decimal
 from enum import Enum
 
 ENCODING_DEFAULT = 'utf-8'
-NULL = chr(0)
+NULL = 'null'
 
 
 def safe_encode(val, encoding):
@@ -15,8 +15,8 @@ def safe_encode(val, encoding):
 
 def safe_decode(val, encoding):
     """Decode value unless null"""
-    null_byte = NULL.encode(encoding)
-    return None if val == null_byte or val is None else val.decode(encoding)
+    null_bytes = NULL.encode(encoding)
+    return None if val == null_bytes or val is None else val.decode(encoding)
 
 
 def serialize_nonstandard(obj):

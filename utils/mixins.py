@@ -84,7 +84,7 @@ class Hashable(FieldMixin):
         """Convert to ordered dict, optionally encoding as well"""
         cls = self.__class__
         model_data = (('__model__', f'{cls.__module__}.{cls.__qualname__}'),)
-        field_data = ((k, serialize(v)) for k, v in self.items())
+        field_data = ((k, serialize(v)) for k, v in self.items() if v is not None)
         serialized = chain(model_data, field_data)
         if encoding:
             serialized = ((k.encode(encoding), v.encode(encoding)) for k, v in serialized)
