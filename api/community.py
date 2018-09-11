@@ -25,13 +25,13 @@ async def contextualize(request):
     Contextualize community problem by furnishing related content:
     - Related content includes the following:
         - Community content
-        - Geo ancestor content
+        - Geo ancestor content (future)
           (e.g. Homelessness in Texas, Homelessness in US, Homelessness)
-        - Highly-rated content in strongly related communities
+        - Highly-rated content in strongly related communities (future)
     - Look for existing content in cache
     - Extract additional content for a community if...
         - No extraction has occurred
-        - The most recent extraction was long enough ago
+        - The most recent extraction was long enough ago (future)
 
     Usage:
     curl -H "Content-Type: application/json" -X POST -d '{
