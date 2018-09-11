@@ -21,9 +21,10 @@ from selenium.webdriver.support.ui import WebDriverWait
 from url_normalize import url_normalize
 
 from exceptions import NoneValueError
+from extraction.caching import MultiExtractorCache, SourceExtractorCache
+from extraction.definitions import ExtractionStatus
 from secret_service.agency import SecretService
 from utils.async import run_in_executor
-from utils.cache import AsyncCache, CacheKey
 from utils.debug import async_debug, sync_debug
 from utils.enum import FlexEnum
 from utils.statistics import HumanDwellTime, human_dwell_time, human_selection_shuffle
@@ -31,10 +32,6 @@ from utils.time import DateTimeWrapper
 from utils.tools import (
     PP, delist, enlist, isnonstringsequence, multi_parse, one, one_max, one_min, xor_constrain
 )
-
-
-ExtractionStatus = FlexEnum('ExtractionStatus',
-                            'INITIALIZED STARTED PRELIMINARY COMPLETED')
 
 
 class BaseExtractor:
@@ -63,13 +60,6 @@ class BaseExtractor:
     DELAY_TAG = 'delay'
     DELAY_DEFAULTS = HumanDwellTime(
         mu=0, sigma=0.5, base=1, multiplier=1, minimum=1, maximum=3)
-
-    # Cache Keys
-    CONTENT_KEY = 'content'
-    EXTRACTION_KEY = 'extraction'
-    RESULTS_KEY = 'results'
-    INFO_KEY = 'info'
-    STATUS_KEY = 'status'
 
     Status = ExtractionStatus
 
@@ -427,21 +417,6 @@ class BaseExtractor:
         return transformed_values
 
     @async_debug(context="self.content_map.get('source_url')")
-    async def _cache_content(self, content):
-        redis = self.cache.client
-        content_key, content_hash = await self._prepare_cache_content(content)
-        await redis.hmset_dict(content_key, content_hash)
-
-    @async_debug(context="self.content_map.get('source_url')")
-    async def _prepare_cache_content(self, content):
-        unique_field = self.model.UNIQUE_FIELD
-        fields = OrderedDict()
-        fields[unique_field] = getattr(content, unique_field)
-        content_key = CacheKey(self.CONTENT_KEY, **fields).key
-        content_hash = content.to_hash()
-        return content_key, content_hash
-
-    @async_debug(context="self.content_map.get('source_url')")
     async def _update_status(self, status):
         if status is self.status:
             return False
@@ -605,11 +580,10 @@ class BaseExtractor:
         elif web_driver_type is self.WebDriverType.FIREFOX:
             raise NotImplementedError('Firefox not yet supported')
 
-    def __init__(self, model, directory, web_driver_type=None, cache=None, loop=None):
-        self.status = None
+    def __init__(self, model, directory, web_driver_type=None, loop=None):
         self.loop = loop or asyncio.get_event_loop()
-        self.cache = cache or AsyncCache(self.loop)
         self.created_timestamp = self.loop.time()
+        self.status = None
 
         self.model = model
         self.base_directory = model.BASE_DIRECTORY
@@ -665,13 +639,13 @@ class SourceExtractor(BaseExtractor):
                 error=e, extractor=repr(self), config=self.content_configuration))
             raise
         else:
-            await self._cache_content(content)
+            await self.cache.store_content(content)
             return content
 
     @sync_debug()
     @classmethod
     def provision_extractors(cls, model, urls=None, delay_configuration=None,
-                             web_driver_type=None, cache=None, loop=None):
+                             web_driver_type=None, loop=None):
         """
         Provision Extractors
 
@@ -682,12 +656,10 @@ class SourceExtractor(BaseExtractor):
         urls=None:                  List of content URL strings
         delay_configuration=None:   Configuration to stagger extractions
         web_driver_type=None:       WebDriverType, e.g. CHROME (default)
-        cache=None:                 AsyncCache singleton (optional)
         loop=None:                  Event loop (optional)
         yield:                      Fully configured source extractors
         """
         loop = loop or asyncio.get_event_loop()
-        cache = cache or AsyncCache()
         web_driver_type = web_driver_type or cls.WEB_DRIVER_TYPE_DEFAULT
 
         human_selection_shuffle(urls)
@@ -697,7 +669,7 @@ class SourceExtractor(BaseExtractor):
             try:
                 initial_delay += human_dwell_time(**delay_config)
                 extractor = cls(model, page_url=url, initial_delay=initial_delay,
-                                web_driver_type=web_driver_type, cache=cache, loop=loop)
+                                web_driver_type=web_driver_type, loop=loop)
                 if extractor.is_enabled:
                     yield extractor
             # FileNotFoundError, ruamel.yaml.scanner.ScannerError, ValueError
@@ -749,12 +721,12 @@ class SourceExtractor(BaseExtractor):
         clipped_url = url[start:end]
         return clipped_url
 
-    def __init__(self, model, page_url, initial_delay=0, web_driver_type=None,
-                 cache=None, loop=None):
+    def __init__(self, model, page_url, initial_delay=0, web_driver_type=None, loop=None):
         self.initial_delay = initial_delay
         self.page_url = url_normalize(page_url)
         directory = self._derive_directory(model, self.page_url)
-        super().__init__(model, directory, web_driver_type, cache, loop)
+        super().__init__(model, directory, web_driver_type, loop)
+        self.cache = SourceExtractorCache(model=self.model, loop=self.loop)
         self.status = ExtractionStatus.INITIALIZED
 
 
@@ -857,7 +829,7 @@ class MultiExtractor(BaseExtractor):
                         page=page, index=index, rank=rank,
                         extractor=repr(self), config=content_config))
 
-                await self._cache_search_result(content, rank)
+                await self.cache.store_search_result(content, rank)
                 self.item_results[unique_key] = content
 
         else:
@@ -880,7 +852,7 @@ class MultiExtractor(BaseExtractor):
         source_urls = [content.source_url for content in item_results.values()]
         source_extractors = SourceExtractor.provision_extractors(
             self.model, source_urls, self.delay_configuration,
-            self.web_driver_type, self.cache, self.loop)
+            self.web_driver_type, self.loop)
         futures = [extractor.extract() for extractor in source_extractors]
         if not futures:
             return []
@@ -906,21 +878,6 @@ class MultiExtractor(BaseExtractor):
                 setattr(item_result, field, source_value)
 
     @async_debug(context="self.content_map.get('source_url')")
-    async def _cache_search_result(self, content, rank):
-        """Cache search result scored by rank and associated content"""
-        redis = self.cache.client
-        pipe = redis.pipeline()
-
-        content_key, content_hash = await self._prepare_cache_content(content)
-        cache_content = pipe.hmset_dict(content_key, content_hash)
-
-        results_key = CacheKey(self.EXTRACTION_KEY, self.RESULTS_KEY, **self.search_data).key
-        cache_result = pipe.zadd(results_key, rank, content_key)
-
-        result = await pipe.execute()
-        await asyncio.gather(cache_content, cache_result)
-
-    @async_debug(context="self.content_map.get('source_url')")
     async def _update_status(self, status):
         """Update extractor/overall status, caching as necessary"""
         if status.value < self.status.value:
@@ -929,19 +886,8 @@ class MultiExtractor(BaseExtractor):
         if status is self.status:
             return False
 
-        info_hash = {}
-        extractor_status_key = CacheKey(self.STATUS_KEY, extractor=self.directory).key
-        info_hash[extractor_status_key] = status.name
-
         overall_status, has_changed = await self._apply_status_change(status)
-        if has_changed:
-            status_key = CacheKey(self.STATUS_KEY).key
-            info_hash[status_key] = overall_status.name
-
-        redis = self.cache.client
-        info_key = CacheKey(self.EXTRACTION_KEY, self.INFO_KEY, **self.search_data).key
-        await redis.hmset_dict(info_key, info_hash)
-
+        await self.cache.store_extraction_status(status, overall_status, has_changed)
         return True
 
     @async_debug(context="self.content_map.get('source_url')")
@@ -976,8 +922,7 @@ class MultiExtractor(BaseExtractor):
 
     @sync_debug()
     @classmethod
-    def provision_extractors(cls, model, search_data=None, web_driver_type=None,
-                             cache=None, loop=None):
+    def provision_extractors(cls, model, search_data=None, web_driver_type=None, loop=None):
         """
         Provision Extractors
 
@@ -1001,12 +946,10 @@ class MultiExtractor(BaseExtractor):
                                                 geo='Texas')
 
         web_driver_type=None:   WebDriverType, e.g. CHROME (default)
-        cache=None:             AsyncCache singleton (optional)
         loop=None:              Event loop (optional)
         yield:                  Fully configured search extractors
         """
         loop = loop or asyncio.get_event_loop()
-        cache = cache or AsyncCache()
         web_driver_type = web_driver_type or cls.WEB_DRIVER_TYPE_DEFAULT
 
         base = model.BASE_DIRECTORY
@@ -1017,7 +960,7 @@ class MultiExtractor(BaseExtractor):
         extractors = {}
         for directory in directories:
             try:
-                extractor = cls(model, directory, search_data, web_driver_type, cache, loop)
+                extractor = cls(model, directory, search_data, web_driver_type, loop)
                 if extractor.is_enabled:
                     extractors[directory] = extractor
             # FileNotFoundError, ruamel.yaml.scanner.ScannerError, ValueError
@@ -1185,10 +1128,12 @@ class MultiExtractor(BaseExtractor):
             raise NoneValueError
         return terms
 
-    def __init__(self, model, directory, search_data=None,
-                 web_driver_type=None, cache=None, loop=None):
+    def __init__(self, model, directory, search_data=None, web_driver_type=None, loop=None):
         self.search_data = self._prepare_search_data(search_data)
-        super().__init__(model, directory, web_driver_type, cache, loop)
+        super().__init__(model, directory, web_driver_type, loop)
+
+        self.cache = MultiExtractorCache(directory=self.directory, search_data=self.search_data,
+                                         model=self.model, loop=self.loop)
         self.page_url = self._form_page_url(self.configuration, self.search_data)
 
         pagination_config = self.configuration.get(self.PAGINATION_TAG)

@@ -6,6 +6,7 @@ from itertools import chain
 
 import aioredis
 
+import settings
 from utils.debug import async_debug, sync_debug
 from utils.singleton import Singleton
 from utils.tools import isnonstringsequence
@@ -19,18 +20,19 @@ class AsyncCache(Singleton):
     def initialize(self, loop=None):
         """Initialize AsyncCache singleton"""
         self.client = None
-        loop = loop or asyncio.get_event_loop()
+        self.loop = loop = loop or asyncio.get_event_loop()
         if loop.is_running():
             loop.create_task(self.connect(loop))
         else:
             loop.run_until_complete(self.connect(loop))
 
     @async_debug()
-    async def connect(self, loop):
+    async def connect(self, loop=None):
         """Connect to Redis via pool, set client, and return it"""
+        loop = loop or self.loop or asyncio.get_event_loop()
         redis = self.client
         if not redis:
-            redis = await aioredis.create_redis_pool('redis://localhost',
+            redis = await aioredis.create_redis_pool(settings.REDIS_ADDRESS,
                                                      encoding=ENCODING_DEFAULT,
                                                      loop=loop)
             self.client = redis
@@ -48,7 +50,7 @@ class AsyncCache(Singleton):
     @sync_debug()
     def terminate(self, loop=None):
         """Terminate AsyncCache from outside the event loop"""
-        loop = loop or asyncio.get_event_loop()
+        loop = loop or self.loop or asyncio.get_event_loop()
         loop.run_until_complete(self.disconnect())
 
 
@@ -64,8 +66,8 @@ class CacheKey:
     values are either strings or non-string sequences of strings.
 
     Cache keys may include any number of qualifiers and fields, provided
-    there is at least one term. Any/all qualifiers always precede any/all
-    fields within the key.
+    there is at least one term. All qualifiers always precede all fields
+    within the key.
 
     Terms (qualifiers/fields) are delimited by Start of Header (1: SOH).
     For display purposes, Ampersand ('&') is used instead. As such,
@@ -96,11 +98,11 @@ class CacheKey:
     https://www.python.org/dev/peps/pep-0468/
 
     I/O:
-    *qualifiers     strings to be included in key in positional order
-    encoding='utf8' encoding for serialization; key not encoded if None
-    **fields        name/value pairs to be included in key in keyword
-                    order, where values are strings or string sequences
-    return          CacheKey instance
+    *qualifiers      strings to be included in key in positional order
+    encoding_=None   encoding for serialization; key not encoded if None
+    **fields         name/value pairs to be included in key in keyword
+                     order, where values are strings or string sequences
+    return           CacheKey instance
     """
     TERM_DELIMITER = chr(1)  # Start of Header (SOH)
     TERM_DELIMITER_DISPLAY = '&'
@@ -115,12 +117,10 @@ class CacheKey:
     NULL_DISPLAY = '~'
 
     @classmethod
-    def from_key(cls, key, is_display=None, encoding=ENCODING_DEFAULT):
+    def from_key(cls, key, is_display=None, encoding=None):
         """Construct CacheKey instance from key or display string"""
-        if not key:
-            raise ValueError('Attempting to instantiate empty CacheKey')
-
-        if encoding and isinstance(key, bytes):
+        if isinstance(key, bytes):
+            encoding = encoding or ENCODING_DEFAULT
             key = str(key, encoding)
 
         if is_display is None:
@@ -131,9 +131,10 @@ class CacheKey:
         terms = key.split(term_delimiter)
         for i, term in enumerate(terms):
             if field_assigner in term:
+                qualifiers = terms[:i]
                 break
-
-        qualifiers = terms[:i]
+        else:
+            return cls(*terms, encoding_=encoding)
 
         def unpack_field(field):
             unpacked = field.split(field_assigner)
@@ -147,15 +148,12 @@ class CacheKey:
         try:
             fields = OrderedDict(unpack_field(field) for field in terms[i:])
         except ValueError:
-            raise ValueError('CacheKey fields must precede all qualifiers')
+            raise ValueError('CacheKey qualifiers must precede all fields')
 
-        return cls(*qualifiers, encoding=encoding, **fields)
+        return cls(*qualifiers, encoding_=encoding, **fields)
 
-    def to_key(self, is_display=False):
-        """Form key from CacheKey instance, optionally for display"""
-        if not (self.fields or self.qualifiers):
-            raise ValueError('Attempting to form empty cache key')
-
+    def to_key(self, is_display=False, encoding=None):
+        """Form key string or encoded bytes, optionally for display"""
         term_delimiter, field_assigner, value_separator, null = self.special_characters(is_display)
 
         def pack_field(name, value):
@@ -171,7 +169,7 @@ class CacheKey:
         packed_fields = (pack_field(name, value) for name, value in self.fields.items())
         terms = chain(self.qualifiers, packed_fields)
         key = term_delimiter.join(terms)
-        return key if is_display or not self.encoding else key.encode(self.encoding)
+        return key.encode(encoding) if encoding else key
 
     @classmethod
     def special_characters(cls, is_display=False):
@@ -188,16 +186,32 @@ class CacheKey:
 
     @property
     def key(self):
-        """Form key from CacheKey instance; bytes unless no encoding"""
-        return self.to_key(is_display=False)
+        """Form key from CacheKey instance"""
+        return self.to_key(is_display=False, encoding=self.encoding)
+
+    @property
+    def string(self):
+        """Form key string from CacheKey instance"""
+        return self.to_key(is_display=False, encoding=None)
+
+    @property
+    def bytes(self):
+        """Form key bytes from instance; encoding defaults to utf-8"""
+        encoding = self.encoding or ENCODING_DEFAULT
+        return self.to_key(is_display=False, encoding=encoding)
+
+    def __str__(self):
+        return self.to_key(is_display=True, encoding=None)
 
     def __repr__(self):
-        return self.to_key(is_display=True)
+        return f"{self.__class__.__name__}.from_key('{self}')"
 
-    def __init__(self, *qualifiers, _encoding=ENCODING_DEFAULT, **fields):
+    def __init__(self, *qualifiers, encoding_=None, **fields):
         self.qualifiers = qualifiers
         self.fields = OrderedDict(fields)
-        self.encoding = _encoding
+        self.encoding = encoding_
+        if not (self.qualifiers or self.fields):
+            raise ValueError('Unable to instantiate empty CacheKey')
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
@@ -212,3 +226,4 @@ class CacheKey:
                     self.fields != other.fields or
                     self.encoding != other.encoding)
         return NotImplemented
+
