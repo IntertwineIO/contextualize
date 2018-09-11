@@ -6,6 +6,7 @@ from itertools import chain
 
 import aioredis
 
+import settings
 from utils.debug import async_debug, sync_debug
 from utils.singleton import Singleton
 from utils.tools import isnonstringsequence
@@ -28,10 +29,10 @@ class AsyncCache(Singleton):
     @async_debug()
     async def connect(self, loop=None):
         """Connect to Redis via pool, set client, and return it"""
-        loop = loop or self.loop
+        loop = loop or self.loop or asyncio.get_event_loop()
         redis = self.client
         if not redis:
-            redis = await aioredis.create_redis_pool('redis://localhost',
+            redis = await aioredis.create_redis_pool(settings.REDIS_ADDRESS,
                                                      encoding=ENCODING_DEFAULT,
                                                      loop=loop)
             self.client = redis
