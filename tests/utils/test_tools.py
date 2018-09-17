@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import pytest
-from inspect import isclass
 
-from utils.tools import get_related_json
+from utils.tools import get_related_json, ischildclass
 
 sun = dict(name='Sun')
 
@@ -47,7 +46,7 @@ paybug2 = dict(venus=venus, earth=earth, mars=mars, moon=moon)
 ])
 def test_get_related_json(idx, base, field, payload, strict, check):
     """Test get related JSON under different scenarios"""
-    if isclass(check) and issubclass(check, Exception):
+    if ischildclass(check, Exception):
         with pytest.raises(check):
             value = get_related_json(base, field, payload, strict)
 

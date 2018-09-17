@@ -200,6 +200,14 @@ def get_related_json(base, field, payload=None, strict=False):
     return value
 
 
+def ischildclass(obj, classinfo):
+    """Check if obj extends classinfo; return None if invalid params"""
+    try:
+        return issubclass(obj, classinfo)
+    except TypeError:
+        return None
+
+
 def isiterator(obj):
     """Check if object is an iterator (not just iterable)"""
     cls = obj.__class__
@@ -207,7 +215,7 @@ def isiterator(obj):
 
 
 def isnonstringsequence(obj):
-    """Determine if an object is a non-string sequence, e.g. list, tuple"""
+    """Check if an object is a non-string sequence, e.g. list, tuple"""
     cls = obj.__class__
     return (hasattr(cls, '__iter__') and hasattr(cls, '__getitem__') and
             not isinstance(obj, basestring) and not hasattr(obj, 'items'))
