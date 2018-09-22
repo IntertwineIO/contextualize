@@ -23,7 +23,6 @@ class CommunityService(ExtractionService):
         org = get_related_json(community, 'org', payload)
         org_terms = org['name'] if org else None
         geo_terms = cls._derive_geo_search_terms(community, payload)
-
         search_data = OrderedDict(problem=problem_terms, org=org_terms, geo=geo_terms)
         return search_data
 
