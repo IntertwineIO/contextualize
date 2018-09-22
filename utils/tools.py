@@ -215,10 +215,14 @@ def isiterator(obj):
 
 
 def isnonstringsequence(obj):
-    """Check if an object is a non-string sequence, e.g. list, tuple"""
-    cls = obj.__class__
-    return (hasattr(cls, '__iter__') and hasattr(cls, '__getitem__') and
-            not isinstance(obj, basestring) and not hasattr(obj, 'items'))
+    """Check if object is non-string sequence: list, tuple, range..."""
+    if (isinstance(obj, basestring) or hasattr(obj, 'items') or not hasattr(obj, '__getitem__')):
+        return False
+    try:
+        iter(obj)
+        return True
+    except TypeError:
+        return False
 
 
 def load_class(specifier):
