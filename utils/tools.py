@@ -149,6 +149,65 @@ def derive_qualname(obj):
     return qualname
 
 
+def get_related_json(base, field, payload=None, strict=False):
+    """
+    Get related JSON
+
+    Return the related JSON specified by the base dictionary, field, and
+    encompassing JSON payload. Supports both nested and non-nested JSON.
+
+    If the field value is a string, return the payload item keyed by it.
+    If the field value is a list and its first element is a string,
+        treat elements as payload keys and return a list of objects.
+    Otherwise, assume the value is nested JSON and return it.
+
+    I/O:
+    base:          Base JSON dictionary in which to look up field
+    field:         Field name for related JSON on base dictionary
+    payload=None:  Encompassing JSON payload
+    strict=True:   If True, raise on missing field or payload key;
+                   If False, return None or exclude it if inside a list
+    return:        Related JSON dictionary, list or value
+    raise:         KeyError if strict and base is missing field
+                   KeyError if strict and payload is missing the key
+                   TypeError if strict and invalid payload in key lookup
+    """
+    try:
+        value = base[field]
+    except KeyError:
+        if strict:
+            raise
+        return
+
+    if isinstance(value, basestring):
+        try:
+            return payload[value]
+        except (KeyError, TypeError):
+            if strict:
+                raise
+            return
+
+    if isinstance(value, list) and value and isinstance(value[0], basestring):
+        values = []
+        for element in value:
+            try:
+                values.append(payload[element])
+            except (KeyError, TypeError):
+                if strict:
+                    raise
+        return values
+
+    return value
+
+
+def ischildclass(obj, classinfo):
+    """Check if obj extends classinfo; return None if invalid params"""
+    try:
+        return issubclass(obj, classinfo)
+    except TypeError:
+        return None
+
+
 def isiterator(obj):
     """Check if object is an iterator (not just iterable)"""
     cls = obj.__class__
@@ -156,10 +215,14 @@ def isiterator(obj):
 
 
 def isnonstringsequence(obj):
-    '''Determine if an object is a non-string sequence, e.g. list, tuple'''
-    cls = obj.__class__
-    return (hasattr(cls, '__iter__') and hasattr(cls, '__getitem__') and
-            not isinstance(obj, basestring) and not hasattr(obj, 'items'))
+    """Check if object is non-string sequence: list, tuple, range..."""
+    if (isinstance(obj, basestring) or hasattr(obj, 'items') or not hasattr(obj, '__getitem__')):
+        return False
+    try:
+        iter(obj)
+        return True
+    except TypeError:
+        return False
 
 
 def load_class(specifier):
