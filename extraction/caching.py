@@ -26,13 +26,13 @@ class ModelCacheMixin:
     # Cache Keys
     CONTENT_KEY = 'content'
 
-    @async_debug(context="getattr(content, 'source_url', None)")
+    # @async_debug(context="getattr(content, 'source_url', None)")
     async def store_content(self, content):
         content_key, content_hash = self._prepare_content(content)
         rv = await self.client.hmset_dict(content_key, content_hash)
         return rv
 
-    @sync_debug(context="getattr(content, 'source_url', None)")
+    # @sync_debug(context="getattr(content, 'source_url', None)")
     def _prepare_content(self, content):
         """Prepare content for storage by returning key and hash"""
         unique_field = self.model.UNIQUE_FIELD
@@ -55,7 +55,7 @@ class SearchCacheMixin:
     INFO_KEY = 'info'
     STATUS_KEY = 'status'
 
-    @async_debug(context="getattr(self, 'search_data', None)")
+    # @async_debug(context="getattr(self, 'search_data', None)")
     async def retrieve_status(self):
         """Retrieve cached extraction status as enum or None"""
         redis = self.client
@@ -64,7 +64,7 @@ class SearchCacheMixin:
             status_name = status_info[self.status_key]
             return ExtractionStatus[status_name]
 
-    @async_debug(context="getattr(self, 'search_data', None)")
+    # @async_debug(context="getattr(self, 'search_data', None)")
     async def retrieve_content(self):
         """Retrieve all cached content for the search data"""
         redis = self.client
@@ -97,7 +97,7 @@ class SearchCacheMixin:
 
 class DirectoryCacheMixin(SearchCacheMixin, ModelCacheMixin):
 
-    @async_debug(context="getattr(content, 'source_url', None)")
+    # @async_debug(context="getattr(content, 'source_url', None)")
     async def store_search_result(self, content, rank):
         """Cache search result scored by rank and associated content"""
         content_key, content_hash = self._prepare_content(content)
@@ -109,6 +109,7 @@ class DirectoryCacheMixin(SearchCacheMixin, ModelCacheMixin):
         rv = await asyncio.gather(cache_content, cache_result)
         return rv
 
+    # @async_debug()
     async def store_extraction_status(self, status, overall_status, has_changed):
         """
         Store extraction status
