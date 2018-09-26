@@ -332,10 +332,6 @@ class ExtractionOperation:
                 value = getattr(value, component)
         return value
 
-    def _execute_in_future(self, func, *args, **kwds):
-        """Run in executor with kwds support & default loop/executor"""
-        return run_in_executor(self.loop, None, func, *args, **kwds)
-
     def _select_targets(self, latest, prior, parent):
         if self.scope is self.Scope.LATEST:
             return enlist(latest)
@@ -345,6 +341,10 @@ class ExtractionOperation:
             return [parent]
         assert self.scope is self.Scope.PAGE
         return [self.web_driver]  # Selenium WebDriver instance
+
+    def _execute_in_future(self, func, *args, **kwds):
+        """Run in executor with kwds support & default loop/executor"""
+        return run_in_executor(self.loop, None, func, *args, **kwds)
 
     # Initialization Methods
 
