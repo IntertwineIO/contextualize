@@ -132,6 +132,27 @@ class ExtractionOperation:
 
     # @async_debug(context='self.context')
     async def _find_elements(self, element, index=1):
+        """
+        Find elements
+
+        Find element(s) via operation's find method/args, is_multiple,
+        and wait method/args.
+
+        The find arg specifies a Selenium selector template that may be
+        rendered with the element index.
+
+        If is_multiple is True, the find method returns a list of
+        elements matching the selector.
+
+        If a wait method is configured, the find method is constrained
+        to wait until the wait condition is satisfied.
+
+        I/O:
+        element:  Driver or element to perform the find; note that all
+                  wait operation selectors use absolute paths.
+        index=1:  Element number on page, 1-indexed
+        return:   Element(s) found
+        """
         element = delist(element)
         self._validate_element(element)
         find_method, find_by = self._derive_find_method(element)
@@ -155,11 +176,13 @@ class ExtractionOperation:
         return enlist(new_elements)
 
     def _validate_element(self, value):
+        """Validate that value is web driver or element"""
         if not isinstance(value, (type(self.web_driver), WebElement)):
             raise TypeError(f'Expected driver or element. Received: {value}')
 
     # @sync_debug(context='self.context')
     def _derive_find_method(self, element):
+        """Derive find (method, by) from operation and given element"""
         element_tag = self.ELEMENTS_TAG if self.is_multiple else self.ELEMENT_TAG
         method_tag = self.find_method.name.lower()
         find_method_name = f'find_{element_tag}_by_{method_tag}'
@@ -181,6 +204,7 @@ class ExtractionOperation:
 
     # @async_debug(context='self.context')
     async def _extract_values(self, elements):
+        """Extract values via the operation's extract method/args"""
         extracted_values = []
         args = (self._render_references(a) for a in self.extract_args)
         field = one(args)
@@ -206,6 +230,7 @@ class ExtractionOperation:
 
     # @async_debug(context='self.context')
     async def _get_values(self, values):
+        """Get values from another field of the same item"""
         retrieved_values = []
         args = self.get_args
 
@@ -218,6 +243,7 @@ class ExtractionOperation:
 
     # @async_debug(context='self.context')
     async def _parse_values(self, values):
+        """Parse values via the operation's parse method/args"""
         parsed_values = []
         args = (self._render_references(a) for a in self.parse_args)
 
@@ -251,6 +277,7 @@ class ExtractionOperation:
 
     # @async_debug(context='self.context')
     async def _format_values(self, values):
+        """Format values via the operation's format method/args"""
         formatted_values = []
         args = (self._render_references(a) for a in self.format_args)
 
@@ -278,6 +305,7 @@ class ExtractionOperation:
 
     # @async_debug(context='self.context')
     async def _transform_values(self, values):
+        """Transform values via the operation's transform method/args"""
         transformed_values = []
         args = (self._render_references(a) for a in self.transform_args)
 
@@ -303,6 +331,7 @@ class ExtractionOperation:
         return transformed_values
 
     def _render_references(self, template):
+        """Render references within a template"""
         while (self.LEFT_REFERENCE_SYMBOL in template and
                self.RIGHT_REFERENCE_SYMBOL in template):
             reference = (template.split(self.RIGHT_REFERENCE_SYMBOL)[0]
@@ -317,6 +346,7 @@ class ExtractionOperation:
         return template
 
     def _get_by_reference_tag(self, reference_tag):
+        """Get (value) by reference tag using angle brackets"""
         parsed = parse(self.REFERENCE_TEMPLATE, reference_tag)
         if not parsed:
             raise ValueError(f"parse('{self.REFERENCE_TEMPLATE}', "
@@ -325,6 +355,7 @@ class ExtractionOperation:
         return self._get_by_reference(reference)
 
     def _get_by_reference(self, reference):
+        """Get (value) by reference using dot notation from the field"""
         components = reference.split(self.REFERENCE_DELIMITER)
         field_name = components[0]
         value = self.extractor.content_map[field_name]
@@ -334,6 +365,7 @@ class ExtractionOperation:
         return value
 
     def _select_targets(self, latest, prior, parent):
+        """Select targets based on scope and latest/prior/parent"""
         if self.scope is self.Scope.LATEST:
             return enlist(latest)
         if self.scope is self.Scope.PRIOR:
@@ -351,7 +383,7 @@ class ExtractionOperation:
 
     @classmethod
     def _configure_scope(cls, configuration):
-        """formerly _derive_operation_scope"""
+        """Configure scope for the current operation – see Scope"""
         if cls.SCOPE_TAG in configuration:
             scope = configuration[cls.SCOPE_TAG]
             return cls.Scope[scope.upper()]
@@ -360,6 +392,7 @@ class ExtractionOperation:
 
     @staticmethod
     def _configure_method(configuration, method_enum):
+        """Configure method based on the given method enum"""
         method_keys = method_enum.set(transform=str.lower)
         method_key = one_max(k for k in configuration if k in method_keys)
         if not method_key:
@@ -371,7 +404,17 @@ class ExtractionOperation:
     @classmethod
     def from_configuration(cls, configuration, field=None, source=None, extractor=None):
         """
-        Formerly _configure_operation
+        From configuration
+
+        Construct operation from the given configuration, within the
+        context of a field, source, and extractor.
+
+        I/O:
+        configuration:   dictionary representation of an operation
+        field=None:      content field name being extracted
+        source=None:     unique key for the content being extracted
+        extractor=None:  extractor instance performing the operation
+        return:          ExtractionOperation instance
         """
         scope = cls._configure_scope(configuration)
         is_multiple = configuration.get(cls.IS_MULTIPLE_TAG, False)

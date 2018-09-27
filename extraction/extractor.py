@@ -71,21 +71,25 @@ class BaseExtractor:
 
     # @async_debug()
     async def _perform_extraction(self, url=None, page=1):
+        """Perform extraction by fetching & extracting page given URL"""
         if url:
             await self._fetch_page(url)
         return await self._extract_page(page=page)
 
     # @async_debug()
     async def _fetch_page(self, url):
+        """Fetch page at given URL by running in executor"""
         future_page = self._execute_in_future(self.web_driver.get, url)
         await future_page
 
     # @async_debug()
     async def _extract_page(self, *args, **kwds):
+        """Extract page (abstract method)"""
         raise NotImplementedError
 
     # @async_debug()
     async def _dispose_web_driver(self):
+        """Dispose web driver, cleaning it up properly"""
         if self.web_driver:
             future_web_driver_quit = self._execute_in_future(self.web_driver.quit)
             await future_web_driver_quit
@@ -254,6 +258,7 @@ class SourceExtractor(BaseExtractor):
 
     # @async_debug()
     async def _extract_page(self, *args, **kwds):
+        """Extract page for single content source"""
         try:
             content = await self._extract_content(self.web_driver,
                                                   self.content_configuration,
@@ -381,6 +386,12 @@ class MultiExtractor(BaseExtractor):
 
     # @async_debug()
     async def _perform_extraction(self, url=None):
+        """
+        Perform extraction
+
+        Given a URL, fetch all pages up to the configured maximum and
+        extract all available content.
+        """
         url = url or self.page_url
         results = await super()._perform_extraction(url, page=1)
 
@@ -399,6 +410,12 @@ class MultiExtractor(BaseExtractor):
 
     # @async_debug()
     async def _extract_following_pages(self, configuration, via_url=False):
+        """
+        Extract following pages
+
+        Attempt to determine next page URL and extract content until
+        reaching configured maximum number of pages.
+        """
         updated_results = None
         page, pages = 1, self.pages
         while page < pages:
@@ -418,10 +435,13 @@ class MultiExtractor(BaseExtractor):
 
     # @async_debug()
     async def _extract_page(self, page=1):
-        return await self._extract_multiple(page=page)
+        """
+        Extract page
 
-    # @async_debug()
-    async def _extract_multiple(self, page=1):
+        Extract page of multiple content items given page index and
+        return ordered dictionary of all content extracted by this
+        extractor instance to date.
+        """
         content_config = self.content_configuration
         items_config = self.items_configuration
         unique_field = self.model.UNIQUE_FIELD
@@ -473,6 +493,7 @@ class MultiExtractor(BaseExtractor):
 
     # @async_debug()
     async def _extract_sources(self, item_results):
+        """Extract sources given item results"""
         source_urls = [content.source_url for content in item_results.values()]
         source_extractors = SourceExtractor.provision_extractors(
             self.model, source_urls, self.delay_configuration,
@@ -486,6 +507,7 @@ class MultiExtractor(BaseExtractor):
 
     # @async_debug()
     async def _combine_results(self, item_results, source_results):
+        """Combine results extracted from search with source content"""
         for source_result in source_results:
             source_url = source_result.source_url
             item_result = item_results[source_url]
