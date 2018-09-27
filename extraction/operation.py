@@ -310,8 +310,9 @@ class ExtractionOperation:
             if not reference:
                 return template
             reference_tag = self.REFERENCE_TEMPLATE.format(reference)
-            value = self._get_by_reference(reference) or ''
-            template = template.replace(reference_tag, str(value))
+            value = self._get_by_reference(reference)
+            value_string = '' if value is None else str(value)
+            template = template.replace(reference_tag, value_string)
 
         return template
 
