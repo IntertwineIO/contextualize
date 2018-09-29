@@ -78,11 +78,11 @@ class ExtractionOperation:
     # SetMethod = FlexEnum('SetMethod', 'SET')
 
     # @async_debug(context='self.context')
-    async def perform(self, target, index=1):
+    async def execute(self, target, index=1):
         """
-        Perform
+        Execute
 
-        Perform operation on the given target and index. Each operation
+        Execute operation on the given target and index. Each operation
         may consist of the following steps:
 
         1. Find element(s) via configured FindMethod and selector;
