@@ -5,9 +5,10 @@ import inspect
 import re
 from collections import OrderedDict
 from functools import lru_cache
-from itertools import chain, islice
+from itertools import islice
 from past.builtins import basestring
 from pprint import PrettyPrinter
+from urllib.parse import urlparse
 
 from parse import parse
 
@@ -85,6 +86,35 @@ def derive_attributes(cls, _mro=None):
                 attributes.update(super_attributes)
 
     return [k for k in attributes] if _mro is None else attributes
+
+
+def derive_domain(url, base=None):
+    """Derive domain, even if no scheme; use base if relative url"""
+    parsed = urlparse(url)
+    if parsed.netloc:
+        return parsed.netloc
+
+    try:
+        url_start = url[0]
+    except (TypeError, IndexError):
+        raise ValueError(f'Invalid URL: {url}')
+
+    if url_start == '/':
+        try:
+            base_start = base[0]
+        except (TypeError, IndexError):
+            raise ValueError('Base is required for relative URL')
+
+        if base_start == '/':
+            raise ValueError('Base may not be relative')
+
+        return derive_domain(url=base)
+
+    first_slash_index = url.find('/')
+    if first_slash_index > 0:
+        return url[:first_slash_index]
+
+    return url
 
 
 def delist(obj):
