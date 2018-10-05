@@ -2,131 +2,47 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import os
-import random
 import urllib
-from collections import OrderedDict, namedtuple
-from datetime import datetime
-from functools import lru_cache, partial
+from collections import OrderedDict
+from functools import lru_cache
 from pathlib import Path
 
-from parse import parse
-from pprint import PrettyPrinter
 from ruamel import yaml
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
-from selenium.webdriver.common.by import By
-from selenium.webdriver.remote.webelement import WebElement
-from selenium.webdriver.support import expected_conditions
-from selenium.webdriver.support.ui import WebDriverWait
 from url_normalize import url_normalize
 
+import settings
 from exceptions import NoneValueError
 from extraction.caching import MultiExtractorCache, SourceExtractorCache
 from extraction.definitions import ExtractionStatus
+from extraction.operation import ExtractionOperation
 from secret_service.agency import SecretService
 from utils.async import run_in_executor
 from utils.debug import async_debug, sync_debug
 from utils.enum import FlexEnum
 from utils.statistics import HumanDwellTime, human_dwell_time, human_selection_shuffle
-from utils.time import DateTimeWrapper
-from utils.tools import (
-    PP, delist, enlist, isnonstringsequence, multi_parse, one, one_max, one_min, xor_constrain
-)
+from utils.tools import PP, enlist, isnonstringsequence, one, xor_constrain
 
 
 class BaseExtractor:
 
     FILE_NAME = NotImplementedError
-    ENCODING = 'utf-8'
 
-    OPTIONS_TAG = 'options'
+    CONTENT_TAG = 'content'
+    DELAY_TAG = 'delay'
+    ELEMENTS_TAG = 'elements'
     IS_ENABLED_TAG = 'is_enabled'
     SOURCE_URL_TAG = 'source_url'
-    CONTENT_TAG = 'content'
-    ELEMENT_TAG = 'element'
-    ELEMENTS_TAG = 'elements'
-    VALUE_TAG = 'value'
-
-    REFERENCE_TEMPLATE = '<{}>'
-    LEFT_REFERENCE_SYMBOL = REFERENCE_TEMPLATE[0]
-    RIGHT_REFERENCE_SYMBOL = REFERENCE_TEMPLATE[-1]
-    REFERENCE_DELIMITER = '.'
+    WAIT_TAG = 'wait'
 
     WebDriverType = FlexEnum('WebDriverType', 'CHROME FIREFOX')
     WEB_DRIVER_TYPE_DEFAULT = WebDriverType.CHROME
-    WAIT_MAXIMUM_DEFAULT = 10
-    WAIT_POLL_INTERVAL = 0.2
 
-    DELAY_TAG = 'delay'
     DELAY_DEFAULTS = HumanDwellTime(
         mu=0, sigma=0.5, base=1, multiplier=1, minimum=1, maximum=3)
 
     Status = ExtractionStatus
-
-    ####################################################################
-    # TODO: Make ExtractOperation a class & encapsulate relevant methods
-    ####################################################################
-
-    SCOPE_TAG = 'scope'
-    IS_MULTIPLE_TAG = 'is_multiple'
-    WAIT_TAG = 'wait'
-    CLICK_TAG = 'click'
-    ATTRIBUTE_TAG = 'attribute'
-
-    OperationScope = FlexEnum('OperationScope', 'PAGE PARENT PRIOR LATEST')
-    OPERATION_SCOPE_DEFAULT = OperationScope.LATEST
-
-    FindMethod = FlexEnum('FindMethod',
-                          'CLASS_NAME CSS_SELECTOR ID LINK_TEXT NAME '
-                          'PARTIAL_LINK_TEXT TAG_NAME XPATH')
-
-    WaitMethod = FlexEnum('WaitMethod', [
-        'ELEMENT_LOCATED_TO_BE_SELECTED',           # locator
-        'ELEMENT_TO_BE_CLICKABLE',                  # locator
-        'FRAME_TO_BE_AVAILABLE_AND_SWITCH_TO_IT',   # locator
-        'INVISIBILITY_OF_ELEMENT_LOCATED',          # locator
-        'PRESENCE_OF_ALL_ELEMENTS_LOCATED',         # locator
-        'PRESENCE_OF_ELEMENT_LOCATED',              # locator
-        'VISIBILITY_OF_ALL_ELEMENTS_LOCATED',       # locator
-        'VISIBILITY_OF_ANY_ELEMENTS_LOCATED',       # locator
-        'VISIBILITY_OF_ELEMENT_LOCATED',            # locator
-
-        # 'ALERT_IS_PRESENT',                         # (no args)
-        # 'ELEMENT_LOCATED_SELECTION_STATE_TO_BE',    # locator, is_selected
-        # 'ELEMENT_SELECTION_STATE_TO_BE',            # element, is_selected
-        # 'ELEMENT_TO_BE_SELECTED',                   # element
-        # 'NEW_WINDOW_IS_OPENED',                     # current_handles
-        # 'NUMBER_OF_WINDOWS_TO_BE',                  # num_windows
-        # 'STALENESS_OF',                             # element
-        # 'TEXT_TO_BE_PRESENT_IN_ELEMENT',            # locator, text_
-        # 'TEXT_TO_BE_PRESENT_IN_ELEMENT_VALUE',      # locator, text_
-        # 'TITLE_CONTAINS',                           # title
-        # 'TITLE_IS',                                 # title
-        # 'URL_CHANGES',                              # url
-        # 'URL_CONTAINS',                             # url
-        # 'URL_MATCHES',                              # pattern
-        # 'URL_TO_BE',                                # url
-        # 'VISIBILITY_OF',                            # element
-    ])
-
-    ExtractMethod = FlexEnum('ExtractMethod', 'GETATTR ATTRIBUTE PROPERTY')
-    GetMethod = FlexEnum('GetMethod', 'GET')
-    ParseMethod = FlexEnum('ParseMethod', 'PARSE STRPTIME')
-    FormatMethod = FlexEnum('FormatMethod', 'FORMAT STRFTIME')
-    TransformMethod = FlexEnum('TransformMethod', 'EXCISE JOIN SPLIT')
-    # SetMethod = FlexEnum('SetMethod', 'SET')
-
-    ExtractOperation = namedtuple('ExtractOperation',
-                                  'is_multiple find_method find_args '
-                                  'wait_method wait_args '
-                                  'wait click '
-                                  'extract_method extract_args '
-                                  'get_method get_args '
-                                  'parse_method parse_args '
-                                  'format_method format_args '
-                                  'transform_method transform_args')
-
-    ####################################################################
 
     @async_debug()
     async def extract(self):
@@ -136,50 +52,67 @@ class BaseExtractor:
                 type='extractor_disabled_warning', extractor=repr(self)))
             return
         try:
+            # TODO: Create DriverPool with context manager to provision
             await self._provision_web_driver()
             await self._update_status(ExtractionStatus.STARTED)
-            return await self._perform_extraction(self.page_url)
+            await self._perform_extraction(self.page_url)
+            return self.extracted_content
         finally:
             await self._update_status(ExtractionStatus.COMPLETED)
             await self._dispose_web_driver()
 
-    @async_debug()
+    # @async_debug()
     async def _provision_web_driver(self):
-        # TODO: retrieve from web driver pool
+        """Provision web driver"""
         future_web_driver = self._execute_in_future(self.web_driver_class,
                                                     **self.web_driver_kwargs)
         self.web_driver = await future_web_driver
-        max_implicit_wait = self.configuration.get(self.WAIT_TAG, self.WAIT_MAXIMUM_DEFAULT)
+        max_implicit_wait = self.configuration.get(self.WAIT_TAG, settings.WAIT_MAXIMUM_DEFAULT)
         # Configure web driver to allow waiting on each operation
         self.web_driver.implicitly_wait(max_implicit_wait)
 
-    @async_debug()
-    async def _perform_extraction(self, url=None, page=1):
-        if url:
-            await self._fetch_page(url)
-        return await self._extract_page(page=page)
-
-    @async_debug()
-    async def _fetch_page(self, url):
-        future_page = self._execute_in_future(self.web_driver.get, url)
-        await future_page
-
-    @async_debug()
-    async def _extract_page(self, *args, **kwds):
-        raise NotImplementedError
-
-    @async_debug()
+    # @async_debug()
     async def _dispose_web_driver(self):
+        """Dispose web driver, cleaning it up properly"""
         if self.web_driver:
             future_web_driver_quit = self._execute_in_future(self.web_driver.quit)
             await future_web_driver_quit
 
-    @async_debug()
-    async def _extract_content(self, element, config, index=1, **kwds):
+    # @async_debug()
+    async def _perform_page_fetch(self, url):
+        """Fetch page at given URL by running in executor"""
+        future_page = self._execute_in_future(self.web_driver.get, url)
+        await future_page
+
+    # @async_debug()
+    async def _perform_extraction(self, url=None, page=1):
+        """Perform extraction by fetching & extracting page given URL"""
+        raise NotImplementedError
+
+    # @async_debug()
+    async def _perform_page_extraction(self, *args, **kwds):
+        """Extract page (abstract method)"""
+        raise NotImplementedError
+
+    # @async_debug()
+    async def _extract_content(self, element, configuration, index=1, **kwds):
+        """
+        Extract content
+
+        Extract content from the given web element and configuration.
+
+        I/O:
+        element:        Selenium web driver or element
+        configuration:  Configuration dictionary in which keys are
+                        content fields and values are extraction
+                        operations
+        index=1:        Index of given element within a series
+        return:         Instance of content model (e.g. ResearchArticle)
+        """
         self.content_map = content_map = OrderedDict(kwds)
         for field in self.model.fields():
             try:
-                field_config = config[field]
+                field_config = configuration[field]
 
             except KeyError as e:
                 field_config = None
@@ -203,338 +136,64 @@ class BaseExtractor:
         instance = self.model(**content_map)
         return instance
 
-    @async_debug(context="self.content_map.get('source_url')")
-    async def _extract_field(self, field, element, config, index=1):
-        if isinstance(config, list):
-            return await self._perform_operation_series(element, config, index)
-        if isinstance(config, dict):
-            return await self._perform_operation(element, config, index)
-        return config
+    # @async_debug(context="self.content_map.get('source_url')")
+    async def _extract_field(self, field, element, configuration, index=1):
+        """
+        Extract field
 
-    @async_debug(context="self.content_map.get('source_url')")
-    async def _perform_operation_series(self, target, config, index=1):
+        Extract specified field value via given element & configuration.
+
+        I/O:
+        field:          Name of field within content
+        element:        Selenium web driver or element
+        configuration:  Configuration consisting of an operation
+                        dictionary, list of operation dictionaries, or
+                        hard-coded field value
+        index=1:        Index of given element within a series
+        return:         Extracted field value
+        """
+        source = self.content_map.get(self.model.UNIQUE_FIELD) if self.content_map else None
+        if isinstance(configuration, list):
+            return await self._execute_operation_series(
+                field, source, element, configuration, index)
+        if isinstance(configuration, dict):
+            return await self._execute_operation(
+                field, source, element, configuration, index)
+        return configuration
+
+    # @async_debug()
+    async def _execute_operation_series(self, field, source, target, configuration, index=1):
         latest = prior = parent = target
-        for operation_config in config:
-            new_targets = self._select_targets(operation_config, latest, prior, parent)
+        for op_config in configuration:
+            operation = ExtractionOperation.from_configuration(op_config, field, source, self)
+            new_targets = operation._select_targets(latest, prior, parent)
             prior = latest
-            if operation_config.get(self.IS_MULTIPLE_TAG, False):
-                latest = await self._perform_operation(new_targets, operation_config, index)
-                continue
-            for new_target in new_targets:
-                latest = await self._perform_operation(new_target, operation_config, index)
+            if operation.is_multiple:
+                latest = await operation.execute(new_targets, index)
+            else:
+                for new_target in new_targets:
+                    latest = await operation.execute(new_target, index)
         return latest
 
-    @async_debug(context="self.content_map.get('source_url')")
-    async def _perform_operation(self, target, config, index=1):
-        operation = self._configure_operation(config)
+    # @async_debug()
+    async def _execute_operation(self, field, source, target, configuration, index=1):
+        operation = ExtractionOperation.from_configuration(configuration, field, source, self)
+        return await operation.execute(target, index)
 
-        if operation.find_method:
-            new_targets = await self._find_elements(operation, target, index)
-        else:
-            new_targets = enlist(target)
-            if operation.wait:
-                await asyncio.sleep(operation.wait)
-
-        if operation.click:
-            await self._click_elements(new_targets)
-
-        if operation.extract_method:
-            values = await self._extract_values(operation, new_targets)
-        else:
-            values = new_targets
-
-        if operation.get_method:
-            values = await self._get_values(operation, values)
-
-        if operation.parse_method:
-            values = await self._parse_values(operation, values)
-
-        if operation.format_method:
-            values = await self._format_values(operation, values)
-
-        if operation.transform_method:
-            values = await self._transform_values(operation, values)
-
-        return delist(values)
-
-    @async_debug(context="self.content_map.get('source_url')")
-    async def _find_elements(self, operation, element, index=1):
-        element = delist(element)
-        self._validate_element(element)
-        find_method, find_by = self._derive_find_method(operation, element)
-        args = (self._render_references(a) for a in operation.find_args)
-        template = one(args)
-        selector = template.format(index=index)
-
-        if operation.wait_method:
-            explicit_wait = operation.wait or self.WAIT_MAXIMUM_DEFAULT
-            wait = WebDriverWait(self.web_driver, explicit_wait,
-                                 poll_frequency=self.WAIT_POLL_INTERVAL)
-            wait_method_name = operation.wait_method.name.lower()
-            wait_condition_method = getattr(expected_conditions, wait_method_name)
-            locator = (find_by, selector)
-            wait_condition = wait_condition_method(locator)
-            future_elements = self._execute_in_future(wait.until, wait_condition)
-        else:
-            future_elements = self._execute_in_future(find_method, selector)
-
-        new_elements = await future_elements
-        return enlist(new_elements)
-
-    @async_debug(context="self.content_map.get('source_url')")
-    async def _click_elements(self, elements):
-        """
-        Click elements sequentially
-
-        Subsequent operations may require web driver to wait for DOM
-        changes via either implicit or explicit waits.
-        """
-        for element in elements:
-            future_dom = self._execute_in_future(element.click)
-            await future_dom
-
-    @async_debug(context="self.content_map.get('source_url')")
-    async def _extract_values(self, operation, elements):
-        extracted_values = []
-        args = (self._render_references(a) for a in operation.extract_args)
-        field = one(args)
-        extract_method = operation.extract_method
-
-        if extract_method is self.ExtractMethod.GETATTR:
-            for element in elements:
-                func = partial(getattr, element)
-                future_value = self._execute_in_future(func, field)
-                value = await future_value
-                extracted_values.append(value)
-
-        elif (extract_method is self.ExtractMethod.ATTRIBUTE or
-              extract_method is self.ExtractMethod.PROPERTY):
-            extract_method_name = f'get_{extract_method.name.lower()}'
-            for element in elements:
-                func = getattr(element, extract_method_name)
-                future_value = self._execute_in_future(func, field)
-                value = await future_value
-                extracted_values.append(value)
-
-        return extracted_values
-
-    @async_debug(context="self.content_map.get('source_url')")
-    async def _get_values(self, operation, values):
-        retrieved_values = []
-        args = operation.get_args
-
-        if operation.get_method is self.GetMethod.GET:
-            # Ignore current values; get new ones based on get_args
-            tags = one_min(args)
-            retrieved_values = [self._get_by_reference_tag(t) for t in tags]
-
-        return retrieved_values
-
-    @async_debug(context="self.content_map.get('source_url')")
-    async def _parse_values(self, operation, values):
-        parsed_values = []
-        args = (self._render_references(a) for a in operation.parse_args)
-
-        if operation.parse_method is self.ParseMethod.PARSE:
-            templates = one_min(args)
-            for value in values:
-                if not value:
-                    parsed_values.append(value)
-                    continue
-                parsed = None
-                try:
-                    parsed = multi_parse(templates, value)
-                    parsed_values.append(parsed.named[self.VALUE_TAG])
-
-                except (ValueError, AttributeError, KeyError) as e:
-                    PP.pprint(dict(
-                        msg='Extractor parse failure',
-                        type='extractor_parse_failure',
-                        templates=templates, value=value, parsed=parsed,
-                        error=e, extractor=repr(self)))
-
-        elif operation.parse_method is self.ParseMethod.STRPTIME:
-            templates = one_min(args)
-            for value in values:
-                if value is None:
-                    parsed_values.append(None)
-                    continue
-                parsed = DateTimeWrapper.strptime(value, *templates)
-                parsed_values.append(parsed)
-
-        return parsed_values
-
-    @async_debug(context="self.content_map.get('source_url')")
-    async def _format_values(self, operation, values):
-        formatted_values = []
-        args = (self._render_references(a) for a in operation.format_args)
-
-        if operation.format_method is self.FormatMethod.FORMAT:
-            template = one(args)
-            fields = {} if self.content_map is None else self.content_map
-            if self.VALUE_TAG in fields:
-                raise ValueError(
-                    "Reserved word '{self.VALUE_TAG}' cannot be content field")
-            fields[self.VALUE_TAG] = None
-            for value in values:
-                fields[self.VALUE_TAG] = value
-                formatted = template.format(**fields)
-                formatted_values.append(formatted)
-            del fields[self.VALUE_TAG]
-
-        elif operation.format_method is self.FormatMethod.STRFTIME:
-            template = one(args)
-            for value in values:
-                formatted = value.strftime(template)
-                formatted_values.append(formatted)
-
-        return formatted_values
-
-    @async_debug(context="self.content_map.get('source_url')")
-    async def _transform_values(self, operation, values):
-        transformed_values = []
-        args = (self._render_references(a) for a in operation.transform_args)
-
-        if operation.transform_method is self.TransformMethod.EXCISE:
-            snippets = one_min(args)
-            for value in values:
-                cleansed_value = value
-                for snippet in snippets:
-                    cleansed_value = cleansed_value.replace(snippet, '')
-                transformed_values.append(cleansed_value)
-
-        elif operation.transform_method is self.TransformMethod.JOIN:
-            delimiter = one(args)
-            joined_values = delimiter.join(values)
-            transformed_values.append(joined_values)
-
-        elif operation.transform_method is self.TransformMethod.SPLIT:
-            delimiter = one(args)
-            for value in values:
-                split_values = value.split(delimiter)
-                transformed_values.extend(split_values)
-
-        return transformed_values
-
-    @async_debug(context="self.content_map.get('source_url')")
+    # @async_debug(context="self.content_map.get('source_url')")
     async def _update_status(self, status):
         if status is self.status:
             return False
         self.status = ExtractionStatus(status)
         return True
 
-    @sync_debug(context="self.content_map.get('source_url')")
-    def _select_targets(self, config, latest, prior, parent):
-        operation_scope = self._derive_operation_scope(config)
-        if operation_scope is self.OperationScope.LATEST:
-            return enlist(latest)
-        if operation_scope is self.OperationScope.PRIOR:
-            return enlist(prior)
-        if operation_scope is self.OperationScope.PARENT:
-            return [parent]
-        assert operation_scope is self.OperationScope.PAGE
-        return [self.web_driver]  # Selenium WebDriver instance
-
-    @sync_debug(context="self.content_map.get('source_url')")
-    def _derive_operation_scope(self, config):
-        if self.SCOPE_TAG in config:
-            operation_scope = config[self.SCOPE_TAG]
-            return self.OperationScope[operation_scope.upper()]
-
-        return self.OPERATION_SCOPE_DEFAULT
-
-    @sync_debug(context="self.content_map.get('source_url')")
-    def _configure_operation(self, config):
-        is_multiple = config.get(self.IS_MULTIPLE_TAG, False)
-        find_method, find_args = self._configure_method(
-            config, self.FindMethod)
-        wait_method, wait_args = self._configure_method(
-            config, self.WaitMethod)
-        wait = config.get(self.WAIT_TAG, 0)
-        click = config.get(self.CLICK_TAG, False)
-        extract_method, extract_args = self._configure_method(
-            config, self.ExtractMethod)
-        get_method, get_args = self._configure_method(
-            config, self.GetMethod)
-        parse_method, parse_args = self._configure_method(
-            config, self.ParseMethod)
-        format_method, format_args = self._configure_method(
-            config, self.FormatMethod)
-        transform_method, transform_args = self._configure_method(
-            config, self.TransformMethod)
-        return self.ExtractOperation(is_multiple, find_method, find_args,
-                                     wait_method, wait_args,
-                                     wait, click,
-                                     extract_method, extract_args,
-                                     get_method, get_args,
-                                     parse_method, parse_args,
-                                     format_method, format_args,
-                                     transform_method, transform_args)
-
-    def _configure_method(self, config, method_enum):
-        method_keys = method_enum.set(transform=str.lower)
-        method_key = one_max(k for k in config if k in method_keys)
-        if not method_key:
-            return None, None
-        method_type = method_enum[method_key.upper()]
-        method_args = enlist(config[method_key])
-        return method_type, method_args
-
-    @sync_debug(context="self.content_map.get('source_url')")
-    def _derive_find_method(self, operation, element):
-        element_tag = (self.ELEMENTS_TAG if operation.is_multiple
-                       else self.ELEMENT_TAG)
-        method_tag = operation.find_method.name.lower()
-        find_method_name = f'find_{element_tag}_by_{method_tag}'
-        find_method = getattr(element, find_method_name)
-        find_by = getattr(By, operation.find_method.name)
-        return find_method, find_by
-
-    @sync_debug(context="self.content_map.get('source_url')")
-    def _render_references(self, template):
-        while (self.LEFT_REFERENCE_SYMBOL in template and
-               self.RIGHT_REFERENCE_SYMBOL in template):
-            reference = (template.split(self.RIGHT_REFERENCE_SYMBOL)[0]
-                                 .split(self.LEFT_REFERENCE_SYMBOL)[-1])
-            if not reference:
-                return template
-            reference_tag = self.REFERENCE_TEMPLATE.format(reference)
-            value = self._get_by_reference(reference) or ''
-            template = template.replace(reference_tag, str(value))
-
-        return template
-
-    @sync_debug(context="self.content_map.get('source_url')")
-    def _get_by_reference_tag(self, reference_tag):
-        parsed = parse(self.REFERENCE_TEMPLATE, reference_tag)
-        if not parsed:
-            raise ValueError(f"parse('{self.REFERENCE_TEMPLATE}', "
-                             f"'{reference_tag}') failed to find match")
-        reference = parsed.fixed[0]
-        return self._get_by_reference(reference)
-
-    @sync_debug(context="self.content_map.get('source_url')")
-    def _get_by_reference(self, reference):
-        components = reference.split(self.REFERENCE_DELIMITER)
-        field_name = components[0]
-        value = self.content_map[field_name]
-        if value:
-            for component in components[1:]:
-                value = getattr(value, component)
-        return value
-
-    def _validate_element(self, value):
-        if not isinstance(value, (self.web_driver_class, WebElement)):
-            raise TypeError(f'Expected driver or element. Received: {value}')
-
-    @sync_debug(context="self.content_map.get('source_url')")
+    # @sync_debug(context="self.content_map.get('source_url')")
     def _execute_in_future(self, func, *args, **kwds):
         """Run in executor with kwds support & default loop/executor"""
         return run_in_executor(self.loop, None, func, *args, **kwds)
 
     # Initialization Methods
 
-    @sync_debug()
     def _form_file_path(self, base, directory):
         return os.path.join(base, directory, self.FILE_NAME)
 
@@ -543,7 +202,6 @@ class BaseExtractor:
         with open(file_path) as stream:
             return yaml.safe_load(stream)
 
-    @sync_debug()
     def _configure_delay(self, configuration):
         delay_config = self.DELAY_DEFAULTS._asdict()
         if self.DELAY_TAG not in configuration:
@@ -558,15 +216,13 @@ class BaseExtractor:
             PP.pprint(dict(
                 msg='Unsupported keys in delay configuration',
                 type='unsupported_keys_in_delay_configuration',
-                config=delay_overrides, unsupported=unsupported, extractor=repr(self)))
+                configuration=delay_overrides, unsupported=unsupported, extractor=repr(self)))
 
         return delay_config
 
-    @sync_debug()
     def _derive_web_driver_class(self, web_driver_type):
         return getattr(webdriver, web_driver_type.name.capitalize())
 
-    @sync_debug()
     def _derive_web_driver_kwargs(self, web_driver_type):
         secret_service = SecretService(web_driver_type.name)
         user_agent = secret_service.random
@@ -599,7 +255,8 @@ class BaseExtractor:
         self.web_driver_kwargs = self._derive_web_driver_kwargs(self.web_driver_type)
         self.web_driver = None
 
-        self.content_map = None  # Temporary storage for content being extracted
+        self.content_map = None  # Temporary storage for extracted fields
+        self.extracted_content = None  # Permanent storage for extracted content
 
     def __repr__(self):
         class_name = self.__class__.__name__
@@ -627,8 +284,16 @@ class SourceExtractor(BaseExtractor):
             await asyncio.sleep(self.initial_delay)
         return await super().extract()
 
-    @async_debug()
-    async def _extract_page(self, *args, **kwds):
+    # @async_debug()
+    async def _perform_extraction(self, url=None):
+        """Perform extraction by fetching & extracting page given URL"""
+        url = url or self.page_url
+        await self._perform_page_fetch(url)
+        await self._perform_page_extraction()
+
+    # @async_debug()
+    async def _perform_page_extraction(self, *args, **kwds):
+        """Extract page for single content source"""
         try:
             content = await self._extract_content(self.web_driver,
                                                   self.content_configuration,
@@ -636,13 +301,13 @@ class SourceExtractor(BaseExtractor):
         except Exception as e:
             PP.pprint(dict(
                 msg='Extract content failure', type='extract_content_failure',
-                error=e, extractor=repr(self), config=self.content_configuration))
+                error=e, extractor=repr(self), configuration=self.content_configuration))
             raise
         else:
+            self.extracted_content = content
             await self.cache.store_content(content)
-            return content
 
-    @sync_debug()
+    # @sync_debug()
     @classmethod
     def provision_extractors(cls, model, urls=None, delay_configuration=None,
                              web_driver_type=None, loop=None):
@@ -676,7 +341,6 @@ class SourceExtractor(BaseExtractor):
             except Exception as e:
                 print(e)  # TODO: Replace with logging
 
-    @sync_debug()
     def _derive_directory(self, model, page_url):
         base_directory = model.BASE_DIRECTORY
         clipped_url = self._clip_url(page_url)
@@ -704,7 +368,6 @@ class SourceExtractor(BaseExtractor):
 
         raise FileNotFoundError(f'Source extractor configuration not found for {page_url}')
 
-    @sync_debug()
     def _clip_url(self, url):
         start = 0
         if url.startswith(self.HTTPS_TAG):
@@ -756,49 +419,68 @@ class MultiExtractor(BaseExtractor):
     EXTRACT_SOURCES_TAG = 'extract_sources'
     ITEMS_TAG = 'items'
 
-    @async_debug()
+    # @async_debug()
     async def _perform_extraction(self, url=None):
+        """
+        Perform extraction
+
+        Given a URL, fetch all pages up to the configured maximum and
+        extract all available content.
+        """
         url = url or self.page_url
-        results = await super()._perform_extraction(url, page=1)
+        await self._perform_page_fetch(url)
+        await self._perform_page_extraction(page=1)
 
         pagination_config = self.configuration.get(self.PAGINATION_TAG)
-        if not pagination_config:
-            return results
 
-        if self.pages < 2:
-            return results
+        if pagination_config and self.pages > 1:
+            via_url = bool(self.next_page_url_configuration)
+            more_pages = True
+            page = 2
 
-        next_page_via_url = bool(self.next_page_url_configuration)
-        updated_results = await self._extract_following_pages(
-            self.next_page_configuration, next_page_via_url)
+            while more_pages:
+                more_pages = await self._perform_next_page_extraction(page, via_url)
+                page += 1
 
-        return updated_results if updated_results else results
+    # @async_debug()
+    async def _perform_next_page_extraction(self, page, via_url):
+        """
+        Perform next page extraction
 
-    @async_debug()
-    async def _extract_following_pages(self, config, via_url=False):
-        updated_results = None
-        page, pages = 1, self.pages
-        while page < pages:
-            try:
-                next_page_result = await self._extract_field(
-                    self.NEXT_PAGE_TAG, self.web_driver, config, page)
-            except NoSuchElementException:
-                break  # Last page always fails to find next element
+        Load and extract next page via next page operation. Loading the
+        page involves either clicking a link (i.e. "next") or extracting
+        a URL that is subsequently fetched.
 
-            page += 1
-            delay = human_dwell_time(**self.delay_configuration)
-            await asyncio.sleep(delay)
-            url = next_page_result if via_url else None
-            updated_results = await super()._perform_extraction(url, page=page)
+        I/O:
+        page:     Page number of results to be extracted
+        via_url:  True if a page must be fetched via an extracted URL
+        return:   True if another page should be extracted, else False
+        """
+        try:
+            next_page_result = await self._extract_field(
+                self.NEXT_PAGE_TAG, self.web_driver, self.next_page_configuration, page - 1)
+        except NoSuchElementException:
+            return False  # Last page always fails to find next element
 
-        return updated_results
+        delay = human_dwell_time(**self.delay_configuration)
+        await asyncio.sleep(delay)
 
-    @async_debug()
-    async def _extract_page(self, page=1):
-        return await self._extract_multiple(page=page)
+        # TODO: Simplify logic by allowing an operation to fetch a page
+        if via_url:
+            await self._perform_page_fetch(url=next_page_result)
 
-    @async_debug()
-    async def _extract_multiple(self, page=1):
+        await self._perform_page_extraction(page=page)
+        return page < self.pages
+
+    # @async_debug()
+    async def _perform_page_extraction(self, page=1):
+        """
+        Perform page extraction
+
+        Extract page of multiple content items given page index and
+        return ordered dictionary of all content extracted by this
+        extractor instance to date.
+        """
         content_config = self.content_configuration
         items_config = self.items_configuration
         unique_field = self.model.UNIQUE_FIELD
@@ -819,37 +501,37 @@ class MultiExtractor(BaseExtractor):
                     PP.pprint(dict(
                         msg='Extract content failure', type='extract_content_failure',
                         error=e, page=page, index=index, rank=rank,
-                        extractor=repr(self), config=content_config))
+                        extractor=repr(self), configuration=content_config))
 
-                if unique_key in self.item_results:
+                if unique_key in self.extracted_content:
                     PP.pprint(dict(
                         msg='Unique key collision', type='unique_key_collision',
                         field=unique_field, unique_key=unique_key,
-                        old_content=self.item_results[unique_key], new_content=content,
+                        old_content=self.extracted_content[unique_key], new_content=content,
                         page=page, index=index, rank=rank,
-                        extractor=repr(self), config=content_config))
+                        extractor=repr(self), configuration=content_config))
 
+                # TODO: store all results for a page at once instead of incrementally
                 await self.cache.store_search_result(content, rank)
-                self.item_results[unique_key] = content
+                self.extracted_content[unique_key] = content
 
         else:
             PP.pprint(dict(
                 msg='Extract item results failure', type='extract_item_results_failure',
-                extractor=repr(self), config=items_config))
+                extractor=repr(self), configuration=items_config))
 
         if self.configuration.get(self.EXTRACT_SOURCES_TAG, True):
             if unique_field != self.SOURCE_URL_TAG:
                 raise ValueError('Unique field must be '
                                  f"'{self.SOURCE_URL_TAG}' to extract sources")
             # PRELIMINARY
-            source_results = await self._extract_sources(self.item_results)
-            await self._combine_results(self.item_results, source_results)
+            source_results = await self._extract_sources(self.extracted_content)
+            await self._combine_results(self.extracted_content, source_results)
 
-        return self.item_results
-
-    @async_debug()
-    async def _extract_sources(self, item_results):
-        source_urls = [content.source_url for content in item_results.values()]
+    # @async_debug()
+    async def _extract_sources(self, extracted_content):
+        """Extract sources given item results"""
+        source_urls = [content.source_url for content in extracted_content.values()]
         source_extractors = SourceExtractor.provision_extractors(
             self.model, source_urls, self.delay_configuration,
             self.web_driver_type, self.loop)
@@ -860,24 +542,25 @@ class MultiExtractor(BaseExtractor):
         source_results = [task.result() for task in done]
         return source_results
 
-    @async_debug()
-    async def _combine_results(self, item_results, source_results):
+    # @async_debug()
+    async def _combine_results(self, extracted_content, source_results):
+        """Combine results extracted from search with source content"""
         for source_result in source_results:
             source_url = source_result.source_url
-            item_result = item_results[source_url]
+            content_result = extracted_content[source_url]
             source_overrides = ((k, v) for k, v in source_result.items() if v is not None)
             for field, source_value in source_overrides:
-                item_value = getattr(item_result, field)
+                item_value = getattr(content_result, field)
                 if item_value is not None and item_value != source_value:
                     PP.pprint(dict(
-                        msg='Overwriting item value from source',
-                        type='overwriting_item_value_from_source',
+                        msg='Overwriting content field value from source',
+                        type='overwriting_content_field_value_from_source',
                         extractor=repr(self), field=field,
                         item_value=item_value, source_value=source_value))
 
-                setattr(item_result, field, source_value)
+                setattr(content_result, field, source_value)
 
-    @async_debug(context="self.content_map.get('source_url')")
+    # @async_debug(context="self.content_map.get('source_url')")
     async def _update_status(self, status):
         """Update extractor/overall status, caching as necessary"""
         if status.value < self.status.value:
@@ -890,7 +573,7 @@ class MultiExtractor(BaseExtractor):
         await self.cache.store_extraction_status(status, overall_status, has_changed)
         return True
 
-    @async_debug(context="self.content_map.get('source_url')")
+    # @async_debug(context="self.content_map.get('source_url')")
     async def _apply_status_change(self, status):
         """Apply status change; return overall status & has_changed"""
         old_overall_status = await self._determine_overall_status()
@@ -902,7 +585,7 @@ class MultiExtractor(BaseExtractor):
         has_changed = new_overall_status is not old_overall_status
         return new_overall_status, has_changed
 
-    @async_debug(context="self.content_map.get('source_url')")
+    # @async_debug(context="self.content_map.get('source_url')")
     async def _determine_overall_status(self):
         """Determine overall extraction status of the cohort"""
         minimum = min(self.cohort_status_values)
@@ -920,7 +603,7 @@ class MultiExtractor(BaseExtractor):
         """Cohort status values are emitted by the returned generator"""
         return (extractor.status.value for extractor in self.cohort.values())
 
-    @sync_debug()
+    # @sync_debug()
     @classmethod
     def provision_extractors(cls, model, search_data=None, web_driver_type=None, loop=None):
         """
@@ -932,18 +615,20 @@ class MultiExtractor(BaseExtractor):
         keyed by directory.
 
         I/O:
-        model:                  Any Extractable content class (via
-                                Extractable mixin); defines base config
-                                directory and fields to extract.
+        model:                  Any Extractable (mixin) content class;
+                                defines base configuration directory,
+                                fields to extract, and unique field.
 
         search_data=None:       Ordered dictionary of all search terms
-                                defined by url configurations. Used to
-                                render urls and form hash keys.
+                                used to render urls and form hash keys.
+                                Keys specify 'topics' whose values are
+                                queried via 'AND'. Values are 'terms'
+                                that are queried via 'OR' when multiple.
 
                                 Example:
                                     OrderedDict(problem='Homelessness',
                                                 org=None,
-                                                geo='Texas')
+                                                geo=['Texas', 'TX'])
 
         web_driver_type=None:   WebDriverType, e.g. CHROME (default)
         loop=None:              Event loop (optional)
@@ -1007,7 +692,6 @@ class MultiExtractor(BaseExtractor):
 
         return self._form_url_clause(url_template, url_config, encoded_search_data)
 
-    @sync_debug()
     def _encode_search_data(self, key, value):
         """Return key & URL-encoded value, a list of strings or None"""
         if value is None:
@@ -1019,7 +703,6 @@ class MultiExtractor(BaseExtractor):
         raise TypeError(f"Expected string or list/tuple for '{key}'; "
                         f"received '{type(value)}': {value}")
 
-    @sync_debug()
     def _form_url_clause(self, template, url_config, search_data, topic=None, term=None, index=1):
         """
         Form URL clause
@@ -1037,7 +720,7 @@ class MultiExtractor(BaseExtractor):
         return:       rendered URL template
         raise:        NoneValueError if token value is None term
                       ValueError if unknown token
-                      TypeError if unexpected type in config
+                      TypeError if unexpected type in configuration
         """
         rendered = template
         tokens = self._find_tokens(template)
@@ -1071,9 +754,8 @@ class MultiExtractor(BaseExtractor):
 
         return rendered
 
-    @sync_debug()
     def _form_url_clause_series(self, series_config, url_config, search_data, topic=None):
-        """Form URL clause series based on series config"""
+        """Form URL clause series based on series configuration"""
         series = self.URLClauseSeries[series_config[self.SERIES_TAG]]
         templates = enlist(series_config[self.TEMPLATES_TAG])
         delimiter = series_config[self.DELIMITER_TAG]
@@ -1101,7 +783,6 @@ class MultiExtractor(BaseExtractor):
 
         return delimiter.join(clauses)
 
-    @sync_debug()
     def _find_tokens(self, template):
         """Find & yield tokens in template as defined by {}"""
         length = len(template)
@@ -1119,7 +800,6 @@ class MultiExtractor(BaseExtractor):
                 start = new_start
             yield template[start + 1:end]
 
-    @sync_debug()
     def _get_relevant_search_terms(self, token, topic, search_data):
         """Get relevant search terms based on token and topic"""
         topic = token if token in search_data else topic
@@ -1137,6 +817,7 @@ class MultiExtractor(BaseExtractor):
         self.page_url = self._form_page_url(self.configuration, self.search_data)
 
         pagination_config = self.configuration.get(self.PAGINATION_TAG)
+
         if pagination_config:
             self.pages = pagination_config.get(self.PAGES_TAG, float('Inf'))
             self.page_size = pagination_config[self.PAGE_SIZE_TAG]
@@ -1149,7 +830,7 @@ class MultiExtractor(BaseExtractor):
             self.next_page_click_configuration = self.next_page_url_configuration = None
 
         self.items_configuration = self.configuration[self.ITEMS_TAG]
-        self.item_results = OrderedDict()  # Store results after extraction
+        self.extracted_content = OrderedDict()
 
         self.cohort = None  # Only set after instantiation
         self.status = ExtractionStatus.INITIALIZED

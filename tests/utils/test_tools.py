@@ -2,7 +2,45 @@
 # -*- coding: utf-8 -*-
 import pytest
 
-from utils.tools import get_related_json, ischildclass
+from utils.tools import derive_domain, get_related_json, ischildclass
+
+
+FULL_URL = 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5452388/'
+CHECK_DOMAIN = 'www.ncbi.nlm.nih.gov'
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ('idx', 'url',                                                  'base',        'check'), [
+    (0,     'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5452388/', None,         CHECK_DOMAIN),
+    (1,           '//www.ncbi.nlm.nih.gov/pmc/articles/PMC5452388/', None,         CHECK_DOMAIN),
+    (2,             'www.ncbi.nlm.nih.gov/pmc/articles/PMC5452388/', None,         CHECK_DOMAIN),
+    (3,     'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5452388',  None,         CHECK_DOMAIN),
+    (4,     'https://www.ncbi.nlm.nih.gov/',                         None,         CHECK_DOMAIN),
+    (5,     'https://www.ncbi.nlm.nih.gov',                          None,         CHECK_DOMAIN),
+    (6,             'www.ncbi.nlm.nih.gov/pmc/articles/PMC5452388',  None,         CHECK_DOMAIN),
+    (7,             'www.ncbi.nlm.nih.gov/',                         None,         CHECK_DOMAIN),
+    (8,             'www.ncbi.nlm.nih.gov',                          None,         CHECK_DOMAIN),
+    (9,                                 '/pmc/articles/PMC5452388/', CHECK_DOMAIN, CHECK_DOMAIN),
+    (10,                                '/pmc/articles/PMC5452388/', FULL_URL,     CHECK_DOMAIN),
+    (11,                                '/pmc/articles/PMC5452388/', None,         ValueError),
+    (12,                                '/pmc/articles/PMC5452388/', '',           ValueError),
+    (13,                                '/pmc/articles/PMC5452388/', '/pmc',       ValueError),
+    (14,                                None,                        None,         ValueError),
+    (15,                                '',                          None,         ValueError),
+])
+def test_derive_domain(idx, url, base, check):
+    """Test derive domain under different scenarios"""
+    if ischildclass(check, Exception):
+        with pytest.raises(check):
+            value = derive_domain(url, base)
+
+    else:
+        value = derive_domain(url, base)
+        if check is None or isinstance(check, dict):
+            assert value is check
+        else:
+            assert value == check
+
 
 sun = dict(name='Sun')
 

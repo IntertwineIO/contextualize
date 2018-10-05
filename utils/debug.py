@@ -118,6 +118,8 @@ def sync_debug(offset=None, indent=4, context=None):
     """
     @wrapt.decorator
     def sync_debug_wrapper(wrapped, instance, args, kwargs):
+        if asyncio.iscoroutinefunction(wrapped):
+            raise TypeError('Function decorated with sync_debug must not be async.')
         loop = asyncio.get_event_loop()
         offset_space = derive_offset_space(offset, indent)
         width = WIDTH - len(offset_space)
@@ -160,6 +162,8 @@ def async_debug(offset=None, indent=4, context=None):
     """
     @wrapt.decorator
     async def async_debug_wrapper(wrapped, instance, args, kwargs):
+        if not asyncio.iscoroutinefunction(wrapped):
+            raise TypeError('Function decorated with async_debug must be async.')
         loop = asyncio.get_event_loop()
         offset_space = derive_offset_space(offset, indent)
         width = WIDTH - len(offset_space)
