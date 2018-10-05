@@ -41,7 +41,7 @@ class Color:
     (Decimal('2.718281828459'), '2.718281828459'),
     (Color.AdditivePrimary.GREEN, 'test_serialization.Color.AdditivePrimary.GREEN'),
     (Color.SubtractivePrimary.YELLOW, 'test_serialization.Color.SubtractivePrimary.YELLOW'),
-    (BaseExtractor.WebDriverType.CHROME, 'extraction.extractor.BaseExtractor.WebDriverType.CHROME'),
+    (BaseExtractor.WebDriverBrand.CHROME, 'extraction.extractor.BaseExtractor.WebDriverBrand.CHROME'),
 ])
 def test_serialize_nonstandard(value, check):
     """Test serialize "nonstandard" (i.e. not handled by json.dumps)"""

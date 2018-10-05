@@ -161,7 +161,7 @@ class ExtractionOperation:
         selector = template.format(index=index)
 
         if self.wait_method:
-            explicit_wait = self.wait or settings.WAIT_MAXIMUM_DEFAULT
+            explicit_wait = self.wait or settings.WAIT_EXPLICIT_DEFAULT
             wait = WebDriverWait(self.web_driver, explicit_wait,
                                  poll_frequency=settings.WAIT_POLL_INTERVAL)
             wait_method_name = self.wait_method.name.lower()
@@ -373,7 +373,7 @@ class ExtractionOperation:
         if self.scope is self.Scope.PARENT:
             return [parent]
         assert self.scope is self.Scope.PAGE
-        return [self.web_driver]  # Selenium WebDriver instance
+        return [self.web_driver]  # Selenium webdriver instance
 
     def _execute_in_future(self, func, *args, **kwds):
         """Run in executor with kwds support & default loop/executor"""

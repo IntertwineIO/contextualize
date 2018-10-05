@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import asyncio
+import datetime
 import os
 import urllib
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict, namedtuple
 from functools import lru_cache
+from itertools import chain
 from pathlib import Path
 
 from ruamel import yaml
@@ -22,7 +24,7 @@ from utils.async import run_in_executor
 from utils.debug import async_debug, sync_debug
 from utils.enum import FlexEnum
 from utils.statistics import HumanDwellTime, human_dwell_time, human_selection_shuffle
-from utils.tools import PP, enlist, isnonstringsequence, one, xor_constrain
+from utils.tools import PP, derive_domain, enlist, isnonstringsequence, one, xor_constrain
 
 
 class BaseExtractor:
@@ -36,8 +38,10 @@ class BaseExtractor:
     SOURCE_URL_TAG = 'source_url'
     WAIT_TAG = 'wait'
 
-    WebDriverType = FlexEnum('WebDriverType', 'CHROME FIREFOX')
-    WEB_DRIVER_TYPE_DEFAULT = WebDriverType.CHROME
+    WebDriverBrand = FlexEnum('WebDriverBrand', 'CHROME FIREFOX')
+    WEB_DRIVER_BRAND_DEFAULT = WebDriverBrand.CHROME
+
+    WebDriverInfo = namedtuple('WebDriverInfo', 'brand type kwargs')
 
     DELAY_DEFAULTS = HumanDwellTime(
         mu=0, sigma=0.5, base=1, multiplier=1, minimum=1, maximum=3)
@@ -46,52 +50,81 @@ class BaseExtractor:
 
     @async_debug()
     async def extract(self):
+        """
+        Extract
+
+        Extract content via the configured extractor. Return content if
+        extractor is enabled and extraction is successful, else None.
+        """
         if not self.is_enabled:
             PP.pprint(dict(
                 msg='WARNING: extracting with disabled extractor',
                 type='extractor_disabled_warning', extractor=repr(self)))
             return
         try:
-            # TODO: Create DriverPool with context manager to provision
-            await self._provision_web_driver()
+            # TODO: Add WebDriverPool with context manager to provision
+            if not self.web_driver:
+                await self._acquire_web_driver()
             await self._update_status(ExtractionStatus.STARTED)
             await self._perform_extraction(self.page_url)
+            await self._update_status(ExtractionStatus.COMPLETED)
             return self.extracted_content
         finally:
-            await self._update_status(ExtractionStatus.COMPLETED)
-            await self._dispose_web_driver()
+            if not self.reuse_web_driver:
+                await self._release_web_driver()
 
-    # @async_debug()
-    async def _provision_web_driver(self):
+    @async_debug()
+    async def _acquire_web_driver(self):
+        """Acquire web driver"""
+        implicit_wait = self.configuration.get(self.WAIT_TAG, settings.WAIT_IMPLICIT_DEFAULT)
+        self.web_driver = await self._provision_web_driver(
+            web_driver_type=self.web_driver_type,
+            web_driver_kwargs=self.web_driver_kwargs,
+            implicit_wait=implicit_wait,
+            loop=self.loop)
+
+    @async_debug()
+    async def _release_web_driver(self):
+        """Release web driver"""
+        await self._deprovision_web_driver(web_driver=self.web_driver, loop=self.loop)
+
+    @async_debug()
+    @classmethod
+    async def _provision_web_driver(cls, web_driver_brand=None, web_driver_type=None,
+                                    web_driver_kwargs=None, implicit_wait=None, loop=None):
         """Provision web driver"""
-        future_web_driver = self._execute_in_future(self.web_driver_class,
-                                                    **self.web_driver_kwargs)
-        self.web_driver = await future_web_driver
-        max_implicit_wait = self.configuration.get(self.WAIT_TAG, settings.WAIT_MAXIMUM_DEFAULT)
+        loop = loop or asyncio.get_event_loop()
+        _, web_driver_type, web_driver_kwargs = cls._derive_web_driver_info(
+            web_driver_brand, web_driver_type, web_driver_kwargs)
+
+        web_driver = await run_in_executor(loop, None, web_driver_type, **web_driver_kwargs)
         # Configure web driver to allow waiting on each operation
-        self.web_driver.implicitly_wait(max_implicit_wait)
+        implicit_wait = settings.WAIT_IMPLICIT_DEFAULT if implicit_wait is None else implicit_wait
+        web_driver.implicitly_wait(implicit_wait)
+        web_driver.last_fetch_timestamp = None
+        return web_driver
 
-    # @async_debug()
-    async def _dispose_web_driver(self):
-        """Dispose web driver, cleaning it up properly"""
-        if self.web_driver:
-            future_web_driver_quit = self._execute_in_future(self.web_driver.quit)
-            await future_web_driver_quit
+    @async_debug()
+    @classmethod
+    async def _deprovision_web_driver(cls, web_driver, loop=None):
+        """Deprovision web driver"""
+        loop = loop or asyncio.get_event_loop()
+        if web_driver:
+            await run_in_executor(loop, None, web_driver.quit)
 
-    # @async_debug()
+    @async_debug()
     async def _perform_page_fetch(self, url):
-        """Fetch page at given URL by running in executor"""
+        """Perform page fetch of given URL by running in executor"""
         future_page = self._execute_in_future(self.web_driver.get, url)
+        self.web_driver.last_fetch_timestamp = datetime.datetime.utcnow()
         await future_page
 
-    # @async_debug()
     async def _perform_extraction(self, url=None, page=1):
-        """Perform extraction by fetching & extracting page given URL"""
+        """Perform extraction (abstract method)"""
         raise NotImplementedError
 
-    # @async_debug()
     async def _perform_page_extraction(self, *args, **kwds):
-        """Extract page (abstract method)"""
+        """Perform page extraction (abstract method)"""
         raise NotImplementedError
 
     # @async_debug()
@@ -110,7 +143,10 @@ class BaseExtractor:
         return:         Instance of content model (e.g. ResearchArticle)
         """
         self.content_map = content_map = OrderedDict(kwds)
-        for field in self.model.fields():
+        # Allow field to be otherwise set without overwriting
+        fields_to_extract = (field for field in self.model.fields() if field not in content_map)
+
+        for field in fields_to_extract:
             try:
                 field_config = configuration[field]
 
@@ -119,10 +155,6 @@ class BaseExtractor:
                 PP.pprint(dict(
                     msg='Extract field configuration missing', type='extract_field_config_missing',
                     error=e, field=field, content_map=content_map, extractor=repr(self)))
-
-            # Allow field to be set by other field without overwriting
-            if field_config is None and content_map.get(field):
-                continue
 
             try:
                 content_map[field] = await self._extract_field(field, element, field_config, index)
@@ -141,7 +173,7 @@ class BaseExtractor:
         """
         Extract field
 
-        Extract specified field value via given element & configuration.
+        Extract specified field via given element and configuration.
 
         I/O:
         field:          Name of field within content
@@ -163,9 +195,28 @@ class BaseExtractor:
 
     # @async_debug()
     async def _execute_operation_series(self, field, source, target, configuration, index=1):
+        """
+        Execute operation series
+
+        Execute series of operations to extract the specified field of
+        the given content source based on the target and configuration.
+
+        I/O:
+        field:          Name of field within content
+        source:         Unique field for content item (e.g. source_url)
+        target:         Selenium web driver or element
+        configuration:  A list of operation dictionaries
+        index=1:        Index of given content element within a series
+        return:         Extracted field value
+        """
         latest = prior = parent = target
-        for op_config in configuration:
-            operation = ExtractionOperation.from_configuration(op_config, field, source, self)
+        for operation_config in configuration:
+            operation = ExtractionOperation.from_configuration(
+                configuration=operation_config,
+                field=field,
+                source=source,
+                extractor=self)
+
             new_targets = operation._select_targets(latest, prior, parent)
             prior = latest
             if operation.is_multiple:
@@ -177,11 +228,31 @@ class BaseExtractor:
 
     # @async_debug()
     async def _execute_operation(self, field, source, target, configuration, index=1):
-        operation = ExtractionOperation.from_configuration(configuration, field, source, self)
+        """
+        Execute operation
+
+        Execute operation to extract the specified field of the given
+        content source based on the target and configuration.
+
+        I/O:
+        field:          Name of field within content
+        source:         Unique field for content item (e.g. source_url)
+        target:         Selenium web driver or element
+        configuration:  An operation dictionary
+        index=1:        Index of given content element within a series
+        return:         Extracted field value
+        """
+        operation = ExtractionOperation.from_configuration(
+            configuration=configuration,
+            field=field,
+            source=source,
+            extractor=self)
+
         return await operation.execute(target, index)
 
     # @async_debug(context="self.content_map.get('source_url')")
     async def _update_status(self, status):
+        """Update status in memory only"""
         if status is self.status:
             return False
         self.status = ExtractionStatus(status)
@@ -195,14 +266,17 @@ class BaseExtractor:
     # Initialization Methods
 
     def _form_file_path(self, base, directory):
+        """Form file path by combining base and directory"""
         return os.path.join(base, directory, self.FILE_NAME)
 
     @lru_cache(maxsize=None, typed=False)
     def _marshall_configuration(self, file_path):
+        """Marshall configuration from file, given a file path"""
         with open(file_path) as stream:
             return yaml.safe_load(stream)
 
     def _configure_delay(self, configuration):
+        """Return delay configuration based on defaults and extractor configuration"""
         delay_config = self.DELAY_DEFAULTS._asdict()
         if self.DELAY_TAG not in configuration:
             return delay_config
@@ -220,23 +294,49 @@ class BaseExtractor:
 
         return delay_config
 
-    def _derive_web_driver_class(self, web_driver_type):
-        return getattr(webdriver, web_driver_type.name.capitalize())
+    @classmethod
+    def _derive_web_driver_brand(cls, web_driver_type=None):
+        """Derive web driver brand, given a web driver type"""
+        if web_driver_type:
+            module_path = web_driver_type.__module__
+            web_driver_brand_name = module_path.split('.')[-2]
+            return cls.WebDriverBrand.cast(web_driver_brand_name)
+        return cls.WEB_DRIVER_BRAND_DEFAULT
 
-    def _derive_web_driver_kwargs(self, web_driver_type):
-        secret_service = SecretService(web_driver_type.name)
+    @classmethod
+    def _derive_web_driver_type(cls, web_driver_brand=None):
+        """Derive web driver type, given a web driver brand enum"""
+        web_driver_brand = web_driver_brand or cls.WEB_DRIVER_BRAND_DEFAULT
+        return getattr(webdriver, web_driver_brand.name.capitalize())
+
+    @classmethod
+    def _derive_web_driver_kwargs(cls, web_driver_brand=None):
+        """Derive web driver kwargs, given a web driver brand enum"""
+        web_driver_brand = web_driver_brand or cls._derive_web_driver_brand()
+        secret_service = SecretService(web_driver_brand.name)
         user_agent = secret_service.random
-        if web_driver_type is self.WebDriverType.CHROME:
+        if web_driver_brand is cls.WebDriverBrand.CHROME:
             chrome_options = webdriver.ChromeOptions()
             # chrome_options.add_argument('--headless')
             chrome_options.add_argument('--disable-extensions')
             chrome_options.add_argument('--disable-infobars')
             chrome_options.add_argument(f'user-agent={user_agent}')
             return dict(chrome_options=chrome_options)
-        elif web_driver_type is self.WebDriverType.FIREFOX:
+        elif web_driver_brand is cls.WebDriverBrand.FIREFOX:
             raise NotImplementedError('Firefox not yet supported')
 
-    def __init__(self, model, directory, web_driver_type=None, loop=None):
+    @classmethod
+    def _derive_web_driver_info(cls, web_driver_brand=None, web_driver_type=None,
+                                web_driver_kwargs=None, web_driver=None):
+        """Derive web driver info from any subset of info or web_driver"""
+        web_driver_type = type(web_driver) if web_driver else web_driver_type
+        web_driver_brand = web_driver_brand or cls._derive_web_driver_brand(web_driver_type)
+        web_driver_type = web_driver_type or cls._derive_web_driver_type(web_driver_brand)
+        web_driver_kwargs = web_driver_kwargs or cls._derive_web_driver_kwargs(web_driver_brand)
+        return cls.WebDriverInfo(web_driver_brand, web_driver_type, web_driver_kwargs)
+
+    def __init__(self, model, directory, web_driver=None, web_driver_brand=None,
+                 reuse_web_driver=None, loop=None):
         self.loop = loop or asyncio.get_event_loop()
         self.created_timestamp = self.loop.time()
         self.status = None
@@ -250,10 +350,12 @@ class BaseExtractor:
         self.delay_configuration = self._configure_delay(self.configuration)
         self.content_configuration = self.configuration[self.CONTENT_TAG]
 
-        self.web_driver_type = web_driver_type or self.WEB_DRIVER_TYPE_DEFAULT
-        self.web_driver_class = self._derive_web_driver_class(self.web_driver_type)
-        self.web_driver_kwargs = self._derive_web_driver_kwargs(self.web_driver_type)
-        self.web_driver = None
+        self.web_driver = web_driver
+        self.reuse_web_driver = bool(web_driver) if reuse_web_driver is None else reuse_web_driver
+        web_driver_info = self._derive_web_driver_info(web_driver_brand, None, None, web_driver)
+        self.web_driver_brand = web_driver_info.brand
+        self.web_driver_type = web_driver_info.type
+        self.web_driver_kwargs = web_driver_info.kwargs
 
         self.content_map = None  # Temporary storage for extracted fields
         self.extracted_content = None  # Permanent storage for extracted content
@@ -279,21 +381,15 @@ class SourceExtractor(BaseExtractor):
     QUERY_STRING_DELIMITER = '?'
 
     @async_debug()
-    async def extract(self):
-        if self.initial_delay:
-            await asyncio.sleep(self.initial_delay)
-        return await super().extract()
-
-    # @async_debug()
     async def _perform_extraction(self, url=None):
         """Perform extraction by fetching & extracting page given URL"""
         url = url or self.page_url
         await self._perform_page_fetch(url)
         await self._perform_page_extraction()
 
-    # @async_debug()
+    @async_debug()
     async def _perform_page_extraction(self, *args, **kwds):
-        """Extract page for single content source"""
+        """Perform page extraction for single content source"""
         try:
             content = await self._extract_content(self.web_driver,
                                                   self.content_configuration,
@@ -307,34 +403,159 @@ class SourceExtractor(BaseExtractor):
             self.extracted_content = content
             await self.cache.store_content(content)
 
-    # @sync_debug()
+    @async_debug()
     @classmethod
-    def provision_extractors(cls, model, urls=None, delay_configuration=None,
-                             web_driver_type=None, loop=None):
+    async def extract_in_parallel(cls, model, urls_by_domain, search_domain,
+                                  search_web_driver=None, delay_configuration=None, loop=None):
+        """
+        Extract in parallel
+
+        Extract content in parallel from multiple domains. For  each
+        domain, source URLs are extracted in series with delays.
+
+        I/O:
+        model:                      Extractable content class
+
+        urls_by_domain:             Dict of URL lists keyed by domain
+
+        search_domain:              Domain of search page for urls
+
+        search_web_driver=None:     Selenium webdriver used by search;
+                                    urls matching the search domain use
+                                    the search web driver
+
+        delay_configuration=None:   Configuration to stagger extractions
+
+        loop=None:                  Event loop (optional)
+
+        return:                     List of extracted content instances
+        """
+        web_driver_brand = cls._derive_web_driver_brand(type(search_web_driver))
+
+        futures = [cls.extract_in_series(
+                   model=model,
+                   urls=urls,
+                   web_driver=search_web_driver if domain == search_domain else None,
+                   web_driver_brand=web_driver_brand,
+                   delay_configuration=delay_configuration,
+                   loop=loop)
+                   for domain, urls in urls_by_domain.items()]
+
+        if not futures:
+            return []
+        done, pending = await asyncio.wait(futures)
+        series_results = [task.result() for task in done]
+        source_results = chain(*series_results)
+        return source_results
+
+    @async_debug()
+    @classmethod
+    async def extract_in_series(cls, model, urls, web_driver=None, web_driver_brand=None,
+                                reuse_web_driver=None, delay_configuration=None, loop=None):
+        """
+        Extract in series
+
+        Extract content from source URLs in series with delays. Used to
+        extract multiple sources from the same domain.
+
+        I/O:
+        model:                      Extractable content class
+
+        urls:                       List of content URL strings
+
+        web_driver=None:            Selenium webdriver (optional);
+                                    if not provided, one is provisioned.
+
+        web_driver_brand=None:      WebDriverBrand, default: CHROME
+
+        reuse_web_driver=None:      If True, driver not released after
+                                    series extraction. Default is True
+                                    if web driver provided, else False.
+
+        delay_configuration=None:   Configuration to stagger extractions
+
+        loop=None:                  Event loop (optional)
+
+        return:                     List of extracted content instances
+        """
+        if web_driver:
+            reuse_web_driver = reuse_web_driver if reuse_web_driver is not None else True
+        else:
+            reuse_web_driver = reuse_web_driver or False
+            web_driver = await cls._provision_web_driver(web_driver_brand=web_driver_brand,
+                                                         loop=loop)
+        # TODO: replace with WebDriverPool.provision_web_driver(web_driver) as web_driver:
+        # Context manager should set web_driver._should_reuse on web driver returned
+        try:
+            delay_config = delay_configuration or cls.DELAY_DEFAULTS._asdict()
+            source_results = []
+
+            source_extractors = cls.provision_extractors(
+                model=model,
+                urls=urls,
+                web_driver=web_driver,
+                reuse_web_driver=True,  # use same web driver for series
+                loop=loop)
+
+            for source_extractor in source_extractors:
+                await cls._delay_if_necessary(delay_config, web_driver.last_fetch_timestamp)
+                source_result = await source_extractor.extract()
+                if source_result:
+                    source_results.append(source_result)
+
+        finally:
+            if not reuse_web_driver:
+                await cls._deprovision_web_driver(web_driver=web_driver, loop=loop)
+
+        return source_results
+
+    @async_debug()
+    @classmethod
+    async def _delay_if_necessary(cls, delay_config, last_fetch_timestamp):
+        delay = human_dwell_time(**delay_config)
+        now = datetime.datetime.utcnow()
+        delta_since_last_fetch = now - last_fetch_timestamp
+        elapsed_seconds = delta_since_last_fetch.total_seconds()
+        remaining_delay = delay - elapsed_seconds if delay > elapsed_seconds else 0
+        if remaining_delay:
+            await asyncio.sleep(delay)
+
+    @sync_debug()
+    @classmethod
+    def provision_extractors(cls, model, urls=None, web_driver=None,
+                             web_driver_brand=None, reuse_web_driver=None, loop=None):
         """
         Provision Extractors
 
         Instantiate and yield source extractors for the given urls.
 
         I/O:
-        model:                      Extractable content class
-        urls=None:                  List of content URL strings
-        delay_configuration=None:   Configuration to stagger extractions
-        web_driver_type=None:       WebDriverType, e.g. CHROME (default)
-        loop=None:                  Event loop (optional)
-        yield:                      Fully configured source extractors
-        """
-        loop = loop or asyncio.get_event_loop()
-        web_driver_type = web_driver_type or cls.WEB_DRIVER_TYPE_DEFAULT
+        model:                  Extractable content class
 
-        human_selection_shuffle(urls)
-        delay_config = delay_configuration or cls.DELAY_DEFAULTS._asdict()
-        initial_delay = 0
+        urls=None:              List of content URL strings
+
+        web_driver=None:        Selenium webdriver (optional);
+                                if not provided, one is provisioned.
+
+        web_driver_brand=None:  WebDriverBrand, default: CHROME
+
+        reuse_web_driver=None:  If True, web driver is not released
+                                after extraction. Defaults to True
+                                if web driver provided, else False.
+
+        loop=None:              Event loop (optional)
+
+        yield:                  Fully configured source extractors
+        """
         for url in urls:
             try:
-                initial_delay += human_dwell_time(**delay_config)
-                extractor = cls(model, page_url=url, initial_delay=initial_delay,
-                                web_driver_type=web_driver_type, loop=loop)
+                extractor = cls(model=model,
+                                page_url=url,
+                                web_driver=web_driver,
+                                web_driver_brand=web_driver_brand,
+                                reuse_web_driver=reuse_web_driver,
+                                loop=loop)
+
                 if extractor.is_enabled:
                     yield extractor
             # FileNotFoundError, ruamel.yaml.scanner.ScannerError, ValueError
@@ -342,6 +563,7 @@ class SourceExtractor(BaseExtractor):
                 print(e)  # TODO: Replace with logging
 
     def _derive_directory(self, model, page_url):
+        """Derive directory from base set on model and page URL"""
         base_directory = model.BASE_DIRECTORY
         clipped_url = self._clip_url(page_url)
         url_path = clipped_url.split(self.PATH_DELIMITER)
@@ -368,7 +590,9 @@ class SourceExtractor(BaseExtractor):
 
         raise FileNotFoundError(f'Source extractor configuration not found for {page_url}')
 
+    # TODO: rewrite to use urlparse and include www in directories
     def _clip_url(self, url):
+        """Clip URL to just contain host and path"""
         start = 0
         if url.startswith(self.HTTPS_TAG):
             start = len(self.HTTPS_TAG)
@@ -384,11 +608,20 @@ class SourceExtractor(BaseExtractor):
         clipped_url = url[start:end]
         return clipped_url
 
-    def __init__(self, model, page_url, initial_delay=0, web_driver_type=None, loop=None):
-        self.initial_delay = initial_delay
-        self.page_url = url_normalize(page_url)
-        directory = self._derive_directory(model, self.page_url)
-        super().__init__(model, directory, web_driver_type, loop)
+    def __init__(self, model, page_url, web_driver=None, web_driver_brand=None,
+                 reuse_web_driver=None, loop=None):
+
+        page_url = url_normalize(page_url)
+        directory = self._derive_directory(model, page_url)
+
+        super().__init__(model=model,
+                         directory=directory,
+                         web_driver=web_driver,
+                         web_driver_brand=web_driver_brand,
+                         reuse_web_driver=reuse_web_driver,
+                         loop=loop)
+
+        self.page_url = page_url
         self.cache = SourceExtractorCache(model=self.model, loop=self.loop)
         self.status = ExtractionStatus.INITIALIZED
 
@@ -419,21 +652,20 @@ class MultiExtractor(BaseExtractor):
     EXTRACT_SOURCES_TAG = 'extract_sources'
     ITEMS_TAG = 'items'
 
-    # @async_debug()
+    @async_debug()
     async def _perform_extraction(self, url=None):
         """
         Perform extraction
 
         Given a URL, fetch all pages up to the configured maximum and
-        extract all available content.
+        extract all available content. As with other "perform" methods,
+        content is extracted, but not returned.
         """
         url = url or self.page_url
         await self._perform_page_fetch(url)
         await self._perform_page_extraction(page=1)
 
-        pagination_config = self.configuration.get(self.PAGINATION_TAG)
-
-        if pagination_config and self.pages > 1:
+        if self.pages > 1:
             via_url = bool(self.next_page_url_configuration)
             more_pages = True
             page = 2
@@ -442,14 +674,15 @@ class MultiExtractor(BaseExtractor):
                 more_pages = await self._perform_next_page_extraction(page, via_url)
                 page += 1
 
-    # @async_debug()
+    @async_debug()
     async def _perform_next_page_extraction(self, page, via_url):
         """
         Perform next page extraction
 
         Load and extract next page via next page operation. Loading the
         page involves either clicking a link (i.e. "next") or extracting
-        a URL that is subsequently fetched.
+        a URL that is subsequently fetched. As with other "perform"
+        methods, content is extracted, but not returned.
 
         I/O:
         page:     Page number of results to be extracted
@@ -472,14 +705,22 @@ class MultiExtractor(BaseExtractor):
         await self._perform_page_extraction(page=page)
         return page < self.pages
 
-    # @async_debug()
+    @async_debug()
     async def _perform_page_extraction(self, page=1):
         """
         Perform page extraction
 
-        Extract page of multiple content items given page index and
-        return ordered dictionary of all content extracted by this
-        extractor instance to date.
+        Perform extraction of page containing multiple content items. If
+        items contain source URLs and the extractor is so configured,
+        source pages are extracted as well. Source page content is
+        typically more accurate and granular, so such content overrides
+        multi-item content on a field by field basis.
+
+        As with other "perform" methods, content is extracted, but not
+        returned.
+
+        I/O:
+        page=1:  Page number of content search results to be extracted
         """
         content_config = self.content_configuration
         items_config = self.items_configuration
@@ -528,21 +769,29 @@ class MultiExtractor(BaseExtractor):
             source_results = await self._extract_sources(self.extracted_content)
             await self._combine_results(self.extracted_content, source_results)
 
-    # @async_debug()
+    @async_debug()
     async def _extract_sources(self, extracted_content):
-        """Extract sources given item results"""
-        source_urls = [content.source_url for content in extracted_content.values()]
-        source_extractors = SourceExtractor.provision_extractors(
-            self.model, source_urls, self.delay_configuration,
-            self.web_driver_type, self.loop)
-        futures = [extractor.extract() for extractor in source_extractors]
-        if not futures:
-            return []
-        done, pending = await asyncio.wait(futures)
-        source_results = [task.result() for task in done]
-        return source_results
+        """Extract sources given extracted content"""
+        search_domain = derive_domain(self.page_url)
+        source_urls = (content.source_url for content in extracted_content.values())
+        urls_by_domain = defaultdict(list)
 
-    # @async_debug()
+        for source_url in source_urls:
+            source_domain = derive_domain(source_url, base=search_domain)
+            urls_by_domain[source_domain].append(source_url)
+
+        for domain, urls in urls_by_domain.items():
+            human_selection_shuffle(urls)
+
+        return await SourceExtractor.extract_in_parallel(
+            model=self.model,
+            urls_by_domain=urls_by_domain,
+            search_domain=search_domain,
+            search_web_driver=self.web_driver,
+            delay_configuration=self.delay_configuration,
+            loop=self.loop)
+
+    @async_debug()
     async def _combine_results(self, extracted_content, source_results):
         """Combine results extracted from search with source content"""
         for source_result in source_results:
@@ -605,7 +854,8 @@ class MultiExtractor(BaseExtractor):
 
     # @sync_debug()
     @classmethod
-    def provision_extractors(cls, model, search_data=None, web_driver_type=None, loop=None):
+    def provision_extractors(cls, model, search_data=None, web_driver=None, web_driver_brand=None,
+                             reuse_web_driver=None, loop=None):
         """
         Provision Extractors
 
@@ -630,13 +880,19 @@ class MultiExtractor(BaseExtractor):
                                                 org=None,
                                                 geo=['Texas', 'TX'])
 
-        web_driver_type=None:   WebDriverType, e.g. CHROME (default)
+        web_driver=None:        Selenium webdriver (optional); if not
+                                provided, one is provisioned.
+
+        web_driver_brand=None:  WebDriverBrand, default: CHROME
+
+        reuse_web_driver=None:  If True, web driver is not released
+                                after extraction. Defaults to True
+                                if web driver provided, else False.
+
         loop=None:              Event loop (optional)
+
         yield:                  Fully configured search extractors
         """
-        loop = loop or asyncio.get_event_loop()
-        web_driver_type = web_driver_type or cls.WEB_DRIVER_TYPE_DEFAULT
-
         base = model.BASE_DIRECTORY
         dir_nodes = os.walk(base)
         directories = (cls._debase_directory(base, dn[0]) for dn in dir_nodes
@@ -645,7 +901,14 @@ class MultiExtractor(BaseExtractor):
         extractors = {}
         for directory in directories:
             try:
-                extractor = cls(model, directory, search_data, web_driver_type, loop)
+                extractor = cls(model=model,
+                                directory=directory,
+                                search_data=search_data,
+                                web_driver=web_driver,
+                                web_driver_brand=web_driver_brand,
+                                reuse_web_driver=reuse_web_driver,
+                                loop=loop)
+
                 if extractor.is_enabled:
                     extractors[directory] = extractor
             # FileNotFoundError, ruamel.yaml.scanner.ScannerError, ValueError
@@ -808,10 +1071,17 @@ class MultiExtractor(BaseExtractor):
             raise NoneValueError
         return terms
 
-    def __init__(self, model, directory, search_data=None, web_driver_type=None, loop=None):
-        self.search_data = self._prepare_search_data(search_data)
-        super().__init__(model, directory, web_driver_type, loop)
+    def __init__(self, model, directory, search_data=None, web_driver=None, web_driver_brand=None,
+                 reuse_web_driver=None, loop=None):
 
+        super().__init__(model=model,
+                         directory=directory,
+                         web_driver=web_driver,
+                         web_driver_brand=web_driver_brand,
+                         reuse_web_driver=reuse_web_driver,
+                         loop=loop)
+
+        self.search_data = self._prepare_search_data(search_data)
         self.cache = MultiExtractorCache(directory=self.directory, search_data=self.search_data,
                                          model=self.model, loop=self.loop)
         self.page_url = self._form_page_url(self.configuration, self.search_data)
@@ -826,7 +1096,8 @@ class MultiExtractor(BaseExtractor):
             self.next_page_configuration = xor_constrain(
                 self.next_page_click_configuration, self.next_page_url_configuration)
         else:
-            self.pages = self.page_size = self.next_page_configuration = None
+            self.pages = 1
+            self.page_size = self.next_page_configuration = None
             self.next_page_click_configuration = self.next_page_url_configuration = None
 
         self.items_configuration = self.configuration[self.ITEMS_TAG]
