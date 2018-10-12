@@ -45,14 +45,14 @@ content_map = {
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    'idx, reference, check', [
-    (0, 'alpha', 'dog'),
-    (1, 'beta.max', 1975),
-    (2, 'gamma.ray.burst', '110328A'),
-    (3, 'delta.delta.delta', 'ΔΔΔ'),
-    (4, 'aleph', KeyError),
-    (5, 'beta.carotene', AttributeError),
-])
+    'idx, reference, check',
+    [(0, 'alpha', 'dog'),
+     (1, 'beta.max', 1975),
+     (2, 'gamma.ray.burst', '110328A'),
+     (3, 'delta.delta.delta', 'ΔΔΔ'),
+     (4, 'aleph', KeyError),
+     (5, 'beta.carotene', AttributeError),
+     ])
 def test_get_by_reference(idx, reference, check):
     """Test ExtractionOperation._get_by_reference"""
     mock_extractor = MagicMock()

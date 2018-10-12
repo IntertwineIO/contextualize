@@ -8,26 +8,27 @@ from utils.tools import derive_domain, get_related_json, ischildclass
 FULL_URL = 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5452388/'
 CHECK_DOMAIN = 'www.ncbi.nlm.nih.gov'
 
+
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ('idx', 'url',                                                  'base',        'check'), [
-    (0,     'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5452388/', None,         CHECK_DOMAIN),
-    (1,           '//www.ncbi.nlm.nih.gov/pmc/articles/PMC5452388/', None,         CHECK_DOMAIN),
-    (2,             'www.ncbi.nlm.nih.gov/pmc/articles/PMC5452388/', None,         CHECK_DOMAIN),
-    (3,     'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5452388',  None,         CHECK_DOMAIN),
-    (4,     'https://www.ncbi.nlm.nih.gov/',                         None,         CHECK_DOMAIN),
-    (5,     'https://www.ncbi.nlm.nih.gov',                          None,         CHECK_DOMAIN),
-    (6,             'www.ncbi.nlm.nih.gov/pmc/articles/PMC5452388',  None,         CHECK_DOMAIN),
-    (7,             'www.ncbi.nlm.nih.gov/',                         None,         CHECK_DOMAIN),
-    (8,             'www.ncbi.nlm.nih.gov',                          None,         CHECK_DOMAIN),
-    (9,                                 '/pmc/articles/PMC5452388/', CHECK_DOMAIN, CHECK_DOMAIN),
-    (10,                                '/pmc/articles/PMC5452388/', FULL_URL,     CHECK_DOMAIN),
-    (11,                                '/pmc/articles/PMC5452388/', None,         ValueError),
-    (12,                                '/pmc/articles/PMC5452388/', '',           ValueError),
-    (13,                                '/pmc/articles/PMC5452388/', '/pmc',       ValueError),
-    (14,                                None,                        None,         ValueError),
-    (15,                                '',                          None,         ValueError),
-])
+    ('idx', 'url',                                                  'base',       'check'),
+    [(0,    'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5452388/', None,         CHECK_DOMAIN),
+     (1,          '//www.ncbi.nlm.nih.gov/pmc/articles/PMC5452388/', None,         CHECK_DOMAIN),
+     (2,            'www.ncbi.nlm.nih.gov/pmc/articles/PMC5452388/', None,         CHECK_DOMAIN),
+     (3,    'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5452388',  None,         CHECK_DOMAIN),
+     (4,    'https://www.ncbi.nlm.nih.gov/',                         None,         CHECK_DOMAIN),
+     (5,    'https://www.ncbi.nlm.nih.gov',                          None,         CHECK_DOMAIN),
+     (6,            'www.ncbi.nlm.nih.gov/pmc/articles/PMC5452388',  None,         CHECK_DOMAIN),
+     (7,            'www.ncbi.nlm.nih.gov/',                         None,         CHECK_DOMAIN),
+     (8,            'www.ncbi.nlm.nih.gov',                          None,         CHECK_DOMAIN),
+     (9,                                '/pmc/articles/PMC5452388/', CHECK_DOMAIN, CHECK_DOMAIN),
+     (10,                               '/pmc/articles/PMC5452388/', FULL_URL,     CHECK_DOMAIN),
+     (11,                               '/pmc/articles/PMC5452388/', None,         ValueError),
+     (12,                               '/pmc/articles/PMC5452388/', '',           ValueError),
+     (13,                               '/pmc/articles/PMC5452388/', '/pmc',       ValueError),
+     (14,                               None,                        None,         ValueError),
+     (15,                               '',                          None,         ValueError),
+     ])
 def test_derive_domain(idx, url, base, check):
     """Test derive domain under different scenarios"""
     if ischildclass(check, Exception):
@@ -58,30 +59,31 @@ payload = dict(venus=venus, earth=earth, mars=mars, moon=moon, phobos=phobos, de
 paybug1 = dict(venus=venus, earth=earth, mars=mars, moon=moon, phobos=phobos)
 paybug2 = dict(venus=venus, earth=earth, mars=mars, moon=moon)
 
+
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ('idx', 'base',  'field',   'payload', 'strict', 'check'), [
-    (0,     earth,   'outer',   payload,   True,     mars),        # Key
-    (1,     earth,   'outer',   None,      True,     TypeError),   # Key/no payload/strict
-    (2,     earth,   'outer',   None,      False,    None),        # Key/no payload
-    (3,     earth,   'star',    payload,   True,     sun),         # Nested dict
-    (4,     earth,   'star',    None,      True,     sun),         # Nested dict/no payload
-    (5,     mercury, 'inner',   payload,   True,     None),        # None
-    (6,     mars,    'outer',   payload,   True,     KeyError),    # Missing key/strict
-    (7,     mars,    'outer',   payload,   False,    None),        # Missing key
-    (8,     venus,   'planet',  payload,   True,     KeyError),    # Missing field/strict
-    (9,     venus,   'planet',  payload,   False,    None),        # Missing field
-    (10,    venus,   'moons',   payload,   True,     []),          # List: empty
-    (11,    venus,   'moons',   None,      True,     []),          # List: empty/no payload
-    (12,    earth,   'moons',   payload,   True,     [moon]),      # List: 1 key
-    (13,    earth,   'moons',   None,      True,     TypeError),   # List: 1 key/no payload/strict
-    (14,    earth,   'moons',   None,      False,    []),          # List: 1 key/no payload
-    (15,    mars,    'moons',   payload,   True,     mars_moons),  # List: 2 keys
-    (16,    mars,    'moons',   paybug1,   True,     KeyError),    # List: 2 keys/1 missing/strict
-    (17,    mars,    'moons',   paybug1,   False,    [phobos]),    # List: 2 keys/1 missing
-    (18,    mars,    'moons',   paybug2,   True,     KeyError),    # List: 2 keys/2 missing/strict
-    (19,    mars,    'moons',   paybug2,   False,    []),          # List: 2 keys/2 missing
-])
+    ('idx', 'base',   'field',  'payload', 'strict', 'check'),
+    [(0,     earth,   'outer',   payload,   True,     mars),        # Key
+     (1,     earth,   'outer',   None,      True,     TypeError),   # Key/no payload/strict
+     (2,     earth,   'outer',   None,      False,    None),        # Key/no payload
+     (3,     earth,   'star',    payload,   True,     sun),         # Nested dict
+     (4,     earth,   'star',    None,      True,     sun),         # Nested dict/no payload
+     (5,     mercury, 'inner',   payload,   True,     None),        # None
+     (6,     mars,    'outer',   payload,   True,     KeyError),    # Missing key/strict
+     (7,     mars,    'outer',   payload,   False,    None),        # Missing key
+     (8,     venus,   'planet',  payload,   True,     KeyError),    # Missing field/strict
+     (9,     venus,   'planet',  payload,   False,    None),        # Missing field
+     (10,    venus,   'moons',   payload,   True,     []),          # List: empty
+     (11,    venus,   'moons',   None,      True,     []),          # List: empty/no payload
+     (12,    earth,   'moons',   payload,   True,     [moon]),      # List: 1 key
+     (13,    earth,   'moons',   None,      True,     TypeError),   # List: 1 key/no payload/strict
+     (14,    earth,   'moons',   None,      False,    []),          # List: 1 key/no payload
+     (15,    mars,    'moons',   payload,   True,     mars_moons),  # List: 2 keys
+     (16,    mars,    'moons',   paybug1,   True,     KeyError),    # List: 2 keys/1 missing/strict
+     (17,    mars,    'moons',   paybug1,   False,    [phobos]),    # List: 2 keys/1 missing
+     (18,    mars,    'moons',   paybug2,   True,     KeyError),    # List: 2 keys/2 missing/strict
+     (19,    mars,    'moons',   paybug2,   False,    []),          # List: 2 keys/2 missing
+     ])
 def test_get_related_json(idx, base, field, payload, strict, check):
     """Test get related JSON under different scenarios"""
     if ischildclass(check, Exception):

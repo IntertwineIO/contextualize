@@ -7,31 +7,90 @@ from utils.cache import CacheKey
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    'idx, qualifiers, fields, encoding, exception, display_check, string_check, bytes_check', [
-    (0, [], {}, None, ValueError, None, None, None),
-    (1, ['alpha', 'beta'], {}, None, None, 'alpha&beta', 'alpha\x01beta', b'alpha\x01beta'),
-    (2, [], dict(a='1', b='2'), None, None, 'a=1&b=2', 'a\x021\x01b\x022', b'a\x021\x01b\x022'),
-    (3, ['alpha', 'beta'], {'a': '1', 'b': 2}, None, None, 'alpha&beta&a=1&b=2',
-        'alpha\x01beta\x01a\x021\x01b\x022', b'alpha\x01beta\x01a\x021\x01b\x022'),
-    (4, ['alpha', 'beta'], {'a': 1, 'b': None}, None, None, 'alpha&beta&a=1&b=~',
-        'alpha\x01beta\x01a\x021\x01b\x02\x00', b'alpha\x01beta\x01a\x021\x01b\x02\x00'),
-    (5, ['alpha', 'beta'], {'a': 1, 'b': ['b1', 'b2']}, None, None, 'alpha&beta&a=1&b=b1|b2',
-        'alpha\x01beta\x01a\x021\x01b\x02b1\x03b2', b'alpha\x01beta\x01a\x021\x01b\x02b1\x03b2'),
-    (6, ['🐍', 'beta'], {'a': '1', '🐲': '🐉'}, None, None,
-        '🐍&beta&a=1&🐲=🐉', '🐍\x01beta\x01a\x021\x01🐲\x02🐉',
+    'idx, qualifiers, fields, encoding, exception, display_check, string_check, bytes_check',
+    [(0,
+        [],                                            # qualifiers
+        {},                                            # fields
+        None,                                          # encoding
+        ValueError,                                    # exception
+        None,                                          # display_check
+        None,                                          # string_check
+        None),                                         # bytes_check
+     (1,
+        ['alpha', 'beta'],                             # qualifiers
+        {},                                            # fields
+        None,                                          # encoding
+        None,                                          # exception
+        'alpha&beta',                                  # display_check
+        'alpha\x01beta',                               # string_check
+        b'alpha\x01beta'),                             # bytes_check
+     (2,
+        [],                                            # qualifiers
+        dict(a='1', b='2'),                            # fields
+        None,                                          # encoding
+        None,                                          # exception
+        'a=1&b=2',                                     # display_check
+        'a\x021\x01b\x022',                            # string_check
+        b'a\x021\x01b\x022'),                          # bytes_check
+     (3,
+        ['alpha', 'beta'],                             # qualifiers
+        {'a': '1', 'b': 2},                            # fields
+        None,                                          # encoding
+        None,                                          # exception
+        'alpha&beta&a=1&b=2',                          # display_check
+        'alpha\x01beta\x01a\x021\x01b\x022',           # string_check
+        b'alpha\x01beta\x01a\x021\x01b\x022'),         # bytes_check
+     (4,
+        ['alpha', 'beta'],                             # qualifiers
+        {'a': 1, 'b': None},                           # fields
+        None,                                          # encoding
+        None,                                          # exception
+        'alpha&beta&a=1&b=~',                          # display_check
+        'alpha\x01beta\x01a\x021\x01b\x02\x00',        # string_check
+        b'alpha\x01beta\x01a\x021\x01b\x02\x00'),      # bytes_check
+     (5,
+        ['alpha', 'beta'],                             # qualifiers
+        {'a': 1, 'b': ['b1', 'b2']},                   # fields
+        None,                                          # encoding
+        None,                                          # exception
+        'alpha&beta&a=1&b=b1|b2',                      # display_check
+        'alpha\x01beta\x01a\x021\x01b\x02b1\x03b2',    # string_check
+        b'alpha\x01beta\x01a\x021\x01b\x02b1\x03b2'),  # bytes_check
+     (6,
+        ['🐍', 'beta'],                                # qualifiers
+        {'a': '1', '🐲': '🐉'},                        # fields
+        None,                                          # encoding
+        None,                                          # exception
+        '🐍&beta&a=1&🐲=🐉',                           # display_check
+        '🐍\x01beta\x01a\x021\x01🐲\x02🐉',            # string_check | bytes_check ↴
         b'\xf0\x9f\x90\x8d\x01beta\x01a\x021\x01\xf0\x9f\x90\xb2\x02\xf0\x9f\x90\x89'),
-    (7, ['🐍', 'beta'], {'a': '1', '🐲': '🐉'}, 'utf-8', None,
-        '🐍&beta&a=1&🐲=🐉', '🐍\x01beta\x01a\x021\x01🐲\x02🐉',
+     (7,
+        ['🐍', 'beta'],                                # qualifiers
+        {'a': '1', '🐲': '🐉'},                        # fields
+        'utf-8',                                       # encoding
+        None,                                          # exception
+        '🐍&beta&a=1&🐲=🐉',                           # display_check
+        '🐍\x01beta\x01a\x021\x01🐲\x02🐉',            # string_check | bytes_check ↴
         b'\xf0\x9f\x90\x8d\x01beta\x01a\x021\x01\xf0\x9f\x90\xb2\x02\xf0\x9f\x90\x89'),
-    (8, ['🐍', 'beta'], {'a': '1', 'dragon': ['🐲', '🐉']}, None, None,
-        '🐍&beta&a=1&dragon=🐲|🐉', '🐍\x01beta\x01a\x021\x01dragon\x02🐲\x03🐉',
+     (8,
+        ['🐍', 'beta'],                                # qualifiers
+        {'a': '1', 'dragon': ['🐲', '🐉']},            # fields
+        None,                                          # encoding
+        None,                                          # exception
+        '🐍&beta&a=1&dragon=🐲|🐉',                    # display_check
+        '🐍\x01beta\x01a\x021\x01dragon\x02🐲\x03🐉',  # string_check | bytes_check ↴
         b'\xf0\x9f\x90\x8d\x01beta\x01a\x021\x01dragon\x02\xf0\x9f\x90\xb2\x03\xf0\x9f\x90\x89'),
-    (9, ['🐍', 'beta'], {'a': '1', 'dragon': ['🐲', '🐉']}, 'utf-8', None,
-        '🐍&beta&a=1&dragon=🐲|🐉', '🐍\x01beta\x01a\x021\x01dragon\x02🐲\x03🐉',
+     (9,
+        ['🐍', 'beta'],                                # qualifiers
+        {'a': '1', 'dragon': ['🐲', '🐉']},            # fields
+        'utf-8',                                       # encoding
+        None,                                          # exception
+        '🐍&beta&a=1&dragon=🐲|🐉',                    # display_check
+        '🐍\x01beta\x01a\x021\x01dragon\x02🐲\x03🐉',  # string_check | bytes_check ↴
         b'\xf0\x9f\x90\x8d\x01beta\x01a\x021\x01dragon\x02\xf0\x9f\x90\xb2\x03\xf0\x9f\x90\x89'),
-])
+     ])
 def test_cache_key(idx, qualifiers, fields, encoding, exception,
-                             display_check, string_check, bytes_check):
+                   display_check, string_check, bytes_check):
     """Test CacheKey"""
     if exception:
         with pytest.raises(exception):

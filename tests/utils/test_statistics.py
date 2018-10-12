@@ -8,12 +8,12 @@ from utils.statistics import HUMAN_SELECTION_LAMBDA, human_dwell_time, human_sel
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ('mu', 'sigma', 'base', 'multiplier', 'minimum', 'maximum'), [
-    (0, 0.5, 1, 1, 1, 4),
-    (0, 0.25, 1, 2, 1, 4),
-    (0, 0.5, 1, 2, 1, None),
-    (0, 0.25, 1, 4, 1, None),
-])
+    ('mu', 'sigma', 'base', 'multiplier', 'minimum', 'maximum'),
+    [(0,    0.5,     1,      1,            1,         4),
+     (0,    0.25,    1,      2,            1,         4),
+     (0,    0.5,     1,      2,            1,         None),
+     (0,    0.25,    1,      4,            1,         None),
+     ])
 def test_human_dwell_time(mu, sigma, base, multiplier, minimum, maximum):
     """Test that human dwell times are unique and within expected ranges"""
     lower = minimum
