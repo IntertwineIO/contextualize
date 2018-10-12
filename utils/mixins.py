@@ -13,18 +13,6 @@ class FieldMixin:
 
     _fields = {}
 
-    def items(self):
-        """Return generator that emits all field/value tuples"""
-        return ((f, getattr(self, f)) for f in self.fields())
-
-    def values(self):
-        """Return generator that emits all values"""
-        return (getattr(self, f) for f in self.fields())
-
-    def quoted_values(self):
-        """Return generator that emits all values, quoted unless None"""
-        return (f"'{v}'" if v is not None else 'None' for v in self.values())
-
     @classmethod
     def fields(cls):
         """Return list of all fields defined on the class"""
@@ -34,12 +22,36 @@ class FieldMixin:
             cls._fields[cls.__name__] = derive_attributes(cls)
             return cls._fields[cls.__name__]
 
+    def items(self):
+        """Return generator that emits all field/value tuples"""
+        return ((f, getattr(self, f)) for f in self.fields())
+
+    def values(self):
+        """Return generator that emits all values"""
+        return (getattr(self, f) for f in self.fields())
+
+    def repr_values(self):
+        """Return generator that emits the repr of each value"""
+        return (f"{v!r}" for v in self.values())
+
     def __repr__(self):
-        arg_string = ', '.join(self.quoted_values())
+        arg_string = ', '.join(self.repr_values())
         return f'{self.__class__.__name__}({arg_string})'
 
     def __str__(self):
         return PP.pformat(OrderedDict(self.items()))
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return all(self_value == other_value for self_value, other_value
+                       in zip(self.values(), other.values()))
+        return NotImplemented
+
+    def __ne__(self, other):
+        if isinstance(other, self.__class__):
+            return any(self_value != other_value for self_value, other_value
+                       in zip(self.values(), other.values()))
+        return NotImplemented
 
 
 class Hashable(FieldMixin):
@@ -49,17 +61,24 @@ class Hashable(FieldMixin):
     def from_hash(cls, hashed, encoding=None):
         """Instantiate from hashed object, optionally decoding too"""
         is_encoded = isinstance(next(iter(hashed.values())), bytes)
-        model_key = b'__model__' if is_encoded else '__model__'
+        if encoding and not is_encoded:
+            raise TypeError('Encoding provided, but content not encoded')
+        encoding = (encoding or cls.ENCODING_DEFAULT) if is_encoded else None
 
-        if cls is Hashable:
+        model_key = '__model__'.encode(encoding) if is_encoded else '__model__'
+        try:
             model_specifier = hashed[model_key]
+            model_specifier = str(model_specifier, encoding) if is_encoded else model_specifier
+        except (KeyError, TypeError):
+            raise TypeError('Model key is improperly encoded or missing')
+
+        if cls.form_specifier() != model_specifier:
             model = load_class(model_specifier)
             return model.from_hash(hashed, encoding)
 
         field_data = ((k, v) for k, v in hashed.items() if k != model_key)
 
         if is_encoded:
-            encoding = encoding or cls.ENCODING_DEFAULT
             field_data = ((k.decode(encoding), v.decode(encoding)) for k, v in field_data)
 
         field_hash = dict(field_data)
@@ -83,7 +102,7 @@ class Hashable(FieldMixin):
     def to_hash(self, encoding=None):
         """Convert to ordered dict, optionally encoding as well"""
         cls = self.__class__
-        model_data = (('__model__', f'{cls.__module__}.{cls.__qualname__}'),)
+        model_data = (('__model__', cls.form_specifier()),)
         field_data = ((k, serialize(v)) for k, v in self.items() if v is not None)
         serialized = chain(model_data, field_data)
         if encoding:
@@ -97,6 +116,10 @@ class Hashable(FieldMixin):
         if encoding:
             rendered_json = rendered_json.encode(encoding)
         return rendered_json
+
+    @classmethod
+    def form_specifier(cls):
+        return f'{cls.__module__}.{cls.__qualname__}'
 
     @classmethod
     def deserialize_datetime(cls, dt_string):
