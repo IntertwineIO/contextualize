@@ -196,16 +196,32 @@ def test_flex_enum_qualname(enum_class, qualname):
     assert enum_class.__qualname__ == qualname
 
 
+ENUM_OPTIONS = [
+    First.Fruit.APPLE,
+    First.Roshambo.ROCK,
+    First.Second.Fruit.BANANA,
+    First.Second.Roshambo.PAPER,
+    First.Second.Third.Fruit.CANTALOUPE,
+    First.Second.Third.Roshambo.SCISSORS,
+]
+
+
 @pytest.mark.unit
-@pytest.mark.parametrize(
-    'enum_option',
-    [First.Fruit.APPLE,
-     First.Roshambo.ROCK,
-     First.Second.Fruit.BANANA,
-     First.Second.Roshambo.PAPER,
-     First.Second.Third.Fruit.CANTALOUPE,
-     First.Second.Third.Roshambo.SCISSORS,
-     ])
+@pytest.mark.parametrize('enum_option', ENUM_OPTIONS)
+def test_flex_enum_serialization(enum_option):
+    """Confirm FlexEnum serializes and deserializes to self"""
+    serialized_option = enum_option.serialize()
+    assert isinstance(serialized_option, str)
+    enum_class = enum_option.__class__
+    assert enum_class.__module__ in serialized_option
+    assert enum_class.__qualname__ in serialized_option
+    assert enum_option.name in serialized_option
+    assert FlexEnum.deserialize(serialized_option) is enum_option
+    assert enum_class.deserialize(serialized_option) is enum_option
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize('enum_option', ENUM_OPTIONS)
 def test_flex_enum_repr(enum_option):
     """Confirm FlexEnum repr has qualname/name/value & evals to self"""
     option_repr = repr(enum_option)
@@ -216,15 +232,7 @@ def test_flex_enum_repr(enum_option):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize(
-    'enum_option',
-    [First.Fruit.APPLE,
-     First.Roshambo.ROCK,
-     First.Second.Fruit.BANANA,
-     First.Second.Roshambo.PAPER,
-     First.Second.Third.Fruit.CANTALOUPE,
-     First.Second.Third.Roshambo.SCISSORS,
-     ])
+@pytest.mark.parametrize('enum_option', ENUM_OPTIONS)
 def test_flex_enum_str(enum_option):
     """Confirm FlexEnum str contains qualname and name"""
     option_str = str(enum_option)

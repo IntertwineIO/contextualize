@@ -5,7 +5,7 @@ from collections import OrderedDict
 from enum import Enum
 from functools import lru_cache
 
-from utils.tools import derive_qualname, is_class_name
+from utils.tools import derive_qualname, is_class_name, load_class
 
 
 class FlexEnum(Enum):
@@ -132,6 +132,19 @@ class FlexEnum(Enum):
         """
         return tuple(
             cls.items(*enumables, swap=False, labels=True, transform=transform, inverse=inverse))
+
+    def serialize(self):
+        """Serialize enum option to specifier"""
+        cls = self.__class__
+        module = cls.__module__
+        qualname = cls.__qualname__
+        name = self.name
+        return f'{module}.{qualname}.{name}'
+
+    @classmethod
+    def deserialize(cls, specifier):
+        """Deserialize specifier to enum option"""
+        return load_class(specifier)
 
     def __init__(self, *args, **kwds):
         super().__init__()
