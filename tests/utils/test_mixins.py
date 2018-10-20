@@ -48,7 +48,7 @@ HASHED_CONTENT = {
      ])
 def test_field_mixin(idx, model_class, hashed_content):
     """Test field mixin core methods"""
-    from utils.time import DateTimeWrapper, Granularity  # noqa: F401
+    from utils.time import GranularDateTime, Granularity  # noqa: F401
 
     hashed_content = hashed_content.copy()
 

@@ -5,7 +5,7 @@ from collections import OrderedDict
 from itertools import chain
 
 from utils.serialization import NULL, serialize_nonstandard, serialize
-from utils.time import STANDARD_DATETIME_FORMATS, DateTimeWrapper
+from utils.time import GranularDateTime
 from utils.tools import PP, derive_attributes, load_class
 
 
@@ -123,7 +123,7 @@ class Hashable(FieldMixin):
 
     @classmethod
     def deserialize_datetime(cls, dt_string):
-        return DateTimeWrapper.strptime(dt_string, *STANDARD_DATETIME_FORMATS)
+        return GranularDateTime.deserialize(dt_string)
 
     @classmethod
     def deserialize_enum(cls, enum_specifier):

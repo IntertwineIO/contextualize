@@ -13,7 +13,7 @@ import settings
 from utils.async import run_in_executor
 from utils.debug import async_debug, sync_debug
 from utils.enum import FlexEnum
-from utils.time import DateTimeWrapper
+from utils.time import GranularDateTime
 from utils.tools import PP, delist, enlist, multi_parse, one, one_max, one_min
 
 
@@ -270,7 +270,7 @@ class ExtractionOperation:
                 if value is None:
                     parsed_values.append(None)
                     continue
-                parsed = DateTimeWrapper.strptime(value, *templates)
+                parsed = GranularDateTime.strptime(value, *templates)
                 parsed_values.append(parsed)
 
         return parsed_values
