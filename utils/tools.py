@@ -27,9 +27,12 @@ CLASS_NAME_PATTERN = re.compile(r'[A-Z][a-zA-Z0-9]*$')
 def is_class_name(name):
     return CLASS_NAME_PATTERN.match(name)
 
+INTERPRETER_MODULE = '__main__'
 MODULE_NAME_PATTERN = re.compile(r'[a-z][a-z_0-9]*[a-z0-9]$')
 
 def is_module_name(name):
+    if name == INTERPRETER_MODULE:
+        return True
     return MODULE_NAME_PATTERN.match(name)
 
 SELF_REFERENTIAL_PARAMS = {'self', 'cls', 'meta'}
