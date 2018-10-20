@@ -4,6 +4,7 @@ import json
 from collections import OrderedDict
 from itertools import chain
 
+from utils.enum import FlexEnum
 from utils.serialization import NULL, serialize_nonstandard, serialize
 from utils.time import GranularDateTime
 from utils.tools import PP, derive_attributes, load_class
@@ -127,7 +128,7 @@ class Hashable(FieldMixin):
 
     @classmethod
     def deserialize_enum(cls, enum_specifier):
-        return load_class(enum_specifier)
+        return FlexEnum.deserialize(enum_specifier)
 
     def __str__(self):
         return PP.pformat(self.to_hash())
