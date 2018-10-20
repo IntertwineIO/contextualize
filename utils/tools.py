@@ -472,10 +472,17 @@ def one_min(iterable):
 
 
 def logical_xor(a, b):
+    """Logical xor of a and b, returning bool"""
     return bool(a) ^ bool(b)
 
 
 def xor_constrain(a, b):
+    """
+    Xor Constrain
+
+    Return truthy value between a and b, raising ValueError if either
+    both are truthy or both are falsy.
+    """
     if a and not b:
         return a
     if b and not a:
