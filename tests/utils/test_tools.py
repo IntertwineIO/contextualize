@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import pytest
 
-from utils.tools import derive_domain, get_related_json, ischildclass
+from utils.tools import derive_domain, get_related_json, ischildclass, logical_xor, xor_constrain
 
 
 FULL_URL = 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5452388/'
@@ -96,3 +96,49 @@ def test_get_related_json(idx, base, field, payload, strict, check):
             assert value is check
         else:
             assert value == check
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ('idx',  'a',    'b',    'check'),
+    [
+     (0,      False,  False,  False),
+     (1,      True,   False,  True),
+     (2,      False,  True,   True),
+     (3,      True,   True,   False),
+     (4,      0,      0,      False),
+     (5,     'a',     0,      True),
+     (6,      0,     'b',     True),
+     (7,     'a',    'b',     False),
+     (8,      None,   None,   False),
+     (9,     'a',     None,   True),
+     (10,     None,  'b',     True),
+     (11,    'a',    'b',     False),
+     ])
+def test_logical_xor(idx, a, b, check):
+    assert logical_xor(a, b) is check
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ('idx',  'a',    'b',    'check'),
+    [
+     (0,      False,  False,  ValueError),
+     (1,      True,   False,  True),
+     (2,      False,  True,   True),
+     (3,      True,   True,   ValueError),
+     (4,      0,      0,      ValueError),
+     (5,     'a',     0,      'a'),
+     (6,      0,     'b',     'b'),
+     (7,     'a',    'b',     ValueError),
+     (8,      None,   None,   ValueError),
+     (9,     'a',     None,   'a'),
+     (10,     None,  'b',     'b'),
+     (11,    'a',    'b',     ValueError),
+     ])
+def test_xor_constrain(idx, a, b, check):
+    if ischildclass(check, Exception):
+        with pytest.raises(check):
+            xor_constrain(a, b)
+    else:
+        assert xor_constrain(a, b) is check
