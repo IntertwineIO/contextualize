@@ -5,8 +5,8 @@ from collections import namedtuple
 from enum import Enum
 
 from exceptions import TooFewValuesError, TooManyValuesError
-from utils.iterable import constrain, one, one_max, one_min
-from utils.tools import ischildclass
+from utils.iterable import InfinIterator, constrain, one, one_max, one_min
+from utils.tools import ischildclass, isiterator
 
 
 MAX_ITERABLE_SIZE = 5
@@ -18,6 +18,32 @@ def generator_fn(iterable):
 
 def range_fn(iterable):
     return range(len(iterable))
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ('idx',  'iterable_fn'),
+    [
+     (0,      generator_fn),
+     (1,      range_fn),
+     (2,      list),
+     (3,      tuple),
+     ])
+def test_infiniterator(idx, iterable_fn):
+    """Test that InfinIterator is an iterator that can be reused"""
+    max_range = range(MAX_ITERABLE_SIZE)
+    for length in max_range:
+        iterable_check = list(range(length))
+        iterable = iterable_fn(iterable_check)
+
+        infiniterator = InfinIterator(iterable)
+        assert isiterator(infiniterator)
+
+        list1 = list(infiniterator)
+        assert list1 == iterable_check
+
+        list2 = list(infiniterator)
+        assert list2 == iterable_check
 
 
 @pytest.mark.unit
