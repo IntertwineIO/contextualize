@@ -23,8 +23,9 @@ from secret_service.agency import SecretService
 from utils.async import run_in_executor
 from utils.debug import async_debug, sync_debug
 from utils.enum import FlexEnum
+from utils.iterable import one
 from utils.statistics import HumanDwellTime, human_dwell_time, human_selection_shuffle
-from utils.tools import PP, derive_domain, enlist, isnonstringsequence, one, xor_constrain
+from utils.tools import PP, derive_domain, enlist, isnonstringsequence, xor_constrain
 
 
 class BaseExtractor:
