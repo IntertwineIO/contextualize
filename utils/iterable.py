@@ -32,6 +32,22 @@ class InfinIterator:
         self.index = 0
 
 
+def _determine_constraints(exact, minimum, maximum):
+    if exact is not None:
+        if minimum is not None or maximum is not None:
+            raise ValueError(
+                f'Incompatible arguments: {exact}, {minimum}, {maximum}')
+        minimum = maximum = exact
+    else:
+        minimum = minimum if minimum is not None else 0
+        maximum = maximum if maximum is not None else float('Inf')
+        if minimum > maximum:
+            raise ValueError(
+                f'Minimum ({minimum}) may not be greater than maximum ({maximum})')
+
+    return minimum, maximum
+
+
 def _form_range_string(minimum, maximum):
     """Form range string (or single value) from minimum and maximum"""
     return f'{minimum}-{maximum}' if minimum < maximum else maximum
@@ -59,22 +75,6 @@ def _raise_constrain_error(error, values, minimum, maximum):
     range_string = _form_range_string(minimum, maximum)
     values_string = _form_values_string(values)
     raise error(expected=range_string, received=values_string)
-
-
-def _determine_constraints(exact, minimum, maximum):
-    if exact is not None:
-        if minimum is not None or maximum is not None:
-            raise ValueError(
-                f'Incompatible arguments: {exact}, {minimum}, {maximum}')
-        minimum = maximum = exact
-    else:
-        minimum = minimum if minimum is not None else 0
-        maximum = maximum if maximum is not None else float('Inf')
-        if minimum > maximum:
-            raise ValueError(
-                f'Minimum ({minimum}) may not be greater than maximum ({maximum})')
-
-    return minimum, maximum
 
 
 def _obtain_constrained_values(iterator, minimum, maximum):
