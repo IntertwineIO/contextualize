@@ -3,6 +3,7 @@
 from itertools import islice
 
 from exceptions import TooFewValuesError, TooManyValuesError
+from utils.tools import isiterator
 
 VALUE_DELIMITER = ', '
 MORE_VALUES = '...'
@@ -97,8 +98,8 @@ def constrain(iterable, exact=None, minimum=None, maximum=None):
     """
     Constrain
 
-    Given an iterable, confirm the number of values meet the
-    constraints and if so return the values.
+    Given an iterable, confirm the number of values meet the constraints
+    and if so return the iterable, casting to a list if an iterator.
 
     I/O:
     exact=None:     Exact number of values required
@@ -111,12 +112,12 @@ def constrain(iterable, exact=None, minimum=None, maximum=None):
     """
     minimum, maximum = _determine_constraints(exact, minimum, maximum)
 
-    if hasattr(iterable, '__len__'):
+    if isiterator(iterable):
+        iterator = iterable
+    else:
         if minimum <= len(iterable) <= maximum:
             return iterable
         iterator = iter(iterable)
-    else:
-        iterator = iterable
 
     return _obtain_constrained_values(iterator, minimum, maximum)
 
@@ -127,16 +128,19 @@ def one(iterable):
 
     Given an iterable, confirm there is only one value and return it.
     Otherwise, raise TooFewValuesError or TooManyValuesError.
+
+    Comparable to the snippet below, but ~40% faster:
+        next(iter(constrain(iterable, exact=1)))
     """
-    if hasattr(iterable, '__len__'):
+    if isiterator(iterable):
+        iterator = iterable
+    else:
         if len(iterable) == 1:
             try:
                 return iterable[0]
             except (TypeError, KeyError):  # sets, dicts, etc.
                 return next(iter(iterable))
         iterator = iter(iterable)
-    else:
-        iterator = iterable
 
     try:
         first = next(iterator)
@@ -158,28 +162,10 @@ def one_max(iterable):
     if one exists, else None. If there are 2 or more values, raise
     TooManyValuesError.
     """
-    if hasattr(iterable, '__len__'):
-        if len(iterable) == 1:
-            try:
-                return iterable[0]
-            except (TypeError, KeyError):  # sets, dicts, etc.
-                return next(iter(iterable))
-        elif not iterable:
-            return None
-        iterator = iter(iterable)
-    else:
-        iterator = iterable
-
     try:
-        first = next(iterator)
-    except StopIteration:
+        return one(iterable)
+    except TooFewValuesError:
         return None
-    try:
-        second = next(iterator)
-        values_string = _form_values_string((first, second), iterator)
-        raise TooManyValuesError(expected=1, received=values_string)
-    except StopIteration:
-        return first
 
 
 def one_min(iterable):
@@ -190,7 +176,7 @@ def one_min(iterable):
     iterable if it has a length; if not (i.e. it's an iterator), convert
     it to a list first. If there are no values, raise TooFewValuesError.
     """
-    values = iterable if hasattr(iterable, '__len__') else list(iterable)
+    values = list(iterable) if isiterator(iterable) else iterable
     if not values:
         raise TooFewValuesError(expected=1, received='')
     return values
