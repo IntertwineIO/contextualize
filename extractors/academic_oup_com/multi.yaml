@@ -3,6 +3,7 @@
 page_type: MULTI
 is_enabled: True
 extract_sources: False
+freshness_threshold: 30
 wait: 0
 
 url:

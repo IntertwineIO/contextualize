@@ -3,6 +3,7 @@
 page_type: MULTI
 is_enabled: True
 extract_sources: True
+freshness_threshold: 30
 wait: 0
 
 url:
@@ -24,7 +25,7 @@ pagination:
     - xpath: "//div[contains(concat(' ', @class, ' '), ' pagination ')]/a[text()='Next >']"
       click: True
     - wait: 5
-      presence_of_all_elements_located:  # All wait operation locations use absolute paths:
+      presence_of_all_elements_located:
       is_multiple: True
       class_name: rprt
 
