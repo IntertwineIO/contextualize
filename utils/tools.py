@@ -255,6 +255,14 @@ def isnonstringsequence(obj):
         return False
 
 
+def is_selfish(func):
+    """Check if function requires a self/cls/meta parameter"""
+    try:
+        return func.__self__ is not None
+    except AttributeError:
+        return False
+
+
 def load_class(specifier):
     """
     Load Class
