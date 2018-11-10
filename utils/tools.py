@@ -4,8 +4,6 @@ import importlib
 import inspect
 import re
 from collections import OrderedDict
-from functools import lru_cache
-from itertools import islice
 from past.builtins import basestring
 from pprint import PrettyPrinter
 from urllib.parse import urlparse
@@ -242,6 +240,11 @@ def isiterator(obj):
     """Check if object is an iterator (not just iterable)"""
     cls = obj.__class__
     return hasattr(cls, '__next__') and not hasattr(cls, '__len__')
+
+
+def isnamedtuple(obj):
+    """Check if object is a namedtuple"""
+    return isinstance(obj, tuple) and hasattr(obj, '_asdict')
 
 
 def isnonstringsequence(obj):
