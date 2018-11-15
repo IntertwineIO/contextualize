@@ -1,8 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import inspect
+import math
 import pytest
+from datetime import date
+from unittest.mock import Mock, patch
 
-from utils.cache import CacheKey
+from utils.cache import CacheKey, LyricalCache
+# from utils.tools import derive_argspec
 
 
 @pytest.mark.unit
@@ -124,3 +129,64 @@ def test_cache_key(idx, qualifiers, fields, encoding, exception,
     assert str(cache_key4) == key1_display
     assert cache_key4.string == key1_string
     assert cache_key4.bytes == key1_bytes
+
+
+Y, M, D = 1999, 3, 21
+Y2, M2, D2 = 2018, 1, 23
+
+
+def quadratic(a, b, c):
+    sqrt_term = math.sqrt(b ** 2 - 4 * a * c)
+    x1 = (-b + sqrt_term) / (2 * a)
+    x2 = (-b - sqrt_term) / (2 * a)
+    rx1, rx2 = round(x1), round(x2)
+    x1 = rx1 if x1 == rx1 else x1
+    x2 = rx2 if x2 == rx2 else x2
+    if x2 == x1:
+        x2 = None
+    return x1, x2
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ('idx', 'func', 'maxsize',  'call_args_and_cache_hits'),
+    [
+     (0,     ord,    3,         [(['A'], {}, 0), (['A'], {}, 1), (['A'], {}, 1)]),
+     (1,     ord,    3,         [(['A'], {}, 0), (['B'], {}, 0), (['C'], {}, 0)]),
+     (2,     ord,    3,         [(['A'], {}, 0), (['B'], {}, 0), (['C'], {}, 0),
+                                 (['A'], {}, 1), (['B'], {}, 1), (['C'], {}, 1)]),
+     (3,     ord,    2,         [(['A'], {}, 0), (['B'], {}, 0), (['C'], {}, 0),
+                                 (['A'], {}, 0), (['B'], {}, 0), (['C'], {}, 0)]),
+     (4,     ord,    2,         [(['A'], {}, 0), (['B'], {}, 0), (['C'], {}, 0),
+                                 (['C'], {}, 1), (['B'], {}, 1), (['A'], {}, 0)]),
+     (5,     date,   3,         [([Y, M, D], {}, 0), ([Y, M, D], {}, 1), ([Y, M, D], {}, 1)]),
+     (6,     date,   3,         [([Y, M], dict(day=D), 0), ([Y, M], dict(day=D2), 0),
+                                 ([Y, M], dict(day=D), 1), ([Y, M], dict(day=D2), 1)]),
+     (7,     date,   3,         [([Y], dict(month=M, day=D), 0), ([Y], dict(month=M, day=D2), 0),
+                                 ([Y], dict(month=M, day=D), 1), ([Y], dict(day=D2, month=M), 1)]),
+     (8,     date,   3,         [([], dict(year=Y, month=M, day=D), 0),
+                                 ([], dict(year=Y, month=M, day=D2), 0),
+                                 ([], dict(year=Y, month=M, day=D), 1),
+                                 ([], dict(year=Y, day=D2, month=M), 1)]),
+     ])
+def test_lyrical_cache(idx, func, maxsize, call_args_and_cache_hits, ):
+    wrapped = Mock(wraps=func)
+
+    # inspect.getfullargspec must return argspec of func, not wrapped
+    with patch('utils.signature.inspect.getfullargspec') as mock_getfullargspec:
+        mock_getfullargspec.return_value = inspect.getfullargspec(func)
+        wrapped_and_cached = LyricalCache(wrapped, maxsize)
+
+    cache_hit_count = cache_miss_count = 0
+    assert len(wrapped.call_args_list) == cache_miss_count
+
+    for call_count, (args, kwargs, cache_hit) in enumerate(call_args_and_cache_hits, start=1):
+        check = func(*args, **kwargs)
+        value = wrapped_and_cached(*args, **kwargs)
+        assert value == check
+
+        if cache_hit:
+            cache_hit_count += 1
+
+        cache_miss_count = call_count - cache_hit_count
+        assert len(wrapped.call_args_list) == cache_miss_count

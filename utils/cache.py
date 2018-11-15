@@ -1,13 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import asyncio
+import inspect
+import os
 from collections import OrderedDict
 from itertools import chain
+from functools import lru_cache
 
 import aioredis
+import wrapt
 
 import settings
 from utils.debug import async_debug, sync_debug
+from utils.signature import CallSign
 from utils.singleton import Singleton
 from utils.tools import isnonstringsequence
 
@@ -200,8 +205,19 @@ class CacheKey:
         encoding = self.encoding or ENCODING_DEFAULT
         return self.to_key(is_display=False, encoding=encoding)
 
-    def __str__(self):
+    @property
+    def display(self):
+        """Form display key string from CacheKey instance"""
         return self.to_key(is_display=True, encoding=None)
+
+    @property
+    def tuple(self):
+        """Form tuple key from CacheKey instance"""
+        field_generator = ((name, value) for name, value in self.fields.items())
+        return tuple(chain(self.qualifiers, field_generator))
+
+    def __str__(self):
+        return self.display
 
     def __repr__(self):
         return f"{self.__class__.__name__}.from_key('{self}')"
@@ -227,3 +243,125 @@ class CacheKey:
                     self.encoding != other.encoding)
         return NotImplemented
 
+
+class LyricalCache(OrderedDict):
+    """
+    Lyrical Cache
+
+    "Lyrical" is a homonym of LRU-CAL, an acronym for:
+
+        Least Recently Used - Clear Any Loaded
+
+    Lyrical is an LRU cache supporting individual key invalidation and
+    key normalization based on the function call signature.
+
+    Inspired by Raymond Hettinger's LRU:
+    https://bugs.python.org/issue30153
+    """
+    def form_cache_key(self, *args, **kwargs):
+        """Form normalized cache key from args and kwargs"""
+        normalized = self.call_sign.normalize(*args, **kwargs)
+        cache_key = CacheKey(*normalized.args, **normalized.kwargs)
+        return cache_key.tuple
+
+    def invalidate(self, *args, **kwargs):
+        """Invalidate cache key corresponding to given inputs"""
+        key = self.form_cache_key(*args, **kwargs)
+        self.pop(key, None)
+
+    def __call__(self, *args, **kwargs):
+        key = self.form_cache_key(*args, **kwargs)
+
+        if key in self:
+            value = self[key]
+            self.move_to_end(key)
+            return value
+
+        value = self.func(*args, **kwargs)
+        self[key] = value
+
+        if len(self) > self.maxsize:
+            self.popitem(last=False)
+
+        return value
+
+    def __init__(self, func, maxsize=128):
+        self.maxsize = maxsize or float('inf')
+        self.func = func
+        # CallSign's getfullargspec is expensive, so perform just once
+        self.call_sign = CallSign.manifest(func)
+
+
+def lyrical_cache(maxsize=128):
+    """An LRU decorator supporting key invalidation; see LyricalCache"""
+    @wrapt.decorator
+    def lyrical_cache_wrapper(func, instance, args, kwargs):
+        if asyncio.iscoroutinefunction(func):
+            raise TypeError('Function decorated with lyrical_cache must not be async.')
+
+        try:
+            cache = func.cache
+        except AttributeError:
+            cache = func.cache = LyricalCache(func=func, maxsize=maxsize)
+
+        return cache(*args, **kwargs)
+
+    return lyrical_cache_wrapper
+
+
+def file_lru_cache(maxsize=None, path_parameter=None):
+    """
+    File LRU Cache
+
+    The File LRU Cache decorator provides least recently used caching
+    with automatic invalidation for file-loading functions.
+
+    The file-loading function must accept the file path as a parameter.
+    If the file has been modified since the last call, the cache is
+    invalidated for just that file and the file is reloaded.
+
+    I/O:
+    maxsize=None:        Max size of the LRU cache
+    path_parameter=None: Argument name containing file path. Defaults to
+                         first parameter that is not self/cls/meta.
+    """
+    def combined_wrapper(func):
+        """Derive path arg info & wrap lyrical cache with file cache"""
+        positional_args = inspect.getfullargspec(func).args
+        is_selfish = getattr(func, '__self__', False) and func.__self__ is not None
+
+        if path_parameter:
+            path_parameter_index = positional_args.index(path_parameter)
+            path_name = path_parameter  # New variable to avoid nonlocal
+        else:
+            path_parameter_index = int(is_selfish)
+            path_name = positional_args[path_parameter_index]
+
+        path_index = path_parameter_index - int(is_selfish)
+
+        @wrapt.decorator
+        def file_cache_wrapper(lyrical_func, instance, args, kwargs):
+            """Clear cached file if modified and call lyrical func"""
+            if asyncio.iscoroutinefunction(lyrical_func):
+                raise TypeError('Function decorated with file_cache must not be async.')
+
+            try:
+                files_last_modified = lyrical_func._files_last_modified
+            except AttributeError:
+                lyrical_func._files_last_modified = files_last_modified = {}
+
+            file_path = args[path_index] if path_index < len(args) else kwargs[path_name]
+            cached_file_modified = files_last_modified.get(file_path, 0)
+            current_file_modified = os.path.getmtime(file_path)
+
+            if current_file_modified > cached_file_modified:
+                files_last_modified[file_path] = current_file_modified
+                if cached_file_modified:
+                    lyrical_func.cache.invalidate(file_path)
+
+            return lyrical_func(*args, **kwargs)
+
+        lyrical_cache_wrapper = lyrical_cache(maxsize=maxsize)
+        return file_cache_wrapper(lyrical_cache_wrapper(func))
+
+    return combined_wrapper
