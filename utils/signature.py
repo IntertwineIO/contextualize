@@ -3,8 +3,9 @@
 import asyncio
 import inspect
 from collections import OrderedDict, namedtuple
-from itertools import chain
+from itertools import chain, groupby, zip_longest
 
+from utils.sentinel import Sentinel
 from utils.tools import isnamedtuple, is_selfish
 
 
@@ -19,170 +20,253 @@ class CallSign:
     func:               A function or method
     enhance_sort=False: By default, signature() imposes no order on
                         varkwargs and normalize() sorts only varkwargs.
-                        If enhanced_sort is True, signature() sorts
+                        If enhance_sort is True, signature() sorts
                         varkwargs and normalize() sorts all kwargs.
     """
+    VAR_KINDS = {'var_positional', 'var_keyword'}
 
-    SignatureArguments = namedtuple('SignatureArguments',
-        'arg_map varargs kwargs_only varkwargs varargs_name varkwargs_name')
+    SENTINEL = Sentinel()
+
+    NamedValues = namedtuple('NamedValues', 'name values')
+
+    SignatureArguments = namedtuple('SignatureArguments', [
+        'positional_only',
+        'positional_or_keyword',
+        'var_positional',
+        'keyword_only',
+        'var_keyword'
+        ])
 
     NormalizedArguments = namedtuple('NormalizedArguments', 'args kwargs')
 
-    def signature(self, *args, **kwargs):
+    def signify(self, *args, **kwargs):
         """
-        Signature
+        Signify
 
         Align calling arguments with function's signature categories,
-        as defined by the CallSign.SignatureArguments namedtuple:
+        as defined by the SignatureArguments namedtuple:
 
-        arg_map:        Ordered dict of signature's positional args
-        varargs:        List of signature's variable args values
-        kwargs_only:    Ordered dict of all keyword only args
-        varkwargs:      Ordered dict of signature's variable kwargs
-        varargs_name:   Name of signature's variable args parameter
-        varkwargs_name: Name of signature's variable kwargs parameter
+        positional_only:        List of positional only parameters
+        positional_or_keyword:  Ordered dict of positional/keyword args
+        var_positional:         NamedValues namedtuple of varargs
+        keyword_only:           ordered dict of parameters keyed by name
+        var_keyword:            NamedValues namedtuple of varkwargs
+
+        Values are None if there are no parameters of the given kind.
 
         I/O:
         *args:                  Calling args
         **kwargs:               Calling kwargs
-        return:                 CallSign.SignatureArguments namedtuple
+        return:                 SignatureArguments namedtuple
         """
-        argspec = self.argspec
-        varargs = kwargs_only = varkwargs = None
+        parameters = self.parameters
+        positional_only = positional_or_keyword = var_positional = keyword_only = var_keyword = None
         named_kwargs = set()
 
-        arg_map = OrderedDict(self._emit_positional_args(args, kwargs))
+        if parameters.positional_only:
+            positional_only = OrderedDict(self._emit_positional_only_args(args, kwargs))
 
-        if len(argspec.args) - int(self.is_selfish) > len(arg_map):
-            remaining_args = self._emit_remaining_args(arg_map, kwargs, named_kwargs)
-            arg_map.update(remaining_args)
+        if parameters.positional_or_keyword:
+            positional_or_keyword = OrderedDict(
+                self._emit_positional_or_keyword_args(args, kwargs, named_kwargs))
 
-        if argspec.varargs:
-            varargs = self._extract_varargs(args)
-            varargs_name = argspec.varargs
+        var_positional_values = self._derive_var_positional_args(args)
+        if parameters.var_positional:
+            var_positional_name = parameters.var_positional.name
+            var_positional = self.NamedValues(name=var_positional_name,
+                                              values=var_positional_values)
 
-        if argspec.kwonlyargs:
-            kwargs_only = OrderedDict(self._emit_keyword_only_args(kwargs, named_kwargs))
+        if parameters.keyword_only:
+            keyword_only = OrderedDict(self._emit_keyword_only_args(kwargs, named_kwargs))
 
-        if argspec.varkw:
-            varkwargs = self._emit_varkwargs(kwargs, named_kwargs)
+        var_keyword_values_iter = self._emit_var_keyword_args(kwargs, named_kwargs)
+        if parameters.var_keyword:
             if self.enhance_sort:
-                varkwargs = sorted(varkwargs)
-            varkwargs = OrderedDict(varkwargs)
-            varkwargs_name = argspec.varkw
+                var_keyword_values_iter = sorted(var_keyword_values_iter)
+            var_keyword_values = OrderedDict(var_keyword_values_iter)
+            var_keyword_name = parameters.var_keyword.name
+            var_keyword = self.NamedValues(name=var_keyword_name, values=var_keyword_values)
 
-        return self.SignatureArguments(arg_map=arg_map,
-                                       varargs=varargs,
-                                       kwargs_only=kwargs_only,
-                                       varkwargs=varkwargs,
-                                       varargs_name=varargs_name,
-                                       varkwargs_name=varkwargs_name)
+        return self.SignatureArguments(positional_only=positional_only,
+                                       positional_or_keyword=positional_or_keyword,
+                                       var_positional=var_positional,
+                                       keyword_only=keyword_only,
+                                       var_keyword=var_keyword)
 
     def normalize(self, *args, **kwargs):
         """
         Normalize
 
         Normalize calling arguments to a signature-based standard form
-        as defined by the CallSign.NormalizedArguments named 2-tuple:
+        as defined by the NormalizedArguments namedtuple:
 
-        args:   List of signature's positional arg values followed
-                by varargs, where the positional args may be specified
-                positionally, via keyword, or by default.
+        args:   List of signature's positional-only args followed by
+                positional/keyword args and then var positional args,
+                with any defaults applied as necessary.
 
-        kwargs: Ordered dict of keyword-only args followed by varkwargs
-                sorted by key and without any positional arg overlaps.
+        kwargs: Ordered dict of keyword-only args followed by var
+                keyword args, sorted by key and without any conflicts.
 
         Use in conjunction with memoization to increase cache hits when
         calls are made with a diversity of argument forms: positional,
-        keyword, varargs, varkwargs, and defaults.
+        keyword, var positional, var keyword, and defaults.
 
         I/O:
         *args:                  Calling args
         **kwargs:               Calling kwargs
-        return:                 CallSign.NormalizedArguments namedtuple
+        return:                 NormalizedArguments namedtuple
         """
-        argspec = self.argspec
+        parameters = self.parameters
         named_kwargs = set()
+        normalized_args_iter = ()
 
-        normalized_args = [v for k, v in self._emit_positional_args(args, kwargs)]
+        if parameters.positional_only:
+            normalized_args_iter = (v for k, v in self._emit_positional_only_args(args, kwargs))
 
-        if len(argspec.args) - int(self.is_selfish) > len(normalized_args):
-            remaining = self._emit_remaining_args(normalized_args, kwargs, named_kwargs)
-            normalized_args.extend(v for k, v in remaining)
+        if parameters.positional_or_keyword:
+            positional_or_keyword_iter = (
+                v for k, v in self._emit_positional_or_keyword_args(args, kwargs, named_kwargs))
+            normalized_args_iter = chain(normalized_args_iter, positional_or_keyword_iter)
 
-        if argspec.varargs:
-            normalized_args.extend(self._extract_varargs(args))
+        var_positional = self._derive_var_positional_args(args)
+        if var_positional:
+            normalized_args_iter = chain(normalized_args_iter, var_positional)
 
-        normalized_kwargs = OrderedDict()
+        normalized_args = tuple(normalized_args_iter)
+        all_kwargs = None
 
-        if argspec.kwonlyargs:
-            normalized_kwargs.update(self._emit_keyword_only_args(kwargs, named_kwargs))
+        if parameters.keyword_only:
+            all_kwargs = keyword_only_args = self._emit_keyword_only_args(kwargs, named_kwargs)
 
-        if argspec.varkw:
-            varkwargs = self._emit_varkwargs(kwargs, named_kwargs)
+        var_keyword = self._emit_var_keyword_args(kwargs, named_kwargs)
+        if parameters.var_keyword:
             if self.enhance_sort:
-                all_kwargs = chain(normalized_kwargs.items(), varkwargs)
-                normalized_kwargs = OrderedDict(sorted(all_kwargs))
+                all_kwargs = sorted(chain(keyword_only_args, var_keyword))
             else:
-                normalized_kwargs.update(sorted(varkwargs))
+                all_kwargs = chain(keyword_only_args, sorted(var_keyword))
+
+        normalized_kwargs = OrderedDict(all_kwargs) if all_kwargs else OrderedDict()
 
         return self.NormalizedArguments(args=normalized_args, kwargs=normalized_kwargs)
 
-    def _emit_positional_args(self, args, kwargs):
-        """Emit positional args given calling args and kwargs"""
-        arg_names_iter = iter(self.argspec.args)
-        if self.is_selfish:
-            next(arg_names_iter)
+    def _emit_positional_only_args(self, args, kwargs):
+        """Emit positional only args given calling args and kwargs"""
+        positional_only_params = self.parameters.positional_only.values()
+        num_positional_only = len(positional_only_params)
+        eligible_args = args[:num_positional_only]
 
-        for arg_name, arg in zip(arg_names_iter, args):
-            if arg_name in kwargs:
+        for param, arg in zip_longest(positional_only_params, eligible_args,
+                                      fillvalue=self.SENTINEL):
+            param_name = param.name
+            if param_name in kwargs:
                 raise TypeError(f"{self.class_name} for {self.function_name}() "
-                                f"got multiple values for argument '{arg_name}'")
-            yield arg_name, arg
-
-    def _emit_remaining_args(self, positional_args, kwargs, named_kwargs):
-        """Emit remaining args and update named kwargs as side effect"""
-        argspec = self.argspec
-        default_values = argspec.defaults
-        num_no_default_args = len(argspec.args) - len(default_values)
-        start_index = len(positional_args) + int(self.is_selfish)
-
-        for i, arg_name in enumerate(argspec.args[start_index:], start=start_index):
-            if arg_name in kwargs:
-                named_kwargs.add(arg_name)
-                yield arg_name, kwargs[arg_name]
-            else:
-                default_index = i - num_no_default_args
-                if default_index < 0:
+                                f"received kwarg for positional-only argument '{param_name}'")
+            elif arg is self.SENTINEL:
+                default = param.default
+                if default is param.empty:
                     raise TypeError(f"{self.class_name} for {self.function_name}() "
-                                    f"missing required positional argument '{arg_name}'")
-                yield arg_name, default_values[default_index]
+                                    f"missing required positional-only argument '{param_name}'")
+                yield param_name, default
+            else:
+                yield param_name, arg
 
-    def _extract_varargs(self, args):
-        """Extract varargs (if any) from args based on signature"""
-        num_arg_names = len(self.argspec.args) - int(self.is_selfish)
-        # Use slicing here as emit version slows normalize() by ~5%
-        return args[num_arg_names:] if len(args) > num_arg_names else []
+
+    def _emit_positional_or_keyword_args(self, args, kwargs, named_kwargs):
+        """Emit positional/keyword args with named kwargs side effect"""
+        parameters = self.parameters
+        num_positional_only = len(parameters.positional_only)
+        positional_or_keyword_params = parameters.positional_or_keyword.values()
+        num_positional_or_keyword = len(positional_or_keyword_params)
+        eligible_args = args[num_positional_only:num_positional_only + num_positional_or_keyword]
+
+        for param, arg in zip_longest(positional_or_keyword_params, eligible_args,
+                                      fillvalue=self.SENTINEL):
+            param_name = param.name
+            if param_name in kwargs:
+                if arg is not self.SENTINEL:
+                    raise TypeError(f"{self.class_name} for {self.function_name}() "
+                                    f"received multiple values for argument '{param_name}'")
+                named_kwargs.add(param_name)
+                yield param_name, kwargs[param_name]
+            elif arg is self.SENTINEL:
+                default = param.default
+                if default is param.empty:
+                    raise TypeError(f"{self.class_name} for {self.function_name}() "
+                                    f"missing required positional/keyword argument '{param_name}'")
+                yield param_name, default
+            else:
+                yield param_name, arg
+
+    def _derive_var_positional_args(self, args):
+        """Derive varargs (if any) from args based on signature"""
+        parameters = self.parameters
+        num_params = len(parameters.positional_only) + len(parameters.positional_or_keyword)
+
+        if len(args) > num_params:
+            if not parameters.var_positional:
+                raise TypeError(f"{self.class_name} for {self.function_name}() "
+                                f"expected at most {num_params} arguments, received {len(args)}")
+            # Use slicing here as emit version slows normalize() by ~5%
+            return args[num_params:]
+        return ()
 
     def _emit_keyword_only_args(self, kwargs, named_kwargs):
         """Emit keyword-only args & update named kwargs as side effect"""
-        argspec = self.argspec
-        kwarg_only_defaults = argspec.kwonlydefaults
-
-        for kwarg_name in argspec.kwonlyargs:
-            if kwarg_name in kwargs:
-                named_kwargs.add(kwarg_name)
-                yield kwarg_name, kwargs[kwarg_name]
+        for param in self.parameters.keyword_only.values():
+            param_name = param.name
+            if param_name in kwargs:
+                named_kwargs.add(param_name)
+                yield param_name, kwargs[param_name]
             else:
-                try:
-                    yield kwarg_name, kwarg_only_defaults[kwarg_name]
-                except KeyError:
+                default = param.default
+                if default is param.empty:
                     raise TypeError(f"{self.class_name} for {self.function_name}() "
-                                    f"missing required keyword-only argument '{kwarg_name}'")
+                                    f"missing required keyword-only argument '{param_name}'")
+                yield param_name, default
 
-    def _emit_varkwargs(self, kwargs, named_kwargs):
-        """Emit varkwargs: all kwargs not in named kwargs as generator"""
+    def _emit_var_keyword_args(self, kwargs, named_kwargs):
+        """Return varkwargs generator; all kwargs not in named kwargs"""
+        if len(kwargs) > len(named_kwargs) and not self.parameters.var_keyword:
+            extras = kwargs.keys() - named_kwargs
+            raise TypeError(f"{self.class_name} for {self.function_name}() "
+                            f"does not accept var keyword arguments, extras: {extras}")
         return ((k, v) for k, v in kwargs.items() if k not in named_kwargs)
+
+    def normalize_via_bind(self, *args, **kwargs):
+        """
+        Normalize via bind
+
+        Same as normalize(), but use builtin signature.bind().
+
+        Unfortunately, this is twice as slow due to poor performance and
+        lack of sorting in signature.bind() and bound.apply_defaults().
+        """
+        bound = self.signature.bind(*args, **kwargs)
+        bound.apply_defaults()
+        normalized_args = bound.args
+        normalized_kwargs = self._normalize_kwargs(bound)
+        return self.NormalizedArguments(args=normalized_args, kwargs=normalized_kwargs)
+
+    def _normalize_kwargs(self, bound):
+        bound_kwargs = bound.kwargs
+        if not bound_kwargs:
+            return OrderedDict()
+
+        if not self.parameters.keyword_only or self.enhance_sort:
+            return OrderedDict(sorted(bound.kwargs.items()))
+
+        var_keyword_param = self.parameters.var_keyword
+        if not var_keyword_param or var_keyword_param.name not in bound.arguments:
+            return OrderedDict(bound.kwargs.items())
+
+        keyword_only_params = self.parameters.keyword_only
+        kwargs_only_items = ((name, bound_kwargs[name]) for name in keyword_only_params.keys()
+                             if name in bound_kwargs)
+
+        varkwargs_items = sorted(bound.arguments[var_keyword_param.name].items())
+
+        normalized_kwargs = OrderedDict(chain(kwargs_only_items, varkwargs_items))
+        return normalized_kwargs
 
     @property
     def class_name(self):
@@ -201,6 +285,31 @@ class CallSign:
             self._is_selfish = is_selfish(self.func)
             return self._is_selfish
 
+    def _derive_parameters(self):
+        """
+        Derive parameters
+
+        Return SignatureArguments namedtuple of parameters:
+
+        positional_only:        ordered dict of parameters keyed by name
+        positional_or_keyword:  ordered dict of parameters keyed by name
+        var_positional:         parameter or None
+        keyword_only:           ordered dict of parameters keyed by name
+        var_keyword:            parameter or None
+        """
+        parameters = self.SignatureArguments(None, None, None, None, None)._asdict()
+        params_iter = iter(self.signature.parameters.items())
+        for kind, params in groupby(params_iter, key=lambda item: item[1].kind):
+            key = kind.name.lower()
+            value = next(params)[1] if key in self.VAR_KINDS else OrderedDict(params)
+            parameters[key] = value
+
+        default_keys = (k for k, v in parameters.items() if k not in self.VAR_KINDS and v is None)
+        for key in default_keys:
+            parameters[key] = OrderedDict()
+
+        return self.SignatureArguments(**parameters)
+
     @classmethod
     def make_generic(cls, func):
         """Make generic call sign by wrapping function"""
@@ -218,26 +327,27 @@ class CallSign:
 
     def __init__(self, func, *, enhance_sort=False):
         self.func = func
-        # getfullargspec is expensive, so perform just once
-        self.argspec = inspect.getfullargspec(self.func)
         self.enhance_sort = enhance_sort
+        # inspection is expensive, so perform just once
+        self.signature = inspect.signature(self.func)
+        self.parameters = self._derive_parameters()
 
 
 def normalize(enhance_sort=False):
     """Normalize decorator for standardizing call arguments"""
     @wrapt.decorator
-    def normalize_wrapper(wrapped, instance, args, kwargs):
-        if asyncio.iscoroutinefunction(wrapped):
+    def normalize_wrapper(func, instance, args, kwargs):
+        if asyncio.iscoroutinefunction(func):
             raise TypeError('Function decorated with normalize must not be async.')
 
         try:
-            call_sign = wrapped.call_sign
+            call_sign = func.call_sign
         except AttributeError:
             # Cache call_sign as CallSign's getfullargspec is expensive
-            call_sign = CallSign(wrapped, enhance_sort=enhance_sort)
-            wrapped.call_sign = call_sign
+            call_sign = CallSign(func, enhance_sort=enhance_sort)
+            func.call_sign = call_sign
 
         normalized = call_sign.normalize(*args, **kwargs)
-        return wrapped(*normalized.args, **normalized.kwargs)
+        return func(*normalized.args, **normalized.kwargs)
 
     return normalize_wrapper
