@@ -260,6 +260,8 @@ def isnonstringsequence(obj):
 
 def is_selfish(func):
     """Check if function requires a self/cls/meta parameter"""
+    if inspect.isbuiltin(func):
+        return False
     try:
         return func.__self__ is not None
     except AttributeError:
