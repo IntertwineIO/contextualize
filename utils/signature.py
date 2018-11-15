@@ -133,6 +133,7 @@ class CallSign:
             normalized_args_iter = chain(normalized_args_iter, var_positional)
 
         normalized_args = tuple(normalized_args_iter)
+        keyword_only_args = ()
         all_kwargs = None
 
         if parameters.keyword_only:
