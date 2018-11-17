@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from collections import deque
 from itertools import islice
 
 from exceptions import TooFewValuesError, TooManyValuesError
@@ -92,6 +93,24 @@ def _obtain_constrained_values(iterator, minimum, maximum):
             pass
 
     return values
+
+
+def consume(iterator, n=None):
+    """
+    Consume
+
+    Advance the iterator n-steps ahead. If n is None, consume entirely.
+
+    Reference:
+    https://docs.python.org/3/library/itertools.html#itertools-recipes
+    """
+    # Use functions that consume iterators at C speed.
+    if n is None:
+        # feed the entire iterator into a zero-length deque
+        deque(iterator, maxlen=0)
+    else:
+        # advance to the empty slice starting at position n
+        next(islice(iterator, n, n), None)
 
 
 def constrain(iterable, exact=None, minimum=None, maximum=None):
