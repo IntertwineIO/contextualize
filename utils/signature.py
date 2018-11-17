@@ -5,6 +5,9 @@ import inspect
 from collections import OrderedDict, namedtuple
 from itertools import chain, groupby, zip_longest
 
+import wrapt
+
+from utils.iterable import consume
 from utils.sentinel import Sentinel
 from utils.tools import isnamedtuple, is_selfish
 
@@ -86,6 +89,8 @@ class CallSign:
             var_keyword_values = OrderedDict(var_keyword_values_iter)
             var_keyword_name = parameters.var_keyword.name
             var_keyword = self.NamedValues(name=var_keyword_name, values=var_keyword_values)
+        else:
+            consume(var_keyword_values_iter)  # confirm there are no var keywords
 
         return self.SignatureArguments(positional_only=positional_only,
                                        positional_or_keyword=positional_or_keyword,
@@ -133,20 +138,17 @@ class CallSign:
             normalized_args_iter = chain(normalized_args_iter, var_positional)
 
         normalized_args = tuple(normalized_args_iter)
-        keyword_only_args = ()
-        all_kwargs = None
 
-        if parameters.keyword_only:
-            all_kwargs = keyword_only_args = self._emit_keyword_only_args(kwargs, named_kwargs)
+        keyword_only_items = (
+            self._emit_keyword_only_args(kwargs, named_kwargs) if parameters.keyword_only else ())
 
-        var_keyword = self._emit_var_keyword_args(kwargs, named_kwargs)
-        if parameters.var_keyword:
-            if self.enhance_sort:
-                all_kwargs = sorted(chain(keyword_only_args, var_keyword))
-            else:
-                all_kwargs = chain(keyword_only_args, sorted(var_keyword))
+        var_keyword_items = self._emit_var_keyword_args(kwargs, named_kwargs)
 
-        normalized_kwargs = OrderedDict(all_kwargs) if all_kwargs else OrderedDict()
+        if self.enhance_sort:
+            normalized_kwargs = OrderedDict(sorted(chain(keyword_only_items, var_keyword_items)))
+        else:
+            normalized_kwargs = OrderedDict(keyword_only_items)  # evaluate keyword only args...
+            normalized_kwargs.update(sorted(var_keyword_items))  # ...before var_keywords
 
         return self.NormalizedArguments(args=normalized_args, kwargs=normalized_kwargs)
 
@@ -170,7 +172,6 @@ class CallSign:
                 yield param_name, default
             else:
                 yield param_name, arg
-
 
     def _emit_positional_or_keyword_args(self, args, kwargs, named_kwargs):
         """Emit positional/keyword args with named kwargs side effect"""
@@ -226,12 +227,16 @@ class CallSign:
                 yield param_name, default
 
     def _emit_var_keyword_args(self, kwargs, named_kwargs):
-        """Return varkwargs generator; all kwargs not in named kwargs"""
+        """Emit var keyword args: all kwargs not in named kwargs"""
         if len(kwargs) > len(named_kwargs) and not self.parameters.var_keyword:
             extras = kwargs.keys() - named_kwargs
             raise TypeError(f"{self.class_name} for {self.function_name}() "
                             f"does not accept var keyword arguments, extras: {extras}")
-        return ((k, v) for k, v in kwargs.items() if k not in named_kwargs)
+
+        var_keyword_items = ((k, v) for k, v in kwargs.items() if k not in named_kwargs)
+
+        for k, v in var_keyword_items:
+            yield (k, v)
 
     def normalize_via_bind(self, *args, **kwargs):
         """
@@ -336,19 +341,18 @@ class CallSign:
 
 def normalize(enhance_sort=False):
     """Normalize decorator for standardizing call arguments"""
-    @wrapt.decorator
-    def normalize_wrapper(func, instance, args, kwargs):
-        if asyncio.iscoroutinefunction(func):
-            raise TypeError('Function decorated with normalize must not be async.')
+    def call_sign_wrapper(func):
+        # Cache call_sign as CallSign's getfullargspec is expensive
+        call_sign = CallSign(func, enhance_sort=enhance_sort)
 
-        try:
-            call_sign = func.call_sign
-        except AttributeError:
-            # Cache call_sign as CallSign's getfullargspec is expensive
-            call_sign = CallSign(func, enhance_sort=enhance_sort)
-            func.call_sign = call_sign
+        @wrapt.decorator
+        def normalize_wrapper(func, instance, args, kwargs):
+            if asyncio.iscoroutinefunction(func):
+                raise TypeError('Function decorated with normalize must not be async.')
 
-        normalized = call_sign.normalize(*args, **kwargs)
-        return func(*normalized.args, **normalized.kwargs)
+            normalized = call_sign.normalize(*args, **kwargs)
+            return func(*normalized.args, **normalized.kwargs)
 
-    return normalize_wrapper
+        return normalize_wrapper(func)
+
+    return call_sign_wrapper
