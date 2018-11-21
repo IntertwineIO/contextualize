@@ -3,7 +3,7 @@
 import asyncio
 import inspect
 import os
-from collections import OrderedDict
+from collections import OrderedDict, namedtuple
 from itertools import chain
 from functools import lru_cache
 
@@ -14,7 +14,7 @@ import settings
 from utils.debug import async_debug, sync_debug
 from utils.signature import CallSign
 from utils.singleton import Singleton
-from utils.tools import isnonstringsequence
+from utils.tools import isnonstringsequence, is_selfish
 
 ENCODING_DEFAULT = 'utf-8'
 
@@ -77,19 +77,19 @@ class CacheKey:
     Terms (qualifiers/fields) are delimited by Start of Header (1: SOH).
     For display purposes, Ampersand ('&') is used instead. As such,
     SOH may not be used within qualifiers or field names/values. While
-    Ampersand is permitted, it will prevent `from_key` from working on
-    the display version of the key.
+    Ampersand is permitted, it will prevent `from_string` from working
+    on the display version of the key.
 
     Field names are assigned values via Start of Text (2: STX). For
     display purposes, Equals ('=') is used instead. As such, STX may not
     be used within field names/values or qualifiers. Equals is allowed,
-    but when used, `from_key` will not work on display keys.
+    but when used, `from_string` will not work on display keys.
 
     Field values that are non-string sequences (lists/tuples/etc.) are
     serialized via concatenation with End of Text (ETX) as delimiter.
     For display purposes, Vertical Bar ('|') is used instead. While ETX
     and Vertical Bar are permitted, usage within field values will
-    prevent `from_key` from working as expected.
+    prevent `from_string` from working as expected.
 
     Field values of None are converted to the Null (0: NUL) character.
     For display, Tilde ('~') is used instead. This means field values
@@ -122,7 +122,7 @@ class CacheKey:
     NULL_DISPLAY = '~'
 
     @classmethod
-    def from_key(cls, key, is_display=None, encoding=None):
+    def from_string(cls, key, is_display=None, encoding=None):
         """Construct CacheKey instance from key or display string"""
         if isinstance(key, bytes):
             encoding = encoding or ENCODING_DEFAULT
@@ -157,7 +157,7 @@ class CacheKey:
 
         return cls(*qualifiers, encoding_=encoding, **fields)
 
-    def to_key(self, is_display=False, encoding=None):
+    def to_string(self, is_display=False, encoding=None):
         """Form key string or encoded bytes, optionally for display"""
         term_delimiter, field_assigner, value_separator, null = self.special_characters(is_display)
 
@@ -172,7 +172,8 @@ class CacheKey:
             return f'{name}{field_assigner}{serialized_value}'
 
         packed_fields = (pack_field(name, value) for name, value in self.fields.items())
-        terms = chain(self.qualifiers, packed_fields)
+        qualifiers = (str(qualifier) for qualifier in self.qualifiers)
+        terms = chain(qualifiers, packed_fields)
         key = term_delimiter.join(terms)
         return key.encode(encoding) if encoding else key
 
@@ -192,23 +193,23 @@ class CacheKey:
     @property
     def key(self):
         """Form key from CacheKey instance"""
-        return self.to_key(is_display=False, encoding=self.encoding)
+        return self.to_string(is_display=False, encoding=self.encoding)
 
     @property
     def string(self):
         """Form key string from CacheKey instance"""
-        return self.to_key(is_display=False, encoding=None)
+        return self.to_string(is_display=False, encoding=None)
 
     @property
     def bytes(self):
         """Form key bytes from instance; encoding defaults to utf-8"""
         encoding = self.encoding or ENCODING_DEFAULT
-        return self.to_key(is_display=False, encoding=encoding)
+        return self.to_string(is_display=False, encoding=encoding)
 
     @property
     def display(self):
         """Form display key string from CacheKey instance"""
-        return self.to_key(is_display=True, encoding=None)
+        return self.to_string(is_display=True, encoding=None)
 
     @property
     def tuple(self):
@@ -220,7 +221,17 @@ class CacheKey:
         return self.display
 
     def __repr__(self):
-        return f"{self.__class__.__name__}.from_key('{self}')"
+        class_name = self.__class__.__name__
+        qualifiers = ', '.join(repr(qualifier) for qualifier in self.qualifiers)
+        delimiter1 = ', ' if qualifiers else ''
+        encoding = "encoding_='{self.encoding}'" if self.encoding else ''
+        delimiter2 = ', ' if encoding and self.fields else ''
+        fields = ', '.join(f'{name}={repr(value)}' for name, value in self.fields.items())
+        try:
+            eval(f"dict({fields})")
+            return f"{class_name}({qualifiers}{delimiter1}{encoding}{delimiter2}{fields})"
+        except SyntaxError:
+            return f"{class_name}({qualifiers}{delimiter1}{encoding}{delimiter2}**{self.fields})"
 
     def __init__(self, *qualifiers, encoding_=None, **fields):
         self.qualifiers = qualifiers
@@ -255,22 +266,32 @@ class LyricalCache(OrderedDict):
     Lyrical is an LRU cache supporting individual key invalidation and
     key normalization based on the function call signature.
 
+    When called
+
     Inspired by Raymond Hettinger's LRU:
     https://bugs.python.org/issue30153
     """
-    def form_cache_key(self, *args, **kwargs):
+    def invalidate(self, *args, **kwargs):
+        """Invalidate cache key corresponding to given inputs"""
+        key = self.form_key(*args, **kwargs)
+        self.pop(key, None)
+
+    def form_key(self, *args, **kwargs):
         """Form normalized cache key from args and kwargs"""
         normalized = self.call_sign.normalize(*args, **kwargs)
         cache_key = CacheKey(*normalized.args, **normalized.kwargs)
         return cache_key.tuple
 
-    def invalidate(self, *args, **kwargs):
-        """Invalidate cache key corresponding to given inputs"""
-        key = self.form_cache_key(*args, **kwargs)
-        self.pop(key, None)
+    @wrapt.decorator
+    def __call__(self, func, instance, args, kwargs):
+        if asyncio.iscoroutinefunction(func):
+            raise TypeError('Function decorated with LyricalCache must not be async.')
 
-    def __call__(self, *args, **kwargs):
-        key = self.form_cache_key(*args, **kwargs)
+        if self.func is None:
+            self.func = func
+            self.call_sign = CallSign.manifest(func)
+
+        key = self.form_key(*args, **kwargs)
 
         if key in self:
             value = self[key]
@@ -285,36 +306,25 @@ class LyricalCache(OrderedDict):
 
         return value
 
-    def __init__(self, func, maxsize=128):
-        self.maxsize = maxsize or float('inf')
-        self.func = func
-        # CallSign's getfullargspec is expensive, so perform just once
-        self.call_sign = CallSign.manifest(func)
+    def __new__(cls, func=None, *, maxsize=128):
+        inst = super().__new__(cls)
+        inst.maxsize = maxsize or float('inf')
+        inst.func = None
+        inst.call_sign = None
+        if func:
+            return inst(func)  # return decorated function
+        return inst  # return decorator
 
 
-def lyrical_cache(maxsize=128):
-    """An LRU decorator supporting key invalidation; see LyricalCache"""
-    @wrapt.decorator
-    def lyrical_cache_wrapper(func, instance, args, kwargs):
-        if asyncio.iscoroutinefunction(func):
-            raise TypeError('Function decorated with lyrical_cache must not be async.')
-
-        try:
-            cache = func.cache
-        except AttributeError:
-            cache = func.cache = LyricalCache(func=func, maxsize=maxsize)
-
-        return cache(*args, **kwargs)
-
-    return lyrical_cache_wrapper
+FileInfo = namedtuple('FileInfo', 'last_modified size')
 
 
-def file_lru_cache(maxsize=None, path_parameter=None):
+class FileCache:
     """
-    File LRU Cache
+    File Cache
 
-    The File LRU Cache decorator provides least recently used caching
-    with automatic invalidation for file-loading functions.
+    The File Cache decorator provides least-recently-used (LRU) caching
+    with automatic file invalidation upon file modification.
 
     The file-loading function must accept the file path as a parameter.
     If the file has been modified since the last call, the cache is
@@ -325,43 +335,64 @@ def file_lru_cache(maxsize=None, path_parameter=None):
     path_parameter=None: Argument name containing file path. Defaults to
                          first parameter that is not self/cls/meta.
     """
-    def combined_wrapper(func):
-        """Derive path arg info & wrap lyrical cache with file cache"""
-        positional_args = inspect.getfullargspec(func).args
-        is_selfish = getattr(func, '__self__', False) and func.__self__ is not None
+    @wrapt.decorator
+    def file_cache_wrapper(self, lyrical_func, instance, args, kwargs):
+        """Clear cached file if modified and call lyrical func"""
+        if asyncio.iscoroutinefunction(lyrical_func):
+            raise TypeError('Function decorated with file_cache must not be async.')
+
+        file_path = (args[self.path_parameter_index] if self.path_parameter_index < len(args)
+                     else kwargs[self.path_parameter_name])
+
+        cached_file_info = self.file_info.get(file_path, FileInfo(0, 0))
+        current_file_stats = os.stat(file_path)
+        current_file_info = FileInfo(current_file_stats.st_mtime, current_file_stats.st_size)
+
+        if current_file_info != cached_file_info:
+            self.file_info[file_path] = current_file_info
+            if cached_file_info > (0, 0):
+                self.lyrical_cache.invalidate(file_path)
+
+        return lyrical_func(*args, **kwargs)
+
+    @wrapt.decorator
+    def __call__(self, func, instance, args, kwargs):
+        if asyncio.iscoroutinefunction(func):
+            raise TypeError('Function decorated with LyricalCache must not be async.')
+
+        if self.func is None:
+            self._initialize(func)
+
+        file_cache = self.file_cache_wrapper(self.lyrical_cache(func))
+        return file_cache(*args, **kwargs)
+
+    def _initialize(self, func):
+        self.func = func
+        self.signature = inspect.signature(func)
+        parameters = self.signature.parameters
+        path_parameter = self.path_parameter
 
         if path_parameter:
-            path_parameter_index = positional_args.index(path_parameter)
-            path_name = path_parameter  # New variable to avoid nonlocal
+            for index, key in enumerate(parameters.keys()):
+                if key == path_parameter:
+                    self.path_parameter_index = index
+                    self.path_parameter_name = path_parameter
+                    break
         else:
-            path_parameter_index = int(is_selfish)
-            path_name = positional_args[path_parameter_index]
+            self.path_parameter_index = 0
+            self.path_parameter_name = next(iter(parameters.keys()))
 
-        path_index = path_parameter_index - int(is_selfish)
+    def __new__(cls, func=None, *, maxsize=None, path_parameter=None):
+        inst = super().__new__(cls)
+        inst.maxsize = maxsize or float('inf')
+        inst.path_parameter = path_parameter
+        inst.path_parameter_name = None
+        inst.path_parameter_index = None
+        inst.func = None
+        inst.signature = None
+        inst.lyrical_cache = LyricalCache(maxsize=maxsize)
+        inst.file_info = {}
 
-        @wrapt.decorator
-        def file_cache_wrapper(lyrical_func, instance, args, kwargs):
-            """Clear cached file if modified and call lyrical func"""
-            if asyncio.iscoroutinefunction(lyrical_func):
-                raise TypeError('Function decorated with file_cache must not be async.')
-
-            try:
-                files_last_modified = lyrical_func._files_last_modified
-            except AttributeError:
-                lyrical_func._files_last_modified = files_last_modified = {}
-
-            file_path = args[path_index] if path_index < len(args) else kwargs[path_name]
-            cached_file_modified = files_last_modified.get(file_path, 0)
-            current_file_modified = os.path.getmtime(file_path)
-
-            if current_file_modified > cached_file_modified:
-                files_last_modified[file_path] = current_file_modified
-                if cached_file_modified:
-                    lyrical_func.cache.invalidate(file_path)
-
-            return lyrical_func(*args, **kwargs)
-
-        lyrical_cache_wrapper = lyrical_cache(maxsize=maxsize)
-        return file_cache_wrapper(lyrical_cache_wrapper(func))
-
-    return combined_wrapper
+        if func:
+            return inst(func)  # return decorated function
+        return inst  # return decorator

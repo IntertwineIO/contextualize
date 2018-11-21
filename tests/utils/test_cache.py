@@ -2,12 +2,24 @@
 # -*- coding: utf-8 -*-
 import inspect
 import math
+import os
 import pytest
+from contextlib import contextmanager
+from collections import OrderedDict, namedtuple  # noqa: F401 OrderedDict used by eval
 from datetime import date
+from enum import Enum
 from unittest.mock import Mock, patch
 
-from utils.cache import CacheKey, LyricalCache
-# from utils.tools import derive_argspec
+from utils.cache import CacheKey, FileCache, LyricalCache
+from utils.signature import CallSign
+
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+A_FILE = 'a_file.txt'
+A_PATH = os.path.join(CURRENT_DIR, A_FILE)
+B_FILE = 'b_file.txt'
+B_PATH = os.path.join(CURRENT_DIR, B_FILE)
+C_FILE = 'c_file.txt'
+C_PATH = os.path.join(CURRENT_DIR, C_FILE)
 
 
 @pytest.mark.unit
@@ -115,36 +127,65 @@ def test_cache_key(idx, qualifiers, fields, encoding, exception,
     key1_repr = repr(cache_key1)
     assert repr(eval(key1_repr)) == key1_repr
 
-    cache_key2 = CacheKey.from_key(key1_display)
+    cache_key2 = CacheKey.from_string(key1_display)
     assert str(cache_key2) == key1_display
     assert cache_key2.string == key1_string
     assert cache_key2.bytes == key1_bytes
 
-    cache_key3 = CacheKey.from_key(key1_string)
+    cache_key3 = CacheKey.from_string(key1_string)
     assert str(cache_key3) == key1_display
     assert cache_key3.string == key1_string
     assert cache_key3.bytes == key1_bytes
 
-    cache_key4 = CacheKey.from_key(key1_bytes)
+    cache_key4 = CacheKey.from_string(key1_bytes)
     assert str(cache_key4) == key1_display
     assert cache_key4.string == key1_string
     assert cache_key4.bytes == key1_bytes
 
 
+def validate_lyrical_cache_calls(idx, func, maxsize, call_args_and_cache_hits):
+    """Validate LyricalCache hits without any mocking"""
+    cached = LyricalCache(func=func, maxsize=maxsize)
+
+    for call_count, (args, kwargs, cache_hit) in enumerate(call_args_and_cache_hits, start=1):
+        check = func(*args, **kwargs)
+        value = cached(*args, **kwargs)
+        assert value == check
+
+
+def validate_lyrical_cache_hits(idx, func, maxsize, call_args_and_cache_hits):
+    """Validate LyricalCache hits via Mock wrapper"""
+    wrapped = Mock(wraps=func)
+
+    # Use call sign of func, not call sign of wrapped
+    call_sign = CallSign.manifest(func)
+    with patch('utils.cache.CallSign.manifest') as mock_manifest_call_sign:
+        mock_manifest_call_sign.return_value = call_sign
+        lyrical_cache = LyricalCache(maxsize=maxsize)
+        wrapped_and_cached = lyrical_cache(wrapped)
+
+        expected_cache_hits = expected_cache_misses = 0
+        assert len(wrapped.call_args_list) == expected_cache_misses
+
+        for call_count, (args, kwargs, cache_hit) in enumerate(call_args_and_cache_hits, start=1):
+            check = func(*args, **kwargs)
+            value = wrapped_and_cached(*args, **kwargs)
+            assert value == check
+
+            if cache_hit:
+                expected_cache_hits += 1
+
+            actual_cache_misses = len(wrapped.call_args_list)
+
+            actual_cache_hits = call_count - actual_cache_misses
+            assert actual_cache_hits == expected_cache_hits
+
+            expected_cache_misses = call_count - expected_cache_hits
+            assert actual_cache_misses == expected_cache_misses
+
+
 Y, M, D = 1999, 3, 21
 Y2, M2, D2 = 2018, 1, 23
-
-
-def quadratic(a, b, c):
-    sqrt_term = math.sqrt(b ** 2 - 4 * a * c)
-    x1 = (-b + sqrt_term) / (2 * a)
-    x2 = (-b - sqrt_term) / (2 * a)
-    rx1, rx2 = round(x1), round(x2)
-    x1 = rx1 if x1 == rx1 else x1
-    x2 = rx2 if x2 == rx2 else x2
-    if x2 == x1:
-        x2 = None
-    return x1, x2
 
 
 @pytest.mark.unit
@@ -169,24 +210,278 @@ def quadratic(a, b, c):
                                  ([], dict(year=Y, month=M, day=D), 1),
                                  ([], dict(year=Y, day=D2, month=M), 1)]),
      ])
-def test_lyrical_cache(idx, func, maxsize, call_args_and_cache_hits, ):
+def test_lyrical_cache_on_builtins(idx, func, maxsize, call_args_and_cache_hits):
+    validate_lyrical_cache_calls(idx, func, maxsize, call_args_and_cache_hits)
+    validate_lyrical_cache_hits(idx, func, maxsize, call_args_and_cache_hits)
+
+
+def quadratic_roots(a, b, c):
+    try:
+        sqrt_term = math.sqrt(b ** 2 - 4 * a * c)
+    except ValueError:
+        return ()
+
+    x1 = (-b + sqrt_term) / (2 * a)
+    rx1 = round(x1)
+    x1 = rx1 if rx1 == x1 else x1
+    if not sqrt_term:
+        return (x1,)
+
+    x2 = (-b - sqrt_term) / (2 * a)
+    rx2 = round(x2)
+    x2 = rx2 if rx2 == x2 else x2
+    return (x1, x2) if x1 < x2 else (x2, x1)
+
+
+class C:
+    def imethod(self, a, b, c):
+        return quadratic_roots(a, b, c)
+
+    @classmethod
+    def cmethod(cls, a, b, c):
+        return quadratic_roots(a, b, c)
+
+    @staticmethod
+    def smethod(a, b, c):
+        return quadratic_roots(a, b, c)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ('idx', 'maxsize',  'call_args_and_cache_hits'),
+    [
+     (0,     2,         [([1, -5, 6], {}, 0), ([1, -5, 6], {}, 1), ([1, -5, 6], {}, 1),
+                         ([1, -7, 12], {}, 0), ([1, -7, 12], {}, 1), ([1, -7, 12], {}, 1),
+                         ([1, -9, 20], {}, 0), ([1, -9, 20], {}, 1), ([1, -9, 20], {}, 1)]),
+     (1,     2,         [([1, -5, 6], {}, 0), ([1, -7, 12], {}, 0), ([1, -9, 20], {}, 0),
+                         ([1, -9, 20], {}, 1), ([1, -7, 12], {}, 1), ([1, -5, 6], {}, 0)]),
+     (2,     2,         [([1, -5, 6], {}, 0), ([1, -7, 12], {}, 0), ([1, -9, 20], {}, 0),
+                         ([1, -5, 6], {}, 0), ([1, -7, 12], {}, 0), ([1, -9, 20], {}, 0)]),
+     (3,     3,         [([1, -5, 6], {}, 0), ([1, -7, 12], {}, 0), ([1, -9, 20], {}, 0),
+                         ([1, -5, 6], {}, 1), ([1, -7, 12], {}, 1), ([1, -9, 20], {}, 1)]),
+     (4,     2,         [([1, -5, 6], {}, 0), ([1, -5], dict(c=6), 1),
+                         ([1], dict(b=-5, c=6), 1), ([1], dict(c=6, b=-5), 1),
+                         ([], dict(a=1, b=-5, c=6), 1), ([], dict(c=6, b=-5, a=1), 1)]),
+     (5,     2,         [([1], dict(b=-5, c=6), 0), ([], dict(c=6, a=1, b=-5), 1),
+                         ([1, -7], dict(c=12), 0), ([1], dict(c=12, b=-7), 1),
+                         ([1, -9, 20], {}, 0), ([1, -9], dict(c=20), 1)]),
+     (6,     2,         [([1, -5, 6], {}, 0),
+                         ([1, -7, 12], {}, 0),
+                         ([1, -9, 20], {}, 0),
+                         ([1, -9], dict(c=20), 1),
+                         ([1], dict(c=12, b=-7), 1),
+                         ([], dict(c=6, a=1, b=-5), 0)]),
+     (7,     2,         [([1, -5, 6], {}, 0),
+                         ([1, -7, 12], {}, 0),
+                         ([1, -9, 20], {}, 0),
+                         ([], dict(c=6, a=1, b=-5), 0),
+                         ([1], dict(c=12, b=-7), 0),
+                         ([1, -9], dict(c=20), 0)]),
+     (8,     3,         [([1, -5, 6], {}, 0),
+                         ([1, -7, 12], {}, 0),
+                         ([1, -9, 20], {}, 0),
+                         ([], dict(c=6, a=1, b=-5), 1),
+                         ([1], dict(c=12, b=-7), 1),
+                         ([1, -9], dict(c=20), 1)]),
+     ])
+@pytest.mark.parametrize(
+    ('func'), [quadratic_roots, C().imethod, C().cmethod, C().smethod])
+def test_lyrical_cache_on_custom_functions(idx, func, maxsize, call_args_and_cache_hits):
+    validate_lyrical_cache_calls(idx, func, maxsize, call_args_and_cache_hits)
+    validate_lyrical_cache_hits(idx, func, maxsize, call_args_and_cache_hits)
+
+
+FileIO = Enum('FileIO', 'READ WRITE')
+
+
+def read_file(file_path):
+    with open(file_path) as file:
+        return file.read()
+
+
+class FR:
+    def imethod(self, file_path):
+        return read_file(file_path)
+
+    @classmethod
+    def cmethod(cls, file_path):
+        return read_file(file_path)
+
+    @staticmethod
+    def smethod(file_path):
+        return read_file(file_path)
+
+
+def write_file(file_path, content):
+    with open(file_path, 'w') as file:
+        file.write(content)
+
+
+@contextmanager
+def reset_files(paths):
+
+    initial_results = {}
+    initial_results = {path: None for path in paths}
+    for path in initial_results.keys():
+        initial_results[path] = read_file(path)
+
+    try:
+        yield initial_results.items()
+
+    finally:
+        for path, content in initial_results.items():
+            write_file(path, content)
+
+
+def validate_file_cache_calls(idx, func, maxsize, procedures):
+    """Validate FileCache calls without any mocking"""
+    file_cached = FileCache(func, maxsize=maxsize, path_parameter=None)
+
+    paths = (procedure.path for procedure in procedures if procedure.io is FileIO.WRITE)
+    with reset_files(paths):
+        for io, path, content, cache_hit in procedures:
+            if io is FileIO.READ:
+                check = func(path)
+                value = file_cached(path)
+                assert value == check
+                assert value == content
+            elif io is FileIO.WRITE:
+                write_file(path, content)
+            else:
+                raise ValueError('io must be a FileIO enum option')
+
+
+def validate_file_cache_hits(idx, func, maxsize, procedures):
+    """Validate FileCache hits via Mock wrapper"""
     wrapped = Mock(wraps=func)
 
-    # inspect.getfullargspec must return argspec of func, not wrapped
-    with patch('utils.signature.inspect.getfullargspec') as mock_getfullargspec:
-        mock_getfullargspec.return_value = inspect.getfullargspec(func)
-        wrapped_and_cached = LyricalCache(wrapped, maxsize)
+    # Use signature of func, not signature of wrapped
+    signature = inspect.signature(func)
+    with patch('utils.cache.inspect.signature') as mock_signature:
+        mock_signature.return_value = signature
 
-    cache_hit_count = cache_miss_count = 0
-    assert len(wrapped.call_args_list) == cache_miss_count
+        file_cache = FileCache(maxsize=maxsize, path_parameter='file_path')
+        wrapped_and_cached = file_cache(wrapped)
 
-    for call_count, (args, kwargs, cache_hit) in enumerate(call_args_and_cache_hits, start=1):
-        check = func(*args, **kwargs)
-        value = wrapped_and_cached(*args, **kwargs)
-        assert value == check
+        expected_cache_hits = expected_cache_misses = 0
+        assert len(wrapped.call_args_list) == expected_cache_misses
 
-        if cache_hit:
-            cache_hit_count += 1
+        paths = (procedure.path for procedure in procedures if procedure.io is FileIO.WRITE)
+        with reset_files(paths):
+            call_count = 1
 
-        cache_miss_count = call_count - cache_hit_count
-        assert len(wrapped.call_args_list) == cache_miss_count
+            for io, path, content, cache_hit in procedures:
+
+                if io is FileIO.READ:
+                    check = func(path)
+                    value = wrapped_and_cached(path)
+                    assert value == check
+                    assert value == content
+
+                    if cache_hit:
+                        expected_cache_hits += 1
+
+                    actual_cache_misses = len(wrapped.call_args_list)
+
+                    actual_cache_hits = call_count - actual_cache_misses
+                    assert actual_cache_hits == expected_cache_hits
+
+                    expected_cache_misses = call_count - expected_cache_hits
+                    assert actual_cache_misses == expected_cache_misses
+
+                    call_count += 1
+
+                elif io is FileIO.WRITE:
+                    write_file(path, content)
+                else:
+                    raise ValueError('io must be a FileIO enum option')
+
+
+FileProcedure = namedtuple('FileProcedure', 'io path content cache_hit')
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ('idx', 'maxsize',  'procedures'),
+    [
+     (0,     2,         [FileProcedure(FileIO.READ, A_PATH, 'apple', 0),
+                         FileProcedure(FileIO.READ, A_PATH, 'apple', 1),
+                         FileProcedure(FileIO.READ, A_PATH, 'apple', 1),
+                         ]),
+     (1,     2,         [FileProcedure(FileIO.READ, A_PATH, 'apple', 0),
+                         FileProcedure(FileIO.READ, A_PATH, 'apple', 1),
+                         FileProcedure(FileIO.READ, A_PATH, 'apple', 1),
+                         FileProcedure(FileIO.WRITE, A_PATH, 'avocado', None),
+                         FileProcedure(FileIO.READ, A_PATH, 'avocado', 0),
+                         FileProcedure(FileIO.READ, A_PATH, 'avocado', 1),
+                         FileProcedure(FileIO.READ, A_PATH, 'avocado', 1),
+                         ]),
+     (2,     2,         [FileProcedure(FileIO.READ, A_PATH, 'apple', 0),
+                         FileProcedure(FileIO.READ, A_PATH, 'apple', 1),
+                         FileProcedure(FileIO.WRITE, A_PATH, 'avocado', None),
+                         FileProcedure(FileIO.READ, A_PATH, 'avocado', 0),
+                         FileProcedure(FileIO.READ, A_PATH, 'avocado', 1),
+                         FileProcedure(FileIO.READ, B_PATH, 'banana', 0),
+                         FileProcedure(FileIO.READ, B_PATH, 'banana', 1),
+                         FileProcedure(FileIO.WRITE, B_PATH, 'blueberry', None),
+                         FileProcedure(FileIO.READ, B_PATH, 'blueberry', 0),
+                         FileProcedure(FileIO.READ, B_PATH, 'blueberry', 1),
+                         ]),
+     (3,     2,         [FileProcedure(FileIO.READ, A_PATH, 'apple', 0),
+                         FileProcedure(FileIO.READ, B_PATH, 'banana', 0),
+                         FileProcedure(FileIO.READ, A_PATH, 'apple', 1),
+                         FileProcedure(FileIO.READ, B_PATH, 'banana', 1),
+                         FileProcedure(FileIO.WRITE, A_PATH, 'avocado', None),
+                         FileProcedure(FileIO.READ, A_PATH, 'avocado', 0),
+                         FileProcedure(FileIO.READ, B_PATH, 'banana', 1),
+                         FileProcedure(FileIO.READ, A_PATH, 'avocado', 1),
+                         FileProcedure(FileIO.READ, B_PATH, 'banana', 1),
+                         FileProcedure(FileIO.WRITE, B_PATH, 'blueberry', None),
+                         FileProcedure(FileIO.READ, A_PATH, 'avocado', 1),
+                         FileProcedure(FileIO.READ, B_PATH, 'blueberry', 0),
+                         FileProcedure(FileIO.READ, A_PATH, 'avocado', 1),
+                         FileProcedure(FileIO.READ, B_PATH, 'blueberry', 1),
+                         ]),
+     (4,     2,         [FileProcedure(FileIO.READ, A_PATH, 'apple', 0),
+                         FileProcedure(FileIO.READ, A_PATH, 'apple', 1),
+                         FileProcedure(FileIO.READ, B_PATH, 'banana', 0),
+                         FileProcedure(FileIO.READ, B_PATH, 'banana', 1),
+                         FileProcedure(FileIO.READ, C_PATH, 'cantaloupe', 0),
+                         FileProcedure(FileIO.READ, C_PATH, 'cantaloupe', 1),
+                         FileProcedure(FileIO.READ, A_PATH, 'apple', 0),
+                         FileProcedure(FileIO.READ, B_PATH, 'banana', 0),
+                         FileProcedure(FileIO.READ, C_PATH, 'cantaloupe', 0),
+                         ]),
+     (5,     None,      [FileProcedure(FileIO.READ, A_PATH, 'apple', 0),
+                         FileProcedure(FileIO.READ, A_PATH, 'apple', 1),
+                         FileProcedure(FileIO.READ, B_PATH, 'banana', 0),
+                         FileProcedure(FileIO.READ, B_PATH, 'banana', 1),
+                         FileProcedure(FileIO.READ, C_PATH, 'cantaloupe', 0),
+                         FileProcedure(FileIO.READ, C_PATH, 'cantaloupe', 1),
+                         FileProcedure(FileIO.READ, A_PATH, 'apple', 1),
+                         FileProcedure(FileIO.READ, B_PATH, 'banana', 1),
+                         FileProcedure(FileIO.READ, C_PATH, 'cantaloupe', 1),
+                         ]),
+     (6,     None,      [FileProcedure(FileIO.READ, A_PATH, 'apple', 0),
+                         FileProcedure(FileIO.READ, B_PATH, 'banana', 0),
+                         FileProcedure(FileIO.READ, C_PATH, 'cantaloupe', 0),
+                         FileProcedure(FileIO.WRITE, B_PATH, 'blueberry', None),
+                         FileProcedure(FileIO.READ, C_PATH, 'cantaloupe', 1),
+                         FileProcedure(FileIO.READ, B_PATH, 'blueberry', 0),
+                         FileProcedure(FileIO.READ, A_PATH, 'apple', 1),
+                         FileProcedure(FileIO.WRITE, C_PATH, 'coconut', None),
+                         FileProcedure(FileIO.READ, A_PATH, 'apple', 1),
+                         FileProcedure(FileIO.READ, B_PATH, 'blueberry', 1),
+                         FileProcedure(FileIO.READ, C_PATH, 'coconut', 0),
+                         FileProcedure(FileIO.WRITE, A_PATH, 'avocado', None),
+                         FileProcedure(FileIO.READ, C_PATH, 'coconut', 1),
+                         FileProcedure(FileIO.READ, B_PATH, 'blueberry', 1),
+                         FileProcedure(FileIO.READ, A_PATH, 'avocado', 0),
+                         FileProcedure(FileIO.READ, A_PATH, 'avocado', 1),
+                         ]),
+     ])
+@pytest.mark.parametrize(
+    ('func'), [read_file, FR().imethod, FR().cmethod, FR().smethod])
+def test_file_cache(idx, func, maxsize, procedures):
+    validate_file_cache_calls(idx, func, maxsize, procedures)
+    validate_file_cache_hits(idx, func, maxsize, procedures)
