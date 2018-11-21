@@ -11,6 +11,10 @@ import wrapt
 from utils.signature import CallSign, normalize
 from utils.tools import ischildclass
 
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+FILE = 'a_file.txt'
+PATH = os.path.join(CURRENT_DIR, 'a_file.txt')
+
 
 def validate_call_sign(idx, func, args_and_kwargs, check):
     call_sign = CallSign(func)
@@ -386,11 +390,6 @@ class VK:
     ('func'), (var_keyword_signature, VK().imethod, VK().cmethod, VK().smethod))
 def test_call_sign_on_var_keyword_signature_functions(idx, func, args_and_kwargs, check):
     validate_call_sign(idx, func, args_and_kwargs, check)
-
-
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-FILE = 'a_file.txt'
-PATH = os.path.join(CURRENT_DIR, 'a_file.txt')
 
 
 @pytest.mark.unit
