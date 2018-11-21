@@ -11,6 +11,8 @@ from utils.iterable import consume
 from utils.sentinel import Sentinel
 from utils.tools import isnamedtuple, is_selfish
 
+SIGNATURE_TAG = inspect.Signature.__qualname__
+
 
 class CallSign:
     """
@@ -328,7 +330,7 @@ class CallSign:
         """Manifest ensures call sign creation via a generic backup"""
         try:
             return cls(func)
-        except TypeError:
+        except ValueError:
             return cls.make_generic(func)
 
     def __init__(self, func, *, enhance_sort=False):
@@ -337,6 +339,10 @@ class CallSign:
         # inspection is expensive, so perform just once
         self.signature = inspect.signature(self.func)
         self.parameters = self._derive_parameters()
+
+
+    def __repr__(self):
+        return repr(self.signature).replace(SIGNATURE_TAG, self.class_name)
 
 
 def normalize(enhance_sort=False):
