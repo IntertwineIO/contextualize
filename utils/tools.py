@@ -236,6 +236,14 @@ def ischildclass(obj, classinfo):
         return None
 
 
+def isclassmethod(func):
+    return inspect.ismethod(func) and inspect.isclass(func.__self__)
+
+
+def isinstancemethod(func):
+    return inspect.ismethod(func) and not inspect.isclass(func.__self__)
+
+
 def isiterator(obj):
     """Check if object is an iterator (not just iterable)"""
     cls = obj.__class__
