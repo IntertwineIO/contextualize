@@ -14,7 +14,7 @@ import settings
 from utils.debug import async_debug, sync_debug
 from utils.signature import CallSign
 from utils.singleton import Singleton
-from utils.tools import isnonstringsequence, is_selfish
+from utils.tools import isinstancemethod, isnonstringsequence
 
 ENCODING_DEFAULT = 'utf-8'
 
@@ -266,8 +266,6 @@ class LyricalCache(OrderedDict):
     Lyrical is an LRU cache supporting individual key invalidation and
     key normalization based on the function call signature.
 
-    When called
-
     Inspired by Raymond Hettinger's LRU:
     https://bugs.python.org/issue30153
     """
@@ -284,12 +282,12 @@ class LyricalCache(OrderedDict):
 
     @wrapt.decorator
     def __call__(self, func, instance, args, kwargs):
+        """Decorate function, returning decorated version of function"""
         if asyncio.iscoroutinefunction(func):
             raise TypeError('Function decorated with LyricalCache must not be async.')
 
         if self.func is None:
-            self.func = func
-            self.call_sign = CallSign.manifest(func)
+            self._initialize_decorated(func)
 
         key = self.form_key(*args, **kwargs)
 
@@ -306,14 +304,27 @@ class LyricalCache(OrderedDict):
 
         return value
 
-    def __new__(cls, func=None, *, maxsize=128):
-        inst = super().__new__(cls)
-        inst.maxsize = maxsize or float('inf')
-        inst.func = None
-        inst.call_sign = None
-        if func:
-            return inst(func)  # return decorated function
-        return inst  # return decorator
+    def _initialize_decorated(self, func):
+        """Initialize attributes from decorated function"""
+        self.func = func
+        self.call_sign = CallSign.manifest(func) if func else None
+
+    def __init__(self, func=None, *, maxsize=128):
+        super().__init__()
+        self.maxsize = maxsize or float('inf')
+        self._initialize_decorated(func)
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return (self.func == other.func and
+                    self.maxsize == other.maxsize)
+        return NotImplemented
+
+    def __ne__(self, other):
+        if isinstance(other, self.__class__):
+            return (self.func != other.func or
+                    self.maxsize != other.maxsize)
+        return NotImplemented
 
 
 FileInfo = namedtuple('FileInfo', 'last_modified size')
@@ -323,12 +334,18 @@ class FileCache:
     """
     File Cache
 
-    The File Cache decorator provides least-recently-used (LRU) caching
+    The FileCache decorator provides least-recently-used (LRU) caching
     with automatic file invalidation upon file modification.
 
-    The file-loading function must accept the file path as a parameter.
+    Each FileCache applies to a single function and must not be reused.
+    The decorated function must accept the file path as a parameter.
     If the file has been modified since the last call, the cache is
     invalidated for just that file and the file is reloaded.
+
+    Both last modified time and file size are used to determine whether
+    a file has been modified. The granularity of last modified time is
+    one second on some operating systems, which works for most real
+    world use cases, but not for tests. File size addresses this issue.
 
     I/O:
     maxsize=None:        Max size of the LRU cache
@@ -336,13 +353,13 @@ class FileCache:
                          first parameter that is not self/cls/meta.
     """
     @wrapt.decorator
-    def file_cache_wrapper(self, lyrical_func, instance, args, kwargs):
+    def _file_cache_wrapper(self, lyrical_func, instance, args, kwargs):
         """Clear cached file if modified and call lyrical func"""
         if asyncio.iscoroutinefunction(lyrical_func):
-            raise TypeError('Function decorated with file_cache must not be async.')
+            raise TypeError('Function decorated with FileCache must not be async.')
 
         file_path = (args[self.path_parameter_index] if self.path_parameter_index < len(args)
-                     else kwargs[self.path_parameter_name])
+                     else kwargs[self.path_parameter])
 
         cached_file_info = self.file_info.get(file_path, FileInfo(0, 0))
         current_file_stats = os.stat(file_path)
@@ -357,42 +374,88 @@ class FileCache:
 
     @wrapt.decorator
     def __call__(self, func, instance, args, kwargs):
+        """Decorate function, returning decorated version of function"""
         if asyncio.iscoroutinefunction(func):
-            raise TypeError('Function decorated with LyricalCache must not be async.')
+            raise TypeError('Function decorated with FileCache must not be async.')
 
         if self.func is None:
-            self._initialize(func)
+            self._initialize_decorated(func, self.path_parameter)
 
-        file_cache = self.file_cache_wrapper(self.lyrical_cache(func))
+        file_cache = self._file_cache_wrapper(self.lyrical_cache(func))
         return file_cache(*args, **kwargs)
 
-    def _initialize(self, func):
+    def _initialize_decorated(self, func, path_parameter):
+        """Initialize attributes from decorated function"""
         self.func = func
+        if not func:
+            self.signature = None
+            self.path_parameter_index = None
+            return
+
         self.signature = inspect.signature(func)
         parameters = self.signature.parameters
-        path_parameter = self.path_parameter
 
-        if path_parameter:
-            for index, key in enumerate(parameters.keys()):
-                if key == path_parameter:
-                    self.path_parameter_index = index
-                    self.path_parameter_name = path_parameter
-                    break
-        else:
+        if not path_parameter:
             self.path_parameter_index = 0
-            self.path_parameter_name = next(iter(parameters.keys()))
+            self.path_parameter = next(iter(parameters.keys()))
+            return
 
-    def __new__(cls, func=None, *, maxsize=None, path_parameter=None):
-        inst = super().__new__(cls)
-        inst.maxsize = maxsize or float('inf')
-        inst.path_parameter = path_parameter
-        inst.path_parameter_name = None
-        inst.path_parameter_index = None
-        inst.func = None
-        inst.signature = None
-        inst.lyrical_cache = LyricalCache(maxsize=maxsize)
-        inst.file_info = {}
+        for index, key in enumerate(parameters.keys()):
+            if key == path_parameter:
+                self.path_parameter_index = index
+                break
+        else:
+            raise ValueError(f'path parameter not found in decorated signature: {self.signature}')
 
-        if func:
-            return inst(func)  # return decorated function
-        return inst  # return decorator
+    def __init__(self, func=None, *, maxsize=None, path_parameter=None):
+        super().__init__()
+        self.maxsize = maxsize or float('inf')
+        self.path_parameter = path_parameter
+        self.lyrical_cache = LyricalCache(maxsize=maxsize)
+        self.file_info = {}
+        self._initialize_decorated(func, path_parameter)
+
+    def __repr__(self):
+        """
+        The FileCache repr evaluates to 'itself':
+
+        FileCache({func}, maxsize={size}, path_parameter={param})
+
+        For a class or static method, the func includes the underlying
+        class name and the evaluated repr equates to the original.
+
+        For an instance method, the instance to which it is bound is
+        referenced by its repr. If it evaluates to an instance, the
+        FileCache repr will evaluate to a FileCache instance.
+
+        If the bound instance's repr evaluates to a new instance, the
+        methods will be bound to different instances, so they may not
+        equate, but they should return the same values when called.
+        """
+        class_name = self.__class__.__name__
+        if not self.func:
+            function = ''
+        elif isinstancemethod(self.func):
+            base = repr(self.func.__self__)
+            function = f'{base}.{self.func.__name__}'
+        else:
+            function = self.func.__qualname__
+        maxsize = f'maxsize={self.maxsize}' if self.maxsize < float('inf') else ''
+        path_parameter = f"path_parameter='{self.path_parameter}'" if self.path_parameter else ''
+        delimiter1 = ', ' if function and maxsize else ''
+        delimiter2 = ', ' if (function or maxsize) and path_parameter else ''
+        return f"{class_name}({function}{delimiter1}{maxsize}{delimiter2}{path_parameter})"
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return (self.func == other.func and
+                    self.maxsize == other.maxsize and
+                    self.path_parameter == other.path_parameter)
+        return NotImplemented
+
+    def __ne__(self, other):
+        if isinstance(other, self.__class__):
+            return (self.func != other.func or
+                    self.maxsize != other.maxsize or
+                    self.path_parameter != other.path_parameter)
+        return NotImplemented

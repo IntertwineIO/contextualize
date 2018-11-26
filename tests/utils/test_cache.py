@@ -12,6 +12,8 @@ from unittest.mock import Mock, patch
 
 from utils.cache import CacheKey, FileCache, LyricalCache
 from utils.signature import CallSign
+from utils.tools import isinstancemethod
+
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 A_FILE = 'a_file.txt'
@@ -145,7 +147,8 @@ def test_cache_key(idx, qualifiers, fields, encoding, exception,
 
 def validate_lyrical_cache_calls(idx, func, maxsize, call_args_and_cache_hits):
     """Validate LyricalCache hits without any mocking"""
-    cached = LyricalCache(func=func, maxsize=maxsize)
+    lyrical_cache = LyricalCache(maxsize=maxsize)
+    cached = lyrical_cache(func)
 
     for call_count, (args, kwargs, cache_hit) in enumerate(call_args_and_cache_hits, start=1):
         check = func(*args, **kwargs)
@@ -311,6 +314,9 @@ class FR:
     def smethod(file_path):
         return read_file(file_path)
 
+    def __repr__(self):
+        return f'{self.__class__.__qualname__}()'
+
 
 def write_file(file_path, content):
     with open(file_path, 'w') as file:
@@ -335,7 +341,10 @@ def reset_files(paths):
 
 def validate_file_cache_calls(idx, func, maxsize, procedures):
     """Validate FileCache calls without any mocking"""
-    file_cached = FileCache(func, maxsize=maxsize, path_parameter=None)
+    file_cache = FileCache(maxsize=maxsize, path_parameter=None)
+    assert eval(repr(file_cache)) == file_cache
+    file_cached = file_cache(func)
+    assert eval(repr(file_cache)) == file_cache
 
     paths = (procedure.path for procedure in procedures if procedure.io is FileIO.WRITE)
     with reset_files(paths):
@@ -345,6 +354,16 @@ def validate_file_cache_calls(idx, func, maxsize, procedures):
                 value = file_cached(path)
                 assert value == check
                 assert value == content
+
+                eval_repr_file_cache = eval(repr(file_cache))
+                # methods bound to different instances do not equate...
+                if not isinstancemethod(func):
+                    assert eval_repr_file_cache == file_cache
+                # ...but they should return the same value
+                eval_repr_file_cached = eval_repr_file_cache(func)
+                eval_repr_value = eval_repr_file_cached(path)
+                assert eval_repr_value == check
+
             elif io is FileIO.WRITE:
                 write_file(path, content)
             else:
@@ -361,6 +380,7 @@ def validate_file_cache_hits(idx, func, maxsize, procedures):
         mock_signature.return_value = signature
 
         file_cache = FileCache(maxsize=maxsize, path_parameter='file_path')
+        assert eval(repr(file_cache)) == file_cache
         wrapped_and_cached = file_cache(wrapped)
 
         expected_cache_hits = expected_cache_misses = 0
