@@ -244,6 +244,10 @@ def isinstancemethod(func):
     return inspect.ismethod(func) and not inspect.isclass(func.__self__)
 
 
+def isstaticmethod(func, cls):
+    return isinstance(cls.__dict__[func.__name__], staticmethod)
+
+
 def isiterator(obj):
     """Check if object is an iterator (not just iterable)"""
     cls = obj.__class__
