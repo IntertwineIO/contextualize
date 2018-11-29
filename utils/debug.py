@@ -31,7 +31,7 @@ def format_text(label, text, offset_space):
 
 
 def derive_offset_space(offset=None, indent=4):
-    """Derive offset by counting wrapped stack frames if not given"""
+    """Derive offset space by counting debug wrapper stack frames"""
     if offset is None:
         frame_records = inspect.stack()
         new_offset = sum(1 for f in frame_records
@@ -56,12 +56,12 @@ def loop_repr(loop):
     return f'<{module}.{class_name} object at {hex_id} {running} {closed} {debug}>'
 
 
-def print_enter_info(wrapped, context, instance, args, kwargs,
+def print_enter_info(func, context, instance, args, kwargs,
                      printer, offset_space, loop=None, is_async=False):
-    """Print enter info for wrapped function to be called/awaited"""
+    """Print enter info for function to be called/awaited"""
     print(SEPARATOR)
     async_ = 'async ' if is_async else ''
-    print(f'{offset_space}Entering {async_}{wrapped.__name__}')
+    print(f'{offset_space}Entering {async_}{func.__name__}')
     if instance is not None:
         if context is not None:
             format_text('context', evaluate_context(instance, context), offset_space)
@@ -75,13 +75,13 @@ def print_enter_info(wrapped, context, instance, args, kwargs,
     print(SEPARATOR)
 
 
-def print_exit_info(wrapped, context, instance, args, kwargs,
+def print_exit_info(func, context, instance, args, kwargs,
                     result, end_time, elapsed_time,
                     printer, offset_space, loop=None, is_async=False):
-    """Print exit info for wrapped function to be called/awaited"""
+    """Print exit info for function upon its return"""
     print(SEPARATOR)
     async_ = 'async ' if is_async else ''
-    print(f'{offset_space}Returning from {async_}{wrapped.__name__}')
+    print(f'{offset_space}Returning from {async_}{func.__name__}')
     if instance is not None:
         if context is not None:
             format_text('context', evaluate_context(instance, context), offset_space)
@@ -117,22 +117,22 @@ def sync_debug(offset=None, indent=4, context=None):
                     for each level of offset
     """
     @wrapt.decorator
-    def sync_debug_wrapper(wrapped, instance, args, kwargs):
-        if asyncio.iscoroutinefunction(wrapped):
+    def sync_debug_wrapper(func, instance, args, kwargs):
+        if asyncio.iscoroutinefunction(func):
             raise TypeError('Function decorated with sync_debug must not be async.')
         loop = asyncio.get_event_loop()
         offset_space = derive_offset_space(offset, indent)
         width = WIDTH - len(offset_space)
         printer = PrettyPrinter(indent=indent, width=width)
-        print_enter_info(wrapped, context, instance, args, kwargs,
+        print_enter_info(func, context, instance, args, kwargs,
                          printer, offset_space, loop)
 
         true_start_time = loop.time()
-        result = wrapped(*args, **kwargs)
+        result = func(*args, **kwargs)
         end_time = loop.time()
         elapsed_time = end_time - true_start_time
 
-        print_exit_info(wrapped, context, instance, args, kwargs,
+        print_exit_info(func, context, instance, args, kwargs,
                         result, end_time, elapsed_time,
                         printer, offset_space, loop)
         return result
@@ -161,22 +161,22 @@ def async_debug(offset=None, indent=4, context=None):
                     for each level of offset
     """
     @wrapt.decorator
-    async def async_debug_wrapper(wrapped, instance, args, kwargs):
-        if not asyncio.iscoroutinefunction(wrapped):
+    async def async_debug_wrapper(func, instance, args, kwargs):
+        if not asyncio.iscoroutinefunction(func):
             raise TypeError('Function decorated with async_debug must be async.')
         loop = asyncio.get_event_loop()
         offset_space = derive_offset_space(offset, indent)
         width = WIDTH - len(offset_space)
         printer = PrettyPrinter(indent=indent, width=width)
-        print_enter_info(wrapped, context, instance, args, kwargs,
+        print_enter_info(func, context, instance, args, kwargs,
                          printer, offset_space, loop, is_async=True)
 
         true_start_time = loop.time()
-        result = await wrapped(*args, **kwargs)
+        result = await func(*args, **kwargs)
         end_time = loop.time()
         elapsed_time = end_time - true_start_time
 
-        print_exit_info(wrapped, context, instance, args, kwargs,
+        print_exit_info(func, context, instance, args, kwargs,
                         result, end_time, elapsed_time,
                         printer, offset_space, loop, is_async=True)
         return result

@@ -25,24 +25,24 @@ class SingletonX(Singleton):
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    'singleton_class, args1, kwds1, exception1, args2, kwds2, exception2', [
-    (SingletonA, [], {}, None, [], {}, None),
-    (SingletonB, [1, 2, 3], {}, None, [], {}, None),
-    (SingletonC, [], {'a': 1, 'b': 2}, None, [], {}, None),
-    (SingletonD, [1, 2, 3], {'a': 1, 'b': 2}, None, [], {}, None),
-    (SingletonE, [1, 2, 3], {}, None, [1, 2, 3], {}, None),
-    (SingletonF, [], {'a': 1, 'b': 2}, None, [], {'a': 1, 'b': 2}, None),
-    (SingletonG, [1, 2, 3], {'a': 1, 'b': 2}, None, [1, 2, 3], {'a': 1, 'b': 2}, None),
-    (SingletonH, [], {}, None, [1], {}, ValueError),
-    (SingletonI, [], {}, None, [], {'a': 1}, ValueError),
-    (SingletonJ, [1, 2, 3], {}, None, [1], {}, ValueError),
-    (SingletonK, [], {'a': 1, 'b': 2}, None, [], {'a': 1, 'b': 2, 'c': 3}, ValueError),
-    (SingletonL, [1, 2, 3], {'a': 1, 'b': 2}, None, [1, 2], {'a': 1, 'b': 2}, ValueError),
-    (SingletonM, [1, 2, 3], {'a': 1, 'b': 2}, None, [1, 2, 3], {'b': 2}, ValueError),
-    (SingletonX, [1, 2, 3], {'a': 1, 'b': 2}, ValueError, [1, 2, 3], {'a': 1, 'b': 2}, None),
-])
+    'singleton_class, args1, kwds1, exception1, args2, kwds2, exception2',
+    [(SingletonA, [], {}, None, [], {}, None),
+     (SingletonB, [1, 2, 3], {}, None, [], {}, None),
+     (SingletonC, [], {'a': 1, 'b': 2}, None, [], {}, None),
+     (SingletonD, [1, 2, 3], {'a': 1, 'b': 2}, None, [], {}, None),
+     (SingletonE, [1, 2, 3], {}, None, [1, 2, 3], {}, None),
+     (SingletonF, [], {'a': 1, 'b': 2}, None, [], {'a': 1, 'b': 2}, None),
+     (SingletonG, [1, 2, 3], {'a': 1, 'b': 2}, None, [1, 2, 3], {'a': 1, 'b': 2}, None),
+     (SingletonH, [], {}, None, [1], {}, ValueError),
+     (SingletonI, [], {}, None, [], {'a': 1}, ValueError),
+     (SingletonJ, [1, 2, 3], {}, None, [1], {}, ValueError),
+     (SingletonK, [], {'a': 1, 'b': 2}, None, [], {'a': 1, 'b': 2, 'c': 3}, ValueError),
+     (SingletonL, [1, 2, 3], {'a': 1, 'b': 2}, None, [1, 2], {'a': 1, 'b': 2}, ValueError),
+     (SingletonM, [1, 2, 3], {'a': 1, 'b': 2}, None, [1, 2, 3], {'b': 2}, ValueError),
+     (SingletonX, [1, 2, 3], {'a': 1, 'b': 2}, ValueError, [1, 2, 3], {'a': 1, 'b': 2}, None),
+     ])
 def test_singleton_instantiation(
-    singleton_class, args1, kwds1, exception1, args2, kwds2, exception2):
+        singleton_class, args1, kwds1, exception1, args2, kwds2, exception2):
     """Test Singleton instantiation"""
     if exception1:
         with pytest.raises(exception1):

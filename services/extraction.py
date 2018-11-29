@@ -1,12 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import asyncio
-from collections import OrderedDict
 
 from content import ResearchArticle
 from extraction.extractor import MultiExtractor
-from utils.cache import AsyncCache
-from utils.debug import async_debug, sync_debug
+from utils.debug import async_debug
 from utils.tools import PP
 
 

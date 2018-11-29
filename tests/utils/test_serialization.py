@@ -34,15 +34,16 @@ class Color:
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ('value', 'check'), [
-    (datetime(2018, 7, 8, 5, 43, 21, 12345), '2018-07-08T05:43:21.012345'),
-    (date(1918, 7, 14), '1918-07-14'),
-    (time(12, 34, 56, 7890), '12:34:56.007890'),
-    (Decimal('2.718281828459'), '2.718281828459'),
-    (Color.AdditivePrimary.GREEN, 'test_serialization.Color.AdditivePrimary.GREEN'),
-    (Color.SubtractivePrimary.YELLOW, 'test_serialization.Color.SubtractivePrimary.YELLOW'),
-    (BaseExtractor.WebDriverBrand.CHROME, 'extraction.extractor.BaseExtractor.WebDriverBrand.CHROME'),
-])
+    ('value', 'check'),
+    [(datetime(2018, 7, 8, 5, 43, 21, 12345), '2018-07-08T05:43:21.012345'),
+     (date(1918, 7, 14), '1918-07-14'),
+     (time(12, 34, 56, 7890), '12:34:56.007890'),
+     (Decimal('2.718281828459'), '2.718281828459'),
+     (Color.AdditivePrimary.GREEN, 'test_serialization.Color.AdditivePrimary.GREEN'),
+     (Color.SubtractivePrimary.YELLOW, 'test_serialization.Color.SubtractivePrimary.YELLOW'),
+     (BaseExtractor.WebDriverBrand.CHROME,
+        'extraction.extractor.BaseExtractor.WebDriverBrand.CHROME'),
+     ])
 def test_serialize_nonstandard(value, check):
     """Test serialize "nonstandard" (i.e. not handled by json.dumps)"""
     serialized = serialize_nonstandard(value)
@@ -51,14 +52,14 @@ def test_serialize_nonstandard(value, check):
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ('value', 'check'), [
-    (Color(Color.AdditivePrimary, 'GREEN'), "Color(Color.AdditivePrimary, 'GREEN')"),
-    (Color(Color.SubtractivePrimary, 'YELLOW'), "Color(Color.SubtractivePrimary, 'YELLOW')"),
-    (Color.AdditivePrimary.GREEN, 'test_serialization.Color.AdditivePrimary.GREEN'),
-    (Color.SubtractivePrimary.YELLOW, 'test_serialization.Color.SubtractivePrimary.YELLOW'),
-    (Color.AdditivePrimary, str(Color.AdditivePrimary)),
-    (None, NULL),
-])
+    ('value', 'check'),
+    [(Color(Color.AdditivePrimary, 'GREEN'), "Color(Color.AdditivePrimary, 'GREEN')"),
+     (Color(Color.SubtractivePrimary, 'YELLOW'), "Color(Color.SubtractivePrimary, 'YELLOW')"),
+     (Color.AdditivePrimary.GREEN, 'test_serialization.Color.AdditivePrimary.GREEN'),
+     (Color.SubtractivePrimary.YELLOW, 'test_serialization.Color.SubtractivePrimary.YELLOW'),
+     (Color.AdditivePrimary, str(Color.AdditivePrimary)),
+     (None, NULL),
+     ])
 def test_serialize(value, check):
     """Test serialize"""
     serialized = serialize(value)

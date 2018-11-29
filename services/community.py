@@ -55,7 +55,6 @@ class CommunityService(ExtractionService):
         search_data = cls._derive_search_data(payload)
         return cls(search_data, loop)
 
-
     def __init__(self, search_data, loop=None):
         super().__init__(search_data, loop)
         self.cache = ContentCache(self.search_data, self.loop)

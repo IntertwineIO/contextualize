@@ -5,7 +5,6 @@ import datetime
 import os
 import urllib
 from collections import OrderedDict, defaultdict, namedtuple
-from functools import lru_cache
 from itertools import chain
 from pathlib import Path
 
@@ -21,10 +20,13 @@ from extraction.definitions import ExtractionStatus
 from extraction.operation import ExtractionOperation
 from secret_service.agency import SecretService
 from utils.async import run_in_executor
+from utils.cache import FileCache
 from utils.debug import async_debug, sync_debug
 from utils.enum import FlexEnum
+from utils.iterable import one
+from utils.mixins import Hashable
 from utils.statistics import HumanDwellTime, human_dwell_time, human_selection_shuffle
-from utils.tools import PP, derive_domain, enlist, isnonstringsequence, one, xor_constrain
+from utils.tools import PP, derive_domain, enlist, is_nonstring_sequence, xor_constrain
 
 
 class BaseExtractor:
@@ -48,6 +50,8 @@ class BaseExtractor:
 
     Status = ExtractionStatus
 
+    configuration_file_cache = FileCache(maxsize=None)
+
     @async_debug()
     async def extract(self):
         """
@@ -61,6 +65,10 @@ class BaseExtractor:
                 msg='WARNING: extracting with disabled extractor',
                 type='extractor_disabled_warning', extractor=repr(self)))
             return
+
+        if await self._load_cached_content():
+            return self.extracted_content
+
         try:
             # TODO: Add WebDriverPool with context manager to provision
             if not self.web_driver:
@@ -69,6 +77,7 @@ class BaseExtractor:
             await self._perform_extraction(self.page_url)
             await self._update_status(ExtractionStatus.COMPLETED)
             return self.extracted_content
+
         finally:
             if not self.reuse_web_driver:
                 await self._release_web_driver()
@@ -119,15 +128,7 @@ class BaseExtractor:
         self.web_driver.last_fetch_timestamp = datetime.datetime.utcnow()
         await future_page
 
-    async def _perform_extraction(self, url=None, page=1):
-        """Perform extraction (abstract method)"""
-        raise NotImplementedError
-
-    async def _perform_page_extraction(self, *args, **kwds):
-        """Perform page extraction (abstract method)"""
-        raise NotImplementedError
-
-    # @async_debug()
+    @async_debug()
     async def _extract_content(self, element, configuration, index=1, **kwds):
         """
         Extract content
@@ -250,6 +251,10 @@ class BaseExtractor:
 
         return await operation.execute(target, index)
 
+    async def _load_cached_content(self):
+        """Load cached content"""
+        return False
+
     # @async_debug(context="self.content_map.get('source_url')")
     async def _update_status(self, status):
         """Update status in memory only"""
@@ -269,7 +274,7 @@ class BaseExtractor:
         """Form file path by combining base and directory"""
         return os.path.join(base, directory, self.FILE_NAME)
 
-    @lru_cache(maxsize=None, typed=False)
+    @configuration_file_cache
     def _marshall_configuration(self, file_path):
         """Marshall configuration from file, given a file path"""
         with open(file_path) as stream:
@@ -630,18 +635,19 @@ class MultiExtractor(BaseExtractor):
 
     FILE_NAME = 'multi.yaml'
 
-    # URL keys
-    URL_TAG = 'url'
-    URL_TEMPLATE_TAG = 'url_template'
+    # URL tags
     INDEX_TAG = 'index'
     SERIES_TAG = 'series'
     TEMPLATES_TAG = 'templates'
     DELIMITER_TAG = 'delimiter'
     TERM_TAG = 'term'
+    URL_TAG = 'url'
+    URL_TEMPLATE_TAG = 'url_template'
+
     TOKEN_TEMPLATE = '{{{}}}'
     URLClauseSeries = FlexEnum('URLClauseSeries', 'TOPIC TERM CUSTOM')
 
-    # Pagination keys
+    # Pagination tags
     PAGINATION_TAG = 'pagination'
     PAGES_TAG = 'pages'
     PAGE_SIZE_TAG = 'page_size'
@@ -650,6 +656,7 @@ class MultiExtractor(BaseExtractor):
     NEXT_PAGE_URL_TAG = 'next_page_url'
 
     EXTRACT_SOURCES_TAG = 'extract_sources'
+    FRESHNESS_THRESHOLD_TAG = 'freshness_threshold'
     ITEMS_TAG = 'items'
 
     @async_debug()
@@ -765,7 +772,7 @@ class MultiExtractor(BaseExtractor):
             if unique_field != self.SOURCE_URL_TAG:
                 raise ValueError('Unique field must be '
                                  f"'{self.SOURCE_URL_TAG}' to extract sources")
-            # PRELIMINARY
+            await self._update_status(ExtractionStatus.PRELIMINARY)
             source_results = await self._extract_sources(self.extracted_content)
             await self._combine_results(self.extracted_content, source_results)
 
@@ -809,7 +816,31 @@ class MultiExtractor(BaseExtractor):
 
                 setattr(content_result, field, source_value)
 
-    # @async_debug(context="self.content_map.get('source_url')")
+    @async_debug(context="self.page_url")
+    async def _load_cached_content(self):
+        """Load cached content, returning True if available and fresh"""
+        status, last_extracted = await self.cache.retrieve_extractor_info()
+
+        if self._should_use_cached_content(status, last_extracted):
+            cached_results = await self.cache.retrieve_extractor_results()
+            unique_field = self.model.UNIQUE_FIELD
+            self.extracted_content = {result[unique_field]: Hashable.from_hash(result)
+                                      for result in cached_results}
+            return True
+        return False
+
+    @sync_debug()
+    def _should_use_cached_content(self, status, last_extracted):
+        """Determine if cached content is available and fresh"""
+        # TODO: Check last extracted after configuration last modified
+        if status and status.indicates_results() and last_extracted:
+            now = datetime.datetime.utcnow()
+            freshness = now - last_extracted
+            return freshness < self.freshness_threshold
+
+        return False
+
+    @async_debug(context="self.content_map.get('source_url')")
     async def _update_status(self, status):
         """Update extractor/overall status, caching as necessary"""
         if status.value < self.status.value:
@@ -822,7 +853,7 @@ class MultiExtractor(BaseExtractor):
         await self.cache.store_extraction_status(status, overall_status, has_changed)
         return True
 
-    # @async_debug(context="self.content_map.get('source_url')")
+    @async_debug(context="self.content_map.get('source_url')")
     async def _apply_status_change(self, status):
         """Apply status change; return overall status & has_changed"""
         old_overall_status = await self._determine_overall_status()
@@ -834,7 +865,7 @@ class MultiExtractor(BaseExtractor):
         has_changed = new_overall_status is not old_overall_status
         return new_overall_status, has_changed
 
-    # @async_debug(context="self.content_map.get('source_url')")
+    @async_debug(context="self.content_map.get('source_url')")
     async def _determine_overall_status(self):
         """Determine overall extraction status of the cohort"""
         minimum = min(self.cohort_status_values)
@@ -852,7 +883,7 @@ class MultiExtractor(BaseExtractor):
         """Cohort status values are emitted by the returned generator"""
         return (extractor.status.value for extractor in self.cohort.values())
 
-    # @sync_debug()
+    @sync_debug()
     @classmethod
     def provision_extractors(cls, model, search_data=None, web_driver=None, web_driver_brand=None,
                              reuse_web_driver=None, loop=None):
@@ -932,6 +963,11 @@ class MultiExtractor(BaseExtractor):
         """Set cohort to dictionary of extractors keyed by directory"""
         self.cohort = extractors
 
+    def _derive_freshness_threshold(self, configuration):
+        freshness_threshold = configuration.get(self.FRESHNESS_THRESHOLD_TAG,
+                                                settings.FRESHNESS_THRESHOLD_DEFAULT)
+        return datetime.timedelta(days=freshness_threshold)
+
     @staticmethod
     def _prepare_search_data(search_data):
         """Prepare search terms by ensuring they are an ordered dict"""
@@ -961,7 +997,7 @@ class MultiExtractor(BaseExtractor):
             return key, None
         if isinstance(value, str):
             return key, [urllib.parse.quote(value)]
-        if isnonstringsequence(value):
+        if is_nonstring_sequence(value):
             return key, [urllib.parse.quote(v) for v in value]
         raise TypeError(f"Expected string or list/tuple for '{key}'; "
                         f"received '{type(value)}': {value}")
@@ -1009,7 +1045,7 @@ class MultiExtractor(BaseExtractor):
 
                 else:
                     raise TypeError(f"Expected str or dict for '{token}'; "
-                                    f"received '{type(series_config)}': {series_config}")
+                                    f"received '{type(token_config)}': {token_config}")
             else:
                 raise ValueError(f'Unknown token: {token}')
 
@@ -1084,6 +1120,7 @@ class MultiExtractor(BaseExtractor):
         self.search_data = self._prepare_search_data(search_data)
         self.cache = MultiExtractorCache(directory=self.directory, search_data=self.search_data,
                                          model=self.model, loop=self.loop)
+        self.freshness_threshold = self._derive_freshness_threshold(self.configuration)
         self.page_url = self._form_page_url(self.configuration, self.search_data)
 
         pagination_config = self.configuration.get(self.PAGINATION_TAG)

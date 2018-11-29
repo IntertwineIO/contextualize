@@ -4,8 +4,7 @@ import importlib
 import inspect
 import re
 from collections import OrderedDict
-from functools import lru_cache
-from itertools import islice
+from contextlib import contextmanager
 from past.builtins import basestring
 from pprint import PrettyPrinter
 from urllib.parse import urlparse
@@ -19,17 +18,17 @@ WIDTH = 200
 
 PP = PrettyPrinter(indent=INDENT, width=WIDTH)
 
-VALUE_DELIMITER = ', '
-MORE_VALUES = '...'
-
 CLASS_NAME_PATTERN = re.compile(r'[A-Z][a-zA-Z0-9]*$')
 
 def is_class_name(name):
     return CLASS_NAME_PATTERN.match(name)
 
+INTERPRETER_MODULE = '__main__'
 MODULE_NAME_PATTERN = re.compile(r'[a-z][a-z_0-9]*[a-z0-9]$')
 
 def is_module_name(name):
+    if name == INTERPRETER_MODULE:
+        return True
     return MODULE_NAME_PATTERN.match(name)
 
 SELF_REFERENTIAL_PARAMS = {'self', 'cls', 'meta'}
@@ -230,7 +229,7 @@ def get_related_json(base, field, payload=None, strict=False):
     return value
 
 
-def ischildclass(obj, classinfo):
+def is_child_class(obj, classinfo):
     """Check if obj extends classinfo; return None if invalid params"""
     try:
         return issubclass(obj, classinfo)
@@ -238,13 +237,33 @@ def ischildclass(obj, classinfo):
         return None
 
 
-def isiterator(obj):
+def is_instance_method(func):
+    """Check if function (via instance) is an instance method"""
+    return inspect.ismethod(func) and not inspect.isclass(func.__self__)
+
+
+def is_class_method(func):
+    """Check if function is a class method"""
+    return inspect.ismethod(func) and inspect.isclass(func.__self__)
+
+
+def is_static_method(func, cls):
+    """Check if function is a static method on the given class"""
+    return False if cls is None else isinstance(cls.__dict__[func.__name__], staticmethod)
+
+
+def is_iterator(obj):
     """Check if object is an iterator (not just iterable)"""
     cls = obj.__class__
     return hasattr(cls, '__next__') and not hasattr(cls, '__len__')
 
 
-def isnonstringsequence(obj):
+def is_namedtuple(obj):
+    """Check if object is a namedtuple"""
+    return isinstance(obj, tuple) and hasattr(obj, '_asdict')
+
+
+def is_nonstring_sequence(obj):
     """Check if object is non-string sequence: list, tuple, range..."""
     if (isinstance(obj, basestring) or hasattr(obj, 'items') or not hasattr(obj, '__getitem__')):
         return False
@@ -252,6 +271,16 @@ def isnonstringsequence(obj):
         iter(obj)
         return True
     except TypeError:
+        return False
+
+
+def is_selfish(func):
+    """Check if function requires a self/cls/meta parameter"""
+    if inspect.isbuiltin(func):
+        return False
+    try:
+        return func.__self__ is not None
+    except AttributeError:
         return False
 
 
@@ -319,160 +348,43 @@ def multi_parse(templates, string):
         f"'{string}' does not match any template: {templates}")
 
 
-def form_range_string(minimum, maximum):
-    """Form range string (or single value) from minimum and maximum"""
-    return f'{minimum}-{maximum}' if minimum < maximum else maximum
+def read_file(path):
+    with open(path) as file:
+        return file.read()
 
 
-def form_values_string(values, iterator=None):
-    """Form values string, with ellipsis if iterator has a next value"""
-    values_string = VALUE_DELIMITER.join(str(v) for v in values)
-    has_more = False
-
-    if iterator:
-        try:
-            next(iterator)
-            has_more = True
-        except StopIteration:
-            pass
-
-    if has_more:
-        values_string += MORE_VALUES
-
-    return values_string
+def write_file(path, content):
+    with open(path, 'w') as file:
+        file.write(content)
 
 
-def constrain(iterable, exact=None, minimum=None, maximum=None):
-    """
-    Constrain
-
-    Given an iterable, confirm the number of values meet the
-    constraints and if so return the values.
-
-    I/O:
-    exact=None:     Exact number of values required
-    minimum=None:   Minimum number of values required
-    maximum=None:   Maximum number of values required
-    return:         Iterable if it has a length, else convert to a list
-                    (i.e. the iterable is an iterator)
-    raise:          TooFewValuesError if less than minimum number
-                    TooManyValuesError if more than maximum number
-    """
-    if exact is not None:
-        if minimum or maximum:
-            raise ValueError(
-                f'Incompatible arguments: {minimum}, {maximum}, {exact}')
-        minimum = maximum = exact
-    else:
-        minimum = minimum if minimum is not None else 0
-        maximum = maximum if maximum is not None else float('Inf')
-
-    if hasattr(iterable, '__len__'):
-        if minimum <= len(iterable) <= maximum:
-            return iterable
-        iterator = iter(iterable)
-    else:
-        iterator = iterable
-
-    values = list(islice(iterator, maximum)) if maximum < float('Inf') else list(iterator)
-
-    if len(values) < minimum:
-        range_string = form_range_string(minimum, maximum)
-        values_string = form_values_string(values)
-        raise TooFewValuesError(expected=range_string, received=values_string)
-
-    if len(values) == maximum:
-        try:
-            values.append(next(iterator))
-            range_string = form_range_string(minimum, maximum)
-            values_string = form_values_string(values)
-            raise TooManyValuesError(expected=range_string, received=values_string)
-        except StopIteration:
-            pass
-
-    return values
-
-
-def one(iterable):
-    """
-    One
-
-    Given an iterable, confirm there is only one value and return it.
-    Otherwise, raise TooFewValuesError or TooManyValuesError.
-    """
-    if hasattr(iterable, '__len__'):
-        if len(iterable) == 1:
-            try:
-                return iterable[0]
-            except (TypeError, KeyError):  # sets, dicts, etc.
-                return next(iter(iterable))
-        iterator = iter(iterable)
-    else:
-        iterator = iterable
+@contextmanager
+def reset_files(*paths):
+    """Context manager that resets contents of specified file paths"""
+    initial_content = {path: None for path in paths}
+    for path in initial_content.keys():
+        initial_content[path] = read_file(path)
 
     try:
-        first = next(iterator)
-    except StopIteration:
-        raise TooFewValuesError(expected=1, received='')
-    try:
-        second = next(iterator)
-        values_string = form_values_string((first, second), iterator)
-        raise TooManyValuesError(expected=1, received=values_string)
-    except StopIteration:
-        return first
+        yield initial_content.items()
 
-
-def one_max(iterable):
-    """
-    One Max
-
-    Given an iterable, confirm there is at most one value and return it
-    if one exists, else None. If there are 2 or more values, raise
-    TooManyValuesError.
-    """
-    if hasattr(iterable, '__len__'):
-        if len(iterable) == 1:
-            try:
-                return iterable[0]
-            except (TypeError, KeyError):  # sets, dicts, etc.
-                return next(iter(iterable))
-        elif not iterable:
-            return None
-        iterator = iter(iterable)
-    else:
-        iterator = iterable
-
-    try:
-        first = next(iterator)
-    except StopIteration:
-        return None
-    try:
-        second = next(iterator)
-        values_string = form_values_string((first, second), iterator)
-        raise TooManyValuesError(expected=1, received=values_string)
-    except StopIteration:
-        return first
-
-
-def one_min(iterable):
-    """
-    One Min
-
-    Given an iterable, confirm there is at least one value. Return the
-    iterable if it has a length; if not (i.e. it's an iterator), convert
-    it to a list first. If there are no values, raise TooFewValuesError.
-    """
-    values = iterable if hasattr(iterable, '__len__') else list(iterable)
-    if not values:
-        raise TooFewValuesError(expected=1, received='')
-    return values
+    finally:
+        for path, content in initial_content.items():
+            write_file(path, content)
 
 
 def logical_xor(a, b):
+    """Logical xor of a and b, returning bool"""
     return bool(a) ^ bool(b)
 
 
 def xor_constrain(a, b):
+    """
+    Xor Constrain
+
+    Return truthy value between a and b, raising ValueError if either
+    both are truthy or both are falsy.
+    """
     if a and not b:
         return a
     if b and not a:

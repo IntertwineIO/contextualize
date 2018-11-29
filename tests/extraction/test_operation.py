@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import MagicMock
 
 from extraction.operation import ExtractionOperation
-from utils.tools import ischildclass
+from utils.tools import is_child_class
 
 
 class ReferencePath:
@@ -45,14 +45,14 @@ content_map = {
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    'idx, reference, check', [
-    (0, 'alpha', 'dog'),
-    (1, 'beta.max', 1975),
-    (2, 'gamma.ray.burst', '110328A'),
-    (3, 'delta.delta.delta', 'ΔΔΔ'),
-    (4, 'aleph', KeyError),
-    (5, 'beta.carotene', AttributeError),
-])
+    'idx, reference, check',
+    [(0, 'alpha', 'dog'),
+     (1, 'beta.max', 1975),
+     (2, 'gamma.ray.burst', '110328A'),
+     (3, 'delta.delta.delta', 'ΔΔΔ'),
+     (4, 'aleph', KeyError),
+     (5, 'beta.carotene', AttributeError),
+     ])
 def test_get_by_reference(idx, reference, check):
     """Test ExtractionOperation._get_by_reference"""
     mock_extractor = MagicMock()
@@ -61,7 +61,7 @@ def test_get_by_reference(idx, reference, check):
     operation = ExtractionOperation.from_configuration(
         {}, field='test_field', source='test_source', extractor=mock_extractor)
 
-    if ischildclass(check, Exception):
+    if is_child_class(check, Exception):
         with pytest.raises(check):
             value = operation._get_by_reference(reference)
 
