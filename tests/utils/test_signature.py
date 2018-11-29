@@ -78,7 +78,7 @@ def obtain_open_results(func, normalized_func, args, kwargs):
     return results, normalized_results
 
 
-def validate_normalize_decorator_results(func, args, kwargs, check):
+def validate_normalize_decorator_results(func, args, kwargs):
     normalize_wrapper = normalize()
     normalized_func = normalize_wrapper(func)
 
@@ -105,7 +105,7 @@ def validate_call_sign(idx, func, arguments, check):
     validate_normalize(call_sign, args, kwargs, check)
     validate_normalize_via_bind(call_sign, args, kwargs, check)
     validate_signify(call_sign, args, kwargs, check)
-    validate_normalize_decorator_results(func, args, kwargs, check)
+    validate_normalize_decorator_results(func, args, kwargs)
 
 
 @wrapt.decorator
