@@ -11,8 +11,6 @@ from utils.iterable import consume
 from utils.sentinel import Sentinel
 from utils.tools import is_selfish
 
-SIGNATURE_TAG = inspect.Signature.__qualname__
-
 
 class CallSign:
     """
@@ -28,9 +26,11 @@ class CallSign:
                         If enhance_sort is True, signature() sorts
                         varkwargs and normalize() sorts all kwargs.
     """
-    VAR_KINDS = {'var_positional', 'var_keyword'}
+    SIGNATURE_TAG = inspect.Signature.__qualname__
 
     SENTINEL = Sentinel()
+
+    VAR_KINDS = {'var_positional', 'var_keyword'}
 
     NamedValues = namedtuple('NamedValues', 'name values')
 
@@ -342,7 +342,7 @@ class CallSign:
 
 
     def __repr__(self):
-        return repr(self.signature).replace(SIGNATURE_TAG, self.class_name)
+        return repr(self.signature).replace(self.SIGNATURE_TAG, self.class_name)
 
 
 def normalize(enhance_sort=False):
