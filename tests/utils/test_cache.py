@@ -4,7 +4,6 @@ import inspect
 import math
 import os
 import pytest
-from contextlib import contextmanager
 from collections import OrderedDict, namedtuple  # noqa: F401 OrderedDict used by eval
 from datetime import date
 from enum import Enum
@@ -12,8 +11,7 @@ from unittest.mock import Mock, patch
 
 from utils.cache import CacheKey, FileCache, LyricalCache
 from utils.signature import CallSign
-from utils.tools import is_instance_method
-
+from utils.tools import is_instance_method, read_file, write_file, reset_files
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 A_FILE = 'a_file.txt'
@@ -297,46 +295,20 @@ def test_lyrical_cache_on_custom_functions(idx, func, maxsize, call_args_and_cac
 FileIO = Enum('FileIO', 'READ WRITE')
 
 
-def read_file(file_path):
-    with open(file_path) as file:
-        return file.read()
-
-
 class FR:
-    def imethod(self, file_path):
-        return read_file(file_path)
+    def imethod(self, path):
+        return read_file(path)
 
     @classmethod
-    def cmethod(cls, file_path):
-        return read_file(file_path)
+    def cmethod(cls, path):
+        return read_file(path)
 
     @staticmethod
-    def smethod(file_path):
-        return read_file(file_path)
+    def smethod(path):
+        return read_file(path)
 
     def __repr__(self):
         return f'{self.__class__.__qualname__}()'
-
-
-def write_file(file_path, content):
-    with open(file_path, 'w') as file:
-        file.write(content)
-
-
-@contextmanager
-def reset_files(paths):
-
-    initial_results = {}
-    initial_results = {path: None for path in paths}
-    for path in initial_results.keys():
-        initial_results[path] = read_file(path)
-
-    try:
-        yield initial_results.items()
-
-    finally:
-        for path, content in initial_results.items():
-            write_file(path, content)
 
 
 def validate_file_cache_calls(idx, func, maxsize, procedures):
@@ -347,7 +319,7 @@ def validate_file_cache_calls(idx, func, maxsize, procedures):
     assert eval(repr(file_cache)) == file_cache
 
     paths = (procedure.path for procedure in procedures if procedure.io is FileIO.WRITE)
-    with reset_files(paths):
+    with reset_files(*paths):
         for io, path, content, cache_hit in procedures:
             if io is FileIO.READ:
                 check = func(path)
@@ -379,7 +351,7 @@ def validate_file_cache_hits(idx, func, maxsize, procedures):
     with patch('utils.cache.inspect.signature') as mock_signature:
         mock_signature.return_value = signature
 
-        file_cache = FileCache(maxsize=maxsize, path_parameter='file_path')
+        file_cache = FileCache(maxsize=maxsize, path_parameter='path')
         assert eval(repr(file_cache)) == file_cache
         wrapped_and_cached = file_cache(wrapped)
 
@@ -387,7 +359,7 @@ def validate_file_cache_hits(idx, func, maxsize, procedures):
         assert len(wrapped.call_args_list) == expected_cache_misses
 
         paths = (procedure.path for procedure in procedures if procedure.io is FileIO.WRITE)
-        with reset_files(paths):
+        with reset_files(*paths):
             call_count = 1
 
             for io, path, content, cache_hit in procedures:

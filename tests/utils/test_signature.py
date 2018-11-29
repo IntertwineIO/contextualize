@@ -9,7 +9,7 @@ from itertools import chain
 import wrapt
 
 from utils.signature import CallSign, normalize
-from utils.tools import is_child_class
+from utils.tools import is_child_class, reset_files
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 FILE = 'a_file.txt'
@@ -46,15 +46,15 @@ def validate_call_sign(idx, func, args_and_kwargs, check):
     positional_or_keyword = signified.positional_or_keyword or {}
     var_positional = signified.var_positional
 
-    args = tuple(chain(positional_only.values(),
-                       positional_or_keyword.values(),
-                       var_positional.values if var_positional else ()))
-    assert args == args_check
+    signified_args = tuple(chain(positional_only.values(),
+                                 positional_or_keyword.values(),
+                                 var_positional.values if var_positional else ()))
+    assert signified_args == args_check
 
-    kwargs = signified.keyword_only or {}
+    signified_kwargs = signified.keyword_only or {}
     var_keyword = signified.var_keyword
-    kwargs.update(var_keyword.values if var_keyword else {})
-    assert kwargs == kwargs_check
+    signified_kwargs.update(var_keyword.values if var_keyword else {})
+    assert signified_kwargs == kwargs_check
 
     argspec = inspect.getfullargspec(func)
     if var_positional:
@@ -64,8 +64,19 @@ def validate_call_sign(idx, func, args_and_kwargs, check):
 
     normalize_wrapper = normalize()
     normalized_func = normalize_wrapper(func)
-    normalized_results = normalized_func(*args, **kwargs)
-    results = func(*args, **kwargs)
+
+    if func is open:
+        paths = [PATH] if 'mode' in kwargs and kwargs['mode'] == 'w' else []
+        with reset_files(*paths):
+            with normalized_func(*args, **kwargs) as f:
+                normalized_results = f
+        with reset_files(*paths):
+            with func(*args, **kwargs) as f:
+                results = f
+    else:
+        normalized_results = normalized_func(*args, **kwargs)
+        results = func(*args, **kwargs)
+
     try:
         normalized_results.__eq__(results)
         assert normalized_results == results

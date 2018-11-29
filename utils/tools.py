@@ -4,6 +4,7 @@ import importlib
 import inspect
 import re
 from collections import OrderedDict
+from contextlib import contextmanager
 from past.builtins import basestring
 from pprint import PrettyPrinter
 from urllib.parse import urlparse
@@ -345,6 +346,31 @@ def multi_parse(templates, string):
 
     raise ValueError(
         f"'{string}' does not match any template: {templates}")
+
+
+def read_file(path):
+    with open(path) as file:
+        return file.read()
+
+
+def write_file(path, content):
+    with open(path, 'w') as file:
+        file.write(content)
+
+
+@contextmanager
+def reset_files(*paths):
+    """Context manager that resets contents of specified file paths"""
+    initial_content = {path: None for path in paths}
+    for path in initial_content.keys():
+        initial_content[path] = read_file(path)
+
+    try:
+        yield initial_content.items()
+
+    finally:
+        for path, content in initial_content.items():
+            write_file(path, content)
 
 
 def logical_xor(a, b):
