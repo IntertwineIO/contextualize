@@ -56,6 +56,7 @@ def validate_signify(call_sign, args, kwargs, check):
     signified_kwargs = signified.keyword_only or {}
     var_keyword = signified.var_keyword
     signified_kwargs.update(var_keyword.values if var_keyword else {})
+
     assert signified_kwargs == check.kwargs
 
     argspec = inspect.getfullargspec(call_sign.func)
@@ -65,29 +66,31 @@ def validate_signify(call_sign, args, kwargs, check):
         assert var_keyword.name == argspec.varkw
 
 
+def obtain_open_results(func, normalized_func, args, kwargs):
+    assert func is open
+    paths = [PATH] if 'mode' in kwargs and kwargs['mode'] == 'w' else []
+    with reset_files(*paths):
+        with normalized_func(*args, **kwargs) as f:
+            normalized_results = f
+    with reset_files(*paths):
+        with func(*args, **kwargs) as f:
+            results = f
+    return results, normalized_results
+
+
 def validate_normalize_decorator_results(func, args, kwargs, check):
     normalize_wrapper = normalize()
     normalized_func = normalize_wrapper(func)
 
     if func is open:
-        paths = [PATH] if 'mode' in kwargs and kwargs['mode'] == 'w' else []
-        with reset_files(*paths):
-            with normalized_func(*args, **kwargs) as f:
-                normalized_results = f
-        with reset_files(*paths):
-            with func(*args, **kwargs) as f:
-                results = f
-    else:
-        normalized_results = normalized_func(*args, **kwargs)
-        results = func(*args, **kwargs)
-
-    assert normalized_results.__eq__(results)
-    assert results.__eq__(normalized_results)
-    try:
-        assert normalized_results == results
-    except AssertionError:
+        results, normalized_results = obtain_open_results(func, normalized_func, args, kwargs)
         # _io.TextIOWrapper comparison with other instance not supported
-        assert func is open
+        assert normalized_results.__eq__(results)
+        assert results.__eq__(normalized_results)
+    else:
+        results = func(*args, **kwargs)
+        normalized_results = normalized_func(*args, **kwargs)
+        assert normalized_results == results
 
 
 def validate_call_sign(idx, func, arguments, check):
