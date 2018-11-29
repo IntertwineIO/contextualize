@@ -5,7 +5,6 @@ import datetime
 import os
 import urllib
 from collections import OrderedDict, defaultdict, namedtuple
-from functools import lru_cache
 from itertools import chain
 from pathlib import Path
 
@@ -21,6 +20,7 @@ from extraction.definitions import ExtractionStatus
 from extraction.operation import ExtractionOperation
 from secret_service.agency import SecretService
 from utils.async import run_in_executor
+from utils.cache import FileCache
 from utils.debug import async_debug, sync_debug
 from utils.enum import FlexEnum
 from utils.iterable import one
@@ -49,6 +49,8 @@ class BaseExtractor:
         mu=0, sigma=0.5, base=1, multiplier=1, minimum=1, maximum=3)
 
     Status = ExtractionStatus
+
+    configuration_file_cache = FileCache(maxsize=None)
 
     @async_debug()
     async def extract(self):
@@ -272,7 +274,7 @@ class BaseExtractor:
         """Form file path by combining base and directory"""
         return os.path.join(base, directory, self.FILE_NAME)
 
-    @lru_cache(maxsize=None, typed=False)
+    @configuration_file_cache
     def _marshall_configuration(self, file_path):
         """Marshall configuration from file, given a file path"""
         with open(file_path) as stream:
