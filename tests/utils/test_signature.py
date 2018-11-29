@@ -4,6 +4,7 @@ import inspect
 import os
 import pytest
 from collections import OrderedDict as OD
+from collections import namedtuple
 from itertools import chain
 
 import wrapt
@@ -15,30 +16,31 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 FILE = 'a_file.txt'
 PATH = os.path.join(CURRENT_DIR, 'a_file.txt')
 
+Arguments = namedtuple('Arguments', 'args kwargs')
 
-def validate_call_sign(idx, func, args_and_kwargs, check):
-    call_sign = CallSign(func)
-    args, kwargs = args_and_kwargs
 
-    if is_child_class(check, Exception):
-        with pytest.raises(check):
-            call_sign.signify(*args, **kwargs)
-        with pytest.raises(check):
-            call_sign.normalize(*args, **kwargs)
-        with pytest.raises(check):
-            call_sign.normalize_via_bind(*args, **kwargs)
-        return
+def validate_call_sign_exceptions(call_sign, args, kwargs, check):
+    with pytest.raises(check):
+        call_sign.normalize(*args, **kwargs)
+    with pytest.raises(check):
+        call_sign.normalize_via_bind(*args, **kwargs)
+    with pytest.raises(check):
+        call_sign.signify(*args, **kwargs)
 
-    args_check, kwargs_check = check
 
+def validate_normalize(call_sign, args, kwargs, check):
     normalized = call_sign.normalize(*args, **kwargs)
-    assert normalized.args == args_check
-    assert normalized.kwargs == kwargs_check
+    assert normalized.args == check.args
+    assert normalized.kwargs == check.kwargs
 
+
+def validate_normalize_via_bind(call_sign, args, kwargs, check):
     normalized_via_bind = call_sign.normalize_via_bind(*args, **kwargs)
-    assert normalized_via_bind.args == args_check
-    assert normalized_via_bind.kwargs == kwargs_check
+    assert normalized_via_bind.args == check.args
+    assert normalized_via_bind.kwargs == check.kwargs
 
+
+def validate_signify(call_sign, args, kwargs, check):
     call_sign.enhance_sort = True
     signified = call_sign.signify(*args, **kwargs)
 
@@ -49,19 +51,21 @@ def validate_call_sign(idx, func, args_and_kwargs, check):
     signified_args = tuple(chain(positional_only.values(),
                                  positional_or_keyword.values(),
                                  var_positional.values if var_positional else ()))
-    assert signified_args == args_check
+    assert signified_args == check.args
 
     signified_kwargs = signified.keyword_only or {}
     var_keyword = signified.var_keyword
     signified_kwargs.update(var_keyword.values if var_keyword else {})
-    assert signified_kwargs == kwargs_check
+    assert signified_kwargs == check.kwargs
 
-    argspec = inspect.getfullargspec(func)
+    argspec = inspect.getfullargspec(call_sign.func)
     if var_positional:
         assert var_positional.name == argspec.varargs
     if var_keyword:
         assert var_keyword.name == argspec.varkw
 
+
+def validate_normalize_decorator_results(func, args, kwargs, check):
     normalize_wrapper = normalize()
     normalized_func = normalize_wrapper(func)
 
@@ -77,12 +81,28 @@ def validate_call_sign(idx, func, args_and_kwargs, check):
         normalized_results = normalized_func(*args, **kwargs)
         results = func(*args, **kwargs)
 
+    assert normalized_results.__eq__(results)
+    assert results.__eq__(normalized_results)
     try:
-        normalized_results.__eq__(results)
         assert normalized_results == results
-    except Exception:
+    except AssertionError:
         # _io.TextIOWrapper comparison with other instance not supported
         assert func is open
+
+
+def validate_call_sign(idx, func, arguments, check):
+    call_sign = CallSign(func)
+    args, kwargs = arguments
+
+    if is_child_class(check, Exception):
+        validate_call_sign_exceptions(call_sign, args, kwargs, check)
+        return
+
+    check = Arguments(*check)
+    validate_normalize(call_sign, args, kwargs, check)
+    validate_normalize_via_bind(call_sign, args, kwargs, check)
+    validate_signify(call_sign, args, kwargs, check)
+    validate_normalize_decorator_results(func, args, kwargs, check)
 
 
 @wrapt.decorator
@@ -131,7 +151,7 @@ class F:
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ('idx', 'args_and_kwargs',                          'check'),
+    ('idx', 'arguments',                                 'check'),
     [
      (0,     ((), dict(g=7, a=1)),                       ((1, 13), OD(e=15, g=7))),
      (1,     ((), dict(g=7, c=3, a=1)),                  ((1, 3), OD(e=15, g=7))),
@@ -160,8 +180,8 @@ class F:
      (24,    ((1, 3, 4, 5), dict(d=14, e=5, h=8)),        TypeError),
      ])
 @pytest.mark.parametrize(('func'), (full_signature, F().imethod, F().cmethod, F().smethod))
-def test_call_sign_on_full_signature_functions(idx, func, args_and_kwargs, check):
-    validate_call_sign(idx, func, args_and_kwargs, check)
+def test_call_sign_on_full_signature_functions(idx, func, arguments, check):
+    validate_call_sign(idx, func, arguments, check)
 
 
 def named_signature(a, c=13, *, e=15, g):
@@ -183,7 +203,7 @@ class N:
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ('idx', 'args_and_kwargs',                           'check'),
+    ('idx', 'arguments',                                 'check'),
     [
      (0,     ((), dict(a=1, g=7)),                       ((1, 13), OD(e=15, g=7))),
      (1,     ((), dict(g=7, a=1)),                       ((1, 13), OD(e=15, g=7))),
@@ -207,8 +227,8 @@ class N:
      (19,    ((1, 3, 2), dict(g=7)),                      TypeError),
      ])
 @pytest.mark.parametrize(('func'), (named_signature, N().imethod, N().cmethod, N().smethod))
-def test_call_sign_on_named_signature_functions(idx, func, args_and_kwargs, check):
-    validate_call_sign(idx, func, args_and_kwargs, check)
+def test_call_sign_on_named_signature_functions(idx, func, arguments, check):
+    validate_call_sign(idx, func, arguments, check)
 
 
 def var_signature(*argz, **kwargz):
@@ -230,7 +250,7 @@ class V:
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ('idx', 'args_and_kwargs',                          'check'),
+    ('idx', 'arguments',                                'check'),
     [
      (0,     ((), {}),                                  ((), {})),
      (1,     ((1,), {}),                                ((1,), {})),
@@ -244,8 +264,8 @@ class V:
      (9,     ((1, 2, 3), dict(a=1, b=2, c=3)),          ((1, 2, 3), OD(a=1, b=2, c=3))),
      ])
 @pytest.mark.parametrize(('func'), (var_signature, V().imethod, V().cmethod, V().smethod))
-def test_call_sign_on_var_signature_functions(idx, func, args_and_kwargs, check):
-    validate_call_sign(idx, func, args_and_kwargs, check)
+def test_call_sign_on_var_signature_functions(idx, func, arguments, check):
+    validate_call_sign(idx, func, arguments, check)
 
 
 def positional_or_keyword_signature(a, c=13):
@@ -267,7 +287,7 @@ class PK:
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ('idx', 'args_and_kwargs',                          'check'),
+    ('idx', 'arguments',                                'check'),
     [
      (0,     ((), dict(a=1)),                           ((1, 13), {})),
      (1,     ((), dict(a=1, c=3)),                      ((1, 3), {})),
@@ -287,8 +307,8 @@ class PK:
      ])
 @pytest.mark.parametrize(
     ('func'), (positional_or_keyword_signature, PK().imethod, PK().cmethod, PK().smethod))
-def test_call_sign_on_positional_or_keyword_signature_functions(idx, func, args_and_kwargs, check):
-    validate_call_sign(idx, func, args_and_kwargs, check)
+def test_call_sign_on_positional_or_keyword_signature_functions(idx, func, arguments, check):
+    validate_call_sign(idx, func, arguments, check)
 
 
 def var_positional_signature(*argz):
@@ -310,7 +330,7 @@ class VP:
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ('idx', 'args_and_kwargs',                          'check'),
+    ('idx', 'arguments',                                'check'),
     [
      (0,     ((), {}),                                  ((), {})),
      (1,     ((1,), {}),                                ((1,), {})),
@@ -323,8 +343,8 @@ class VP:
      ])
 @pytest.mark.parametrize(
     ('func'), (var_positional_signature, VP().imethod, VP().cmethod, VP().smethod))
-def test_call_sign_on_var_positional_signature_functions(idx, func, args_and_kwargs, check):
-    validate_call_sign(idx, func, args_and_kwargs, check)
+def test_call_sign_on_var_positional_signature_functions(idx, func, arguments, check):
+    validate_call_sign(idx, func, arguments, check)
 
 
 def keyword_only_signature(*, e, f=16, g):
@@ -346,7 +366,7 @@ class KO:
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ('idx', 'args_and_kwargs',                          'check'),
+    ('idx', 'arguments',                                'check'),
     [
      (0,     ((), dict(e=5, g=7)),                      ((), OD(e=5, f=16, g=7))),
      (1,     ((), dict(g=7, e=5)),                      ((), OD(e=5, f=16, g=7))),
@@ -361,8 +381,8 @@ class KO:
      ])
 @pytest.mark.parametrize(
     ('func'), (keyword_only_signature, KO().imethod, KO().cmethod, KO().smethod))
-def test_call_sign_on_keyword_only_signature_functions(idx, func, args_and_kwargs, check):
-    validate_call_sign(idx, func, args_and_kwargs, check)
+def test_call_sign_on_keyword_only_signature_functions(idx, func, arguments, check):
+    validate_call_sign(idx, func, arguments, check)
 
 
 def var_keyword_signature(**kwargz):
@@ -384,28 +404,28 @@ class VK:
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ('idx', 'args_and_kwargs',                          'check'),
+    ('idx', 'arguments',                                'check'),
     [
      (0,     ((), {}),                                  ((), {})),
      (1,     ((), dict(a=1)),                           ((), OD(a=1))),
      (2,     ((), dict(a=1, b=2)),                      ((), OD(a=1, b=2))),
      (3,     ((), dict(a=1, b=2, c=3)),                 ((), OD(a=1, b=2, c=3))),
-     (4,     ((1,), {}),                                TypeError),
-     (5,     ((1, 2), {}),                              TypeError),
-     (6,     ((1,), dict(a=1)),                         TypeError),
-     (7,     ((1, 2), dict(a=1, b=2)),                  TypeError),
-     (8,     ((1,), dict(a=1, b=2, c=3)),               TypeError),
-     (9,     ((1, 2), dict(a=1, b=2, c=3)),             TypeError),
+     (4,     ((1,), {}),                                 TypeError),
+     (5,     ((1, 2), {}),                               TypeError),
+     (6,     ((1,), dict(a=1)),                          TypeError),
+     (7,     ((1, 2), dict(a=1, b=2)),                   TypeError),
+     (8,     ((1,), dict(a=1, b=2, c=3)),                TypeError),
+     (9,     ((1, 2), dict(a=1, b=2, c=3)),              TypeError),
      ])
 @pytest.mark.parametrize(
     ('func'), (var_keyword_signature, VK().imethod, VK().cmethod, VK().smethod))
-def test_call_sign_on_var_keyword_signature_functions(idx, func, args_and_kwargs, check):
-    validate_call_sign(idx, func, args_and_kwargs, check)
+def test_call_sign_on_var_keyword_signature_functions(idx, func, arguments, check):
+    validate_call_sign(idx, func, arguments, check)
 
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ('idx', 'func', 'args_and_kwargs',          'check'),
+    ('idx', 'func', 'arguments',               'check'),
     [
      (0,     ord,   (('A',), {}),              (('A',), {})),
      (1,     ord,   ((), {}),                   TypeError),
@@ -428,5 +448,5 @@ def test_call_sign_on_var_keyword_signature_functions(idx, func, args_and_kwargs
      (18,    open,  ((PATH), dict(file=PATH)),  TypeError),
      (19,    open,  ((PATH), dict(x=0)),        TypeError),
      ])
-def test_call_sign_on_builtins(idx, func, args_and_kwargs, check):
-    validate_call_sign(idx, func, args_and_kwargs, check)
+def test_call_sign_on_builtins(idx, func, arguments, check):
+    validate_call_sign(idx, func, arguments, check)
