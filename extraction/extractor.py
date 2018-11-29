@@ -26,7 +26,7 @@ from utils.enum import FlexEnum
 from utils.iterable import one
 from utils.mixins import Hashable
 from utils.statistics import HumanDwellTime, human_dwell_time, human_selection_shuffle
-from utils.tools import PP, derive_domain, enlist, isnonstringsequence, xor_constrain
+from utils.tools import PP, derive_domain, enlist, is_nonstring_sequence, xor_constrain
 
 
 class BaseExtractor:
@@ -995,7 +995,7 @@ class MultiExtractor(BaseExtractor):
             return key, None
         if isinstance(value, str):
             return key, [urllib.parse.quote(value)]
-        if isnonstringsequence(value):
+        if is_nonstring_sequence(value):
             return key, [urllib.parse.quote(v) for v in value]
         raise TypeError(f"Expected string or list/tuple for '{key}'; "
                         f"received '{type(value)}': {value}")

@@ -4,7 +4,7 @@ from collections import deque
 from itertools import islice
 
 from exceptions import TooFewValuesError, TooManyValuesError
-from utils.tools import isiterator
+from utils.tools import is_iterator
 
 VALUE_DELIMITER = ', '
 MORE_VALUES = '...'
@@ -131,7 +131,7 @@ def constrain(iterable, exact=None, minimum=None, maximum=None):
     """
     minimum, maximum = _determine_constraints(exact, minimum, maximum)
 
-    if isiterator(iterable):
+    if is_iterator(iterable):
         iterator = iterable
     else:
         if minimum <= len(iterable) <= maximum:
@@ -151,7 +151,7 @@ def one(iterable):
     Comparable to the snippet below, but ~40% faster:
         next(iter(constrain(iterable, exact=1)))
     """
-    if isiterator(iterable):
+    if is_iterator(iterable):
         iterator = iterable
     else:
         if len(iterable) == 1:
@@ -195,7 +195,7 @@ def one_min(iterable):
     iterable if it has a length; if not (i.e. it's an iterator), convert
     it to a list first. If there are no values, raise TooFewValuesError.
     """
-    values = list(iterable) if isiterator(iterable) else iterable
+    values = list(iterable) if is_iterator(iterable) else iterable
     if not values:
         raise TooFewValuesError(expected=1, received='')
     return values

@@ -9,7 +9,7 @@ from itertools import chain
 import wrapt
 
 from utils.signature import CallSign, normalize
-from utils.tools import ischildclass
+from utils.tools import is_child_class
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 FILE = 'a_file.txt'
@@ -20,7 +20,7 @@ def validate_call_sign(idx, func, args_and_kwargs, check):
     call_sign = CallSign(func)
     args, kwargs = args_and_kwargs
 
-    if ischildclass(check, Exception):
+    if is_child_class(check, Exception):
         with pytest.raises(check):
             call_sign.signify(*args, **kwargs)
         with pytest.raises(check):

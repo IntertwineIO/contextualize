@@ -228,7 +228,7 @@ def get_related_json(base, field, payload=None, strict=False):
     return value
 
 
-def ischildclass(obj, classinfo):
+def is_child_class(obj, classinfo):
     """Check if obj extends classinfo; return None if invalid params"""
     try:
         return issubclass(obj, classinfo)
@@ -236,30 +236,33 @@ def ischildclass(obj, classinfo):
         return None
 
 
-def isclassmethod(func):
-    return inspect.ismethod(func) and inspect.isclass(func.__self__)
-
-
-def isinstancemethod(func):
+def is_instance_method(func):
+    """Check if function (via instance) is an instance method"""
     return inspect.ismethod(func) and not inspect.isclass(func.__self__)
 
 
-def isstaticmethod(func, cls):
-    return isinstance(cls.__dict__[func.__name__], staticmethod)
+def is_class_method(func):
+    """Check if function is a class method"""
+    return inspect.ismethod(func) and inspect.isclass(func.__self__)
 
 
-def isiterator(obj):
+def is_static_method(func, cls):
+    """Check if function is a static method on the given class"""
+    return False if cls is None else isinstance(cls.__dict__[func.__name__], staticmethod)
+
+
+def is_iterator(obj):
     """Check if object is an iterator (not just iterable)"""
     cls = obj.__class__
     return hasattr(cls, '__next__') and not hasattr(cls, '__len__')
 
 
-def isnamedtuple(obj):
+def is_namedtuple(obj):
     """Check if object is a namedtuple"""
     return isinstance(obj, tuple) and hasattr(obj, '_asdict')
 
 
-def isnonstringsequence(obj):
+def is_nonstring_sequence(obj):
     """Check if object is non-string sequence: list, tuple, range..."""
     if (isinstance(obj, basestring) or hasattr(obj, 'items') or not hasattr(obj, '__getitem__')):
         return False

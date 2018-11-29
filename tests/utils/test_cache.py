@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch
 
 from utils.cache import CacheKey, FileCache, LyricalCache
 from utils.signature import CallSign
-from utils.tools import isinstancemethod
+from utils.tools import is_instance_method
 
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -357,7 +357,7 @@ def validate_file_cache_calls(idx, func, maxsize, procedures):
 
                 eval_repr_file_cache = eval(repr(file_cache))
                 # methods bound to different instances do not equate...
-                if not isinstancemethod(func):
+                if not is_instance_method(func):
                     assert eval_repr_file_cache == file_cache
                 # ...but they should return the same value
                 eval_repr_file_cached = eval_repr_file_cache(func)

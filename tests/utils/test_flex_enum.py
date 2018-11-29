@@ -4,7 +4,7 @@ import pytest
 from collections import OrderedDict
 
 from utils.enum import FlexEnum
-from utils.tools import ischildclass, isiterator
+from utils.tools import is_child_class, is_iterator
 
 
 # Functional enum declaration
@@ -30,7 +30,7 @@ class Roshambo(FlexEnum):
      ])
 def test_flex_enum_cast(enum_class, value, check):
     """Test FlexEnum cast"""
-    if ischildclass(check, Exception):
+    if is_child_class(check, Exception):
         with pytest.raises(check):
             enum_class.cast(value)
     else:
@@ -55,7 +55,7 @@ def test_flex_enum_cast(enum_class, value, check):
      ])
 def test_flex_enum_option(enum_class, name, value, check):
     """Confirm FlexEnum option creates enums or raises as expected"""
-    if ischildclass(check, Exception):
+    if is_child_class(check, Exception):
         with pytest.raises(check):
             enum_class.option(name, value)
     else:
@@ -74,7 +74,7 @@ def test_flex_enum_option(enum_class, name, value, check):
 def test_flex_enum_names(enum_class, enumables, transform, enum_names):
     """Test FlexEnum names, list, tuple, and set"""
     names = enum_class.names(*enumables, transform=transform)
-    assert isiterator(names)
+    assert is_iterator(names)
     count = 0
     for name, check in zip(names, enum_names):
         assert name == check
@@ -98,7 +98,7 @@ def test_flex_enum_names(enum_class, enumables, transform, enum_names):
 def test_flex_enum_values(enum_class, enumables, transform, enum_values):
     """Test FlexEnum values"""
     values = enum_class.values(*enumables, transform=transform)
-    assert isiterator(values)
+    assert is_iterator(values)
     count = 0
     for value, check in zip(values, enum_values):
         assert value == check
@@ -142,7 +142,7 @@ def test_flex_enum_items(enum_class, swap, labels, transform, inverse, enumables
     """Test FlexEnum items, map, and labels"""
     items = enum_class.items(
         *enumables, swap=swap, labels=labels, transform=transform, inverse=inverse)
-    assert isiterator(items)
+    assert is_iterator(items)
     count = 0
     for item, check in zip(items, enum_items):
         assert item == check

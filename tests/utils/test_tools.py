@@ -2,7 +2,10 @@
 # -*- coding: utf-8 -*-
 import pytest
 
-from utils.tools import derive_domain, get_related_json, ischildclass, logical_xor, xor_constrain
+from utils.tools import (
+    derive_domain, get_related_json, is_child_class, is_instance_method, is_class_method,
+    is_static_method, logical_xor, xor_constrain
+)
 
 
 FULL_URL = 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5452388/'
@@ -31,7 +34,7 @@ CHECK_DOMAIN = 'www.ncbi.nlm.nih.gov'
      ])
 def test_derive_domain(idx, url, base, check):
     """Test derive domain under different scenarios"""
-    if ischildclass(check, Exception):
+    if is_child_class(check, Exception):
         with pytest.raises(check):
             value = derive_domain(url, base)
 
@@ -86,7 +89,7 @@ paybug2 = dict(venus=venus, earth=earth, mars=mars, moon=moon)
      ])
 def test_get_related_json(idx, base, field, payload, strict, check):
     """Test get related JSON under different scenarios"""
-    if ischildclass(check, Exception):
+    if is_child_class(check, Exception):
         with pytest.raises(check):
             value = get_related_json(base, field, payload, strict)
 
@@ -96,6 +99,71 @@ def test_get_related_json(idx, base, field, payload, strict, check):
             assert value is check
         else:
             assert value == check
+
+
+def func():
+    pass
+
+
+class C:
+    def imethod(self):
+        pass
+
+    @classmethod
+    def cmethod(cls):
+        pass
+
+    @staticmethod
+    def smethod():
+        pass
+
+    def __repr__(self):
+        return f'{self.__class__.__qualname__}()'
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ('idx', 'func',        'check'),
+    [
+     (0,     func,          False),
+     (1,     C().imethod,   True),
+     (2,     C().cmethod,   False),
+     (3,     C().smethod,   False),
+     (4,     C.cmethod,     False),
+     (5,     C.smethod,     False),
+     ])
+def test_is_instance_method(idx, func, check):
+    assert is_instance_method(func) is check
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ('idx', 'func',        'check'),
+    [
+     (0,     func,          False),
+     (1,     C().imethod,   False),
+     (2,     C().cmethod,   True),
+     (3,     C().smethod,   False),
+     (4,     C.cmethod,     True),
+     (5,     C.smethod,     False),
+     ])
+def test_is_class_method(idx, func, check):
+    assert is_class_method(func) is check
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ('idx', 'func',        'cls',  'check'),
+    [
+     (0,     func,          None,   False),
+     (1,     C().imethod,   C,      False),
+     (2,     C().cmethod,   C,      False),
+     (3,     C().smethod,   C,      True),
+     (4,     C.cmethod,     C,      False),
+     (5,     C.smethod,     C,      True),
+     ])
+def test_is_static_method(idx, func, cls, check):
+    assert is_static_method(func, cls) is check
 
 
 @pytest.mark.unit
@@ -137,7 +205,7 @@ def test_logical_xor(idx, a, b, check):
      (11,    'a',    'b',     ValueError),
      ])
 def test_xor_constrain(idx, a, b, check):
-    if ischildclass(check, Exception):
+    if is_child_class(check, Exception):
         with pytest.raises(check):
             xor_constrain(a, b)
     else:

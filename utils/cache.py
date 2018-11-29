@@ -14,7 +14,7 @@ import settings
 from utils.debug import async_debug, sync_debug
 from utils.signature import CallSign
 from utils.singleton import Singleton
-from utils.tools import isinstancemethod, isnonstringsequence
+from utils.tools import is_instance_method, is_nonstring_sequence
 
 ENCODING_DEFAULT = 'utf-8'
 
@@ -165,7 +165,7 @@ class CacheKey:
             # serialized_value = null if value is None else str(value)
             if value is None:
                 serialized_value = null
-            elif isnonstringsequence(value):
+            elif is_nonstring_sequence(value):
                 serialized_value = value_separator.join(str(v) for v in value)
             else:
                 serialized_value = str(value)
@@ -435,7 +435,7 @@ class FileCache:
         class_name = self.__class__.__name__
         if not self.func:
             function = ''
-        elif isinstancemethod(self.func):
+        elif is_instance_method(self.func):
             base = repr(self.func.__self__)
             function = f'{base}.{self.func.__name__}'
         else:

@@ -9,7 +9,7 @@ import wrapt
 
 from utils.iterable import consume
 from utils.sentinel import Sentinel
-from utils.tools import isnamedtuple, is_selfish
+from utils.tools import is_selfish
 
 SIGNATURE_TAG = inspect.Signature.__qualname__
 

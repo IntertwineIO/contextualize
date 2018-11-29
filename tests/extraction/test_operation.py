@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import MagicMock
 
 from extraction.operation import ExtractionOperation
-from utils.tools import ischildclass
+from utils.tools import is_child_class
 
 
 class ReferencePath:
@@ -61,7 +61,7 @@ def test_get_by_reference(idx, reference, check):
     operation = ExtractionOperation.from_configuration(
         {}, field='test_field', source='test_source', extractor=mock_extractor)
 
-    if ischildclass(check, Exception):
+    if is_child_class(check, Exception):
         with pytest.raises(check):
             value = operation._get_by_reference(reference)
 

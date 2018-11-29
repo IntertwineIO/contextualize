@@ -6,7 +6,7 @@ from enum import Enum
 
 from exceptions import TooFewValuesError, TooManyValuesError
 from utils.iterable import InfinIterator, constrain, one, one_max, one_min
-from utils.tools import ischildclass, isiterator
+from utils.tools import is_child_class, is_iterator
 
 
 MAX_ITERABLE_SIZE = 5
@@ -37,7 +37,7 @@ def test_infiniterator(idx, iterable_fn):
         iterable = iterable_fn(iterable_check)
 
         infiniterator = InfinIterator(iterable)
-        assert isiterator(infiniterator)
+        assert is_iterator(infiniterator)
 
         list1 = list(infiniterator)
         assert list1 == iterable_check
@@ -222,7 +222,7 @@ DoubleEnum = Enum('DoubleEnum', 'FIRST SECOND')
      (21,     DoubleEnum,               TooManyValuesError),
      ])
 def test_one(idx, iterable, check):
-    if ischildclass(check, Exception):
+    if is_child_class(check, Exception):
         with pytest.raises(check):
             one(iterable)
     else:
@@ -260,7 +260,7 @@ def test_one(idx, iterable, check):
      (21,     DoubleEnum,               TooManyValuesError),
      ])
 def test_one_max(idx, iterable, check):
-    if ischildclass(check, Exception):
+    if is_child_class(check, Exception):
         with pytest.raises(check):
             one_max(iterable)
     else:
@@ -295,7 +295,7 @@ def test_one_max(idx, iterable, check):
      (21,     DoubleEnum,               DoubleEnum),
      ])
 def test_one_min(idx, iterable, check):
-    if ischildclass(check, Exception):
+    if is_child_class(check, Exception):
         with pytest.raises(check):
             one_min(iterable)
     else:
