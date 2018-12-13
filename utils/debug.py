@@ -106,7 +106,7 @@ def sync_debug(offset=None, indent=4, context=None):
       & end/elapsed time (args/kwargs/instance are repeated since the
       return message can be far removed from the await message)
     - Each message is offset based on the degree to which the function
-      is awaited by other functions also decorated by Debug/Async Debug
+      follows other functions also decorated by Debug/Async Debug
     - Horizontal separators visually delineate each message
 
     I/O:
@@ -150,7 +150,7 @@ def async_debug(offset=None, indent=4, context=None):
       & end/elapsed time (args/kwargs/instance are repeated since the
       return message can be far removed from the await message)
     - Each message is offset based on the degree to which the function
-      is awaited by other functions also decorated by Debug/Async Debug
+      follows other functions also decorated by Debug/Async Debug
     - Horizontal separators visually delineate each message
 
     I/O:
