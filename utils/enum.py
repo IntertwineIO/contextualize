@@ -15,27 +15,27 @@ class FlexEnum(Enum):
     Enum with helpful cast, accessor, and transformation methods.
     """
     @classmethod
-    def cast(cls, option):
-        """Cast option name (case-insensitive) or value to enum"""
-        if option in cls:
-            return option
-        if isinstance(option, int):
-            return cls(option)
+    def cast(cls, identifier):
+        """Cast member name (case-insensitive) or value to enum"""
+        if identifier in cls:
+            return identifier
+        if isinstance(identifier, int):
+            return cls(identifier)
         try:
-            return cls[option.upper()]
+            return cls[identifier.upper()]
         except (AttributeError, KeyError):
-            return cls(option)
+            return cls(identifier)
 
     @classmethod
-    def option(cls, name, value):
-        """Construct option with given name/value, ensuring validity"""
+    def member(cls, name, value):
+        """Construct member with given name/value, ensuring validity"""
         try:
-            option = cls[name]
+            member = cls[name]
         except KeyError:
             raise KeyError(f"Invalid {cls.__qualname__} name '{name}'")
-        if option.value != value:
-            raise ValueError(f"Invalid {cls.__qualname__} value in option '{name}: {value}'")
-        return option
+        if member.value != value:
+            raise ValueError(f"Invalid {cls.__qualname__} value in member '{name}: {value}'")
+        return member
 
     @classmethod
     def names(cls, *enumables, transform=None):
@@ -134,7 +134,7 @@ class FlexEnum(Enum):
             cls.items(*enumables, swap=False, labels=True, transform=transform, inverse=inverse))
 
     def serialize(self):
-        """Serialize enum option to specifier"""
+        """Serialize enum member to specifier"""
         cls = self.__class__
         module = cls.__module__
         qualname = cls.__qualname__
@@ -143,7 +143,7 @@ class FlexEnum(Enum):
 
     @classmethod
     def deserialize(cls, specifier):
-        """Deserialize specifier to enum option"""
+        """Deserialize specifier to enum member"""
         return load_class(specifier)
 
     def __init__(self, *args, **kwds):
@@ -155,7 +155,7 @@ class FlexEnum(Enum):
         qualname = self.__class__.__qualname__
         name, value = self.name, self.value
         value = value if isinstance(value, int) else f"'{value}'"
-        return f"{qualname}.option('{name}', {value})"
+        return f"{qualname}.member('{name}', {value})"
 
     def __str__(self):
         """Str contains qualname/name"""
