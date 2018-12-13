@@ -53,13 +53,13 @@ def test_flex_enum_cast(enum_class, value, check):
      (Roshambo, 'STONE',      'SCISSORZ',   KeyError),
      (Roshambo, 'ROCK',       'SCISSORZ',   ValueError),
      ])
-def test_flex_enum_option(enum_class, name, value, check):
-    """Confirm FlexEnum option creates enums or raises as expected"""
+def test_flex_enum_member(enum_class, name, value, check):
+    """Confirm FlexEnum member creates enums or raises as expected"""
     if is_child_class(check, Exception):
         with pytest.raises(check):
-            enum_class.option(name, value)
+            enum_class.member(name, value)
     else:
-        assert enum_class.option(name, value) is check
+        assert enum_class.member(name, value) is check
 
 
 @pytest.mark.unit
@@ -207,34 +207,34 @@ ENUM_OPTIONS = [
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize('enum_option', ENUM_OPTIONS)
-def test_flex_enum_serialization(enum_option):
+@pytest.mark.parametrize('enum_member', ENUM_OPTIONS)
+def test_flex_enum_serialization(enum_member):
     """Confirm FlexEnum serializes and deserializes to self"""
-    serialized_option = enum_option.serialize()
-    assert isinstance(serialized_option, str)
-    enum_class = enum_option.__class__
-    assert enum_class.__module__ in serialized_option
-    assert enum_class.__qualname__ in serialized_option
-    assert enum_option.name in serialized_option
-    assert FlexEnum.deserialize(serialized_option) is enum_option
-    assert enum_class.deserialize(serialized_option) is enum_option
+    serialized_member = enum_member.serialize()
+    assert isinstance(serialized_member, str)
+    enum_class = enum_member.__class__
+    assert enum_class.__module__ in serialized_member
+    assert enum_class.__qualname__ in serialized_member
+    assert enum_member.name in serialized_member
+    assert FlexEnum.deserialize(serialized_member) is enum_member
+    assert enum_class.deserialize(serialized_member) is enum_member
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize('enum_option', ENUM_OPTIONS)
-def test_flex_enum_repr(enum_option):
+@pytest.mark.parametrize('enum_member', ENUM_OPTIONS)
+def test_flex_enum_repr(enum_member):
     """Confirm FlexEnum repr has qualname/name/value & evals to self"""
-    option_repr = repr(enum_option)
-    assert enum_option.__class__.__qualname__ in option_repr
-    assert enum_option.name in option_repr
-    assert str(enum_option.value) in option_repr
-    assert eval(option_repr) is enum_option
+    member_repr = repr(enum_member)
+    assert enum_member.__class__.__qualname__ in member_repr
+    assert enum_member.name in member_repr
+    assert str(enum_member.value) in member_repr
+    assert eval(member_repr) is enum_member
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize('enum_option', ENUM_OPTIONS)
-def test_flex_enum_str(enum_option):
+@pytest.mark.parametrize('enum_member', ENUM_OPTIONS)
+def test_flex_enum_str(enum_member):
     """Confirm FlexEnum str contains qualname and name"""
-    option_str = str(enum_option)
-    assert enum_option.__class__.__qualname__ in option_str
-    assert enum_option.name in option_str
+    member_str = str(enum_member)
+    assert enum_member.__class__.__qualname__ in member_str
+    assert enum_member.name in member_str
