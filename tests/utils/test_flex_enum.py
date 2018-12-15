@@ -105,6 +105,9 @@ def test_flex_enum_values(enum_class, enumables, transform, enum_values):
         count += 1
 
     assert count == len(enum_values)
+    assert enum_class.as_list(*enumables, values=True, transform=transform) == enum_values
+    assert enum_class.as_tuple(*enumables, values=True, transform=transform) == tuple(enum_values)
+    assert enum_class.as_set(*enumables, values=True, transform=transform) == set(enum_values)
 
 
 def minus_1(x): return x - 1
