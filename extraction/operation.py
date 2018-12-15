@@ -394,7 +394,7 @@ class ExtractionOperation:
     @staticmethod
     def _configure_method(configuration, method_enum):
         """Configure method based on the given method enum"""
-        method_keys = method_enum.set(transform=str.lower)
+        method_keys = method_enum.as_set(transform=str.lower)
         method_key = one_max(k for k in configuration if k in method_keys)
         if not method_key:
             return None, None
