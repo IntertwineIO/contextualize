@@ -38,9 +38,14 @@ class FlexEnum(Enum):
         return member
 
     @classmethod
+    def members(cls, *enumables):
+        """Generator of specified enum members, defaulting to all"""
+        return (cls.cast(x) for x in enumables) if enumables else cls
+
+    @classmethod
     def names(cls, *enumables, transform=None):
         """Generator of enum names, transformed if function provided"""
-        enums = (cls.cast(x) for x in enumables) if enumables else cls
+        enums = cls.members(*enumables)
         if transform:
             return (transform(en.name) for en in enums)
         return (en.name for en in enums)
@@ -48,28 +53,42 @@ class FlexEnum(Enum):
     @classmethod
     def values(cls, *enumables, transform=None):
         """Generator of enum values, transformed if function provided"""
-        enums = (cls.cast(x) for x in enumables) if enumables else cls
+        enums = cls.members(*enumables)
         if transform:
             return (transform(en.value) for en in enums)
         return (en.value for en in enums)
 
     @classmethod
-    @lru_cache(maxsize=None)
-    def list(cls, *enumables, transform=None):
-        """List of enum names, transformed if function provided"""
-        return list(cls.names(*enumables, transform=transform))
+    def contain(cls, container, *enumables, names=False, values=False, transform=None, **kwds):
+        """Contain given enumables with given container, optionally transformed"""
+        if names:
+            if values:
+                return container(cls.items(*enumables, transform=transform, **kwds))
+            return container(cls.names(*enumables, transform=transform))
+        if values:
+            return container(cls.values(*enumables, transform=transform))
+        return container(cls.members(*enumables))
 
     @classmethod
     @lru_cache(maxsize=None)
-    def tuple(cls, *enumables, transform=None):
-        """Tuple of enum names, transformed if function provided"""
-        return tuple(cls.names(*enumables, transform=transform))
+    def as_list(cls, *enumables, names=False, values=False, transform=None, **kwds):
+        """List of given enumables, optionally transformed"""
+        return cls.contain(
+            list, *enumables, names=names, values=values, transform=transform, **kwds)
 
     @classmethod
     @lru_cache(maxsize=None)
-    def set(cls, *enumables, transform=None):
-        """Set of enum names, transformed if function provided"""
-        return set(cls.names(*enumables, transform=transform))
+    def as_tuple(cls, *enumables, names=False, values=False, transform=None, **kwds):
+        """Tuple of given enumables, optionally transformed"""
+        return cls.contain(
+            tuple, *enumables, names=names, values=values, transform=transform, **kwds)
+
+    @classmethod
+    @lru_cache(maxsize=None)
+    def as_set(cls, *enumables, names=False, values=False, transform=None, **kwds):
+        """Set of given enumables, optionally transformed"""
+        return cls.contain(
+            set, *enumables, names=names, values=values, transform=transform, **kwds)
 
     @classmethod
     def items(cls, *enumables, swap=False, labels=False, transform=None, inverse=False):
@@ -84,7 +103,7 @@ class FlexEnum(Enum):
         inverse=False:  if True, invert a & b at end: (b, a)
         return:         generator of enum pair 2-tuples
         """
-        enums = (cls.cast(x) for x in enumables) if enumables else cls
+        enums = cls.members(*enumables)
 
         if swap:
             pairs = ((en.value, en.name) for en in enums)
@@ -103,7 +122,7 @@ class FlexEnum(Enum):
 
     @classmethod
     @lru_cache(maxsize=None)
-    def map(cls, *enumables, swap=False, labels=False, transform=None, inverse=False):
+    def as_map(cls, *enumables, swap=False, labels=False, transform=None, inverse=False):
         """
         Ordered enum map of pair 2-tuples, (name, value) by default
 
@@ -120,7 +139,7 @@ class FlexEnum(Enum):
 
     @classmethod
     @lru_cache(maxsize=None)
-    def labels(cls, *enumables, transform=None, inverse=True):
+    def as_labels(cls, *enumables, transform=None, inverse=True):
         """
         Tuple of labeled enum 2-tuples, (name, transformed(name)) by default
 

@@ -162,9 +162,8 @@ def derive_qualname(obj):
             elif frame.function == '<module>':
                 break
             elif is_eligible:
-                if not is_class_name(frame.function):
-                    continue
-                classes.append(frame.function)
+                if is_class_name(frame.function):
+                    classes.append(frame.function)
     finally:
         del frame
         del stack

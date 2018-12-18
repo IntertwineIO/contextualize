@@ -81,9 +81,9 @@ def test_flex_enum_names(enum_class, enumables, transform, enum_names):
         count += 1
 
     assert count == len(enum_names)
-    assert enum_class.list(*enumables, transform=transform) == enum_names
-    assert enum_class.tuple(*enumables, transform=transform) == tuple(enum_names)
-    assert enum_class.set(*enumables, transform=transform) == set(enum_names)
+    assert enum_class.as_list(*enumables, names=True, transform=transform) == enum_names
+    assert enum_class.as_tuple(*enumables, names=True, transform=transform) == tuple(enum_names)
+    assert enum_class.as_set(*enumables, names=True, transform=transform) == set(enum_names)
 
 
 @pytest.mark.unit
@@ -105,6 +105,9 @@ def test_flex_enum_values(enum_class, enumables, transform, enum_values):
         count += 1
 
     assert count == len(enum_values)
+    assert enum_class.as_list(*enumables, values=True, transform=transform) == enum_values
+    assert enum_class.as_tuple(*enumables, values=True, transform=transform) == tuple(enum_values)
+    assert enum_class.as_set(*enumables, values=True, transform=transform) == set(enum_values)
 
 
 def minus_1(x): return x - 1
@@ -149,10 +152,10 @@ def test_flex_enum_items(enum_class, swap, labels, transform, inverse, enumables
         count += 1
 
     assert count == len(enum_items)
-    assert OrderedDict(enum_items) == enum_class.map(
+    assert OrderedDict(enum_items) == enum_class.as_map(
         *enumables, swap=swap, labels=labels, transform=transform, inverse=inverse)
     if labels and not swap:
-        assert tuple(enum_items) == enum_class.labels(
+        assert tuple(enum_items) == enum_class.as_labels(
             *enumables, transform=transform, inverse=inverse)
 
 

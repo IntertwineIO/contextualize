@@ -14,12 +14,12 @@ BLUEPRINT = 'community'
 bp = Blueprint(BLUEPRINT)
 
 
-@bp.route(f'/{BLUEPRINT}', methods=HTTP.list('GET'))
+@bp.route(f'/{BLUEPRINT}', methods=list(HTTP.names('GET')))
 async def test(request):
     return response.json({'hello': 'world'})
 
 
-@bp.route(f'/{BLUEPRINT}/content', methods=HTTP.list('POST'))
+@bp.route(f'/{BLUEPRINT}/content', methods=list(HTTP.names('POST')))
 async def contextualize(request):
     '''
     Contextualize community problem by furnishing related content:
@@ -82,7 +82,7 @@ async def contextualize(request):
     return response.json(response_value)
 
 
-@bp.route(f'/{BLUEPRINT}/content/extraction', methods=HTTP.list('POST'))
+@bp.route(f'/{BLUEPRINT}/content/extraction', methods=list(HTTP.names('POST')))
 async def extract(request):
     '''
     Extract community content
@@ -116,4 +116,4 @@ async def extract(request):
 
     loop.create_task(extract_community_content)
 
-    return response.json({"search_data": search_data})
+    return response.json({'status': ExtractionStatus.INITIALIZED.name})
