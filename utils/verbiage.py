@@ -1,19 +1,16 @@
 import ast
-import string
-from contextlib import contextmanager
+from enum import Enum
 from numbers import Number
-
-from utils.enum import FlexEnum
-from utils.tools import is_nonstring_sequence
+from string import Template
 
 
-class Template(string.Template):
-
+class ClearTemplate(Template):
+    """String Template with improved str, repr and comparison support"""
     def __str__(self):
         return self.template
 
     def __repr__(self):
-        return f'{self.__class__.__name__}({self.template!r})'
+        return f'{self.__class__.__qualname__}({self.template!r})'
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
@@ -30,7 +27,29 @@ class Plurality:
     """
     Plurality
 
-    A utility for utilizing singular/plural forms based on a number.
+    Obtain singular/plural forms based on a number.
+
+    Arguments may include a number, a single/plural forms string, and/or
+    template strings. All arguments are optional and may be specified in
+    any order. Plurality instances are callable, accept all arguments,
+    and return new Plurality instances to enable chaining.
+
+    Numbers may be any numeric type.
+
+    Singular/plural forms are specified by one of these string formats:
+        '{base}/{singular_suffix}/{plural_suffix}', e.g. 'cact/us/i'
+        '{base}/{plural_suffix}', e.g. 'tree/s'
+        '{base}', e.g. 'deer'
+        Credit for this format: https://stackoverflow.com/a/27642538
+
+    Templates are specified as follows, with multiple delimited by ';':
+        '{n}={template_string}', e.g. '1=$n $thing;n=$n $things'
+        where '{n}' is the number for which the template should be used
+            or 'n' to specify the default template
+        and where '{template_string}' may include these tokens:
+            '$n' for the number
+            '$thing' for the singular form
+            '$things' for the plural form
 
     Usage:
 
@@ -86,19 +105,19 @@ class Plurality:
     SINGULAR_TOKEN = 'thing'
     PLURAL_TOKEN = 'things'
 
-    TEMPLATE_CLASS = Template
+    TEMPLATE_CLASS = ClearTemplate
 
     TEMPLATE_DEFAULTS = {
         1: TEMPLATE_CLASS(f'${NUMBER_TOKEN} ${SINGULAR_TOKEN}'),  # '1=1 $thing'
         NUMBER_TOKEN: TEMPLATE_CLASS(f'${NUMBER_TOKEN} ${PLURAL_TOKEN}')  # 'n=$n $things'
     }
 
-    class Formatter(FlexEnum):
+    class Formatter(Enum):
         NUMBER = 'number_formatter'
         FORM = 'form_formatter'
         TEMPLATE = 'template_formatter'
 
-    class CustomFormatter(FlexEnum):
+    class CustomFormatter(Enum):
         NUMBER = 'number_formatter'
         FORM = 'form_formatter'
         TEMPLATE = 'custom_template_formatter'
@@ -139,7 +158,7 @@ class Plurality:
         return template.safe_substitute(**kwargs)
 
     def __repr__(self):
-        class_name = self.__class__.__name__
+        class_name = self.__class__.__qualname__
         number = self.number if self.number is not None else ''
         forms = f'{self.form_formatter!r}' if self.form_formatter else ''
         custom_template_formatter = self.custom_template_formatter
@@ -172,29 +191,7 @@ class Plurality:
             return str(self)
         substrings = formatter.split(self.FORMATTER_DELIMITER)
         args = (self._deformat(substring) for substring in substrings)
-        return self.stringify(*args)
-
-    def __getitem__(self, value):
-        if is_nonstring_sequence(value):
-            return self.stringify(*value)
-        return self.stringify(value)
-
-    def stringify(self, *args):
-        if not args:
-            return str(self)
-        with self.updated_arguments(*args):
-            return str(self)
-
-    @contextmanager
-    def updated_arguments(self, *args):
-        old_number, old_singular, old_plural, old_templates = (
-            self.number, self.singular, self.plural, self.templates)
-        try:
-            self._configure_from_args(*args)
-            yield self
-        finally:
-            self.number, self.singular, self.plural, self.templates = (
-                old_number, old_singular, old_plural, old_templates)
+        return str(self(*args))
 
     @property
     def is_complete(self):
@@ -216,9 +213,10 @@ class Plurality:
     def custom_formatters(self):
         return self._build_formatters(self.CustomFormatter)
 
-    def _build_formatters(self, formatter_type):
+    def _build_formatters(self, formatter_enum):
         formatters = []
-        for formatter_name in formatter_type.values():
+        formatter_names = (formatter_option.value for formatter_option in formatter_enum)
+        for formatter_name in formatter_names:
             formatter = getattr(self, formatter_name)
             if formatter:
                 formatters.append(formatter)
@@ -248,7 +246,6 @@ class Plurality:
 
     @property
     def template_formatter(self):
-        # join is faster on lists than iterators: https://stackoverflow.com/a/9061024
         return self.FORMATTER_DELIMITER.join(self.template_formatters)
 
     @property
@@ -257,7 +254,6 @@ class Plurality:
 
     @property
     def custom_template_formatter(self):
-        # join is faster on lists than iterators: https://stackoverflow.com/a/9061024
         return self.FORMATTER_DELIMITER.join(self.custom_template_formatters)
 
     @property
