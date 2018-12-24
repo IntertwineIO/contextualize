@@ -4,13 +4,13 @@ import asyncio
 
 from content import ResearchArticle
 from extraction.extractor import MultiExtractor
-from utils.debug import async_debug
+from utils.debug import debug
 from utils.tools import PP
 
 
 class ExtractionService:
 
-    @async_debug()
+    @debug
     async def extract_content(self):
         extractors = MultiExtractor.provision_extractors(
             ResearchArticle, self.search_data, loop=self.loop)

@@ -21,7 +21,7 @@ from extraction.operation import ExtractionOperation
 from secret_service.agency import SecretService
 from utils.async import run_in_executor
 from utils.cache import FileCache
-from utils.debug import async_debug, sync_debug
+from utils.debug import debug
 from utils.enum import FlexEnum
 from utils.iterable import one
 from utils.mixins import Hashable
@@ -52,7 +52,7 @@ class BaseExtractor:
 
     configuration_file_cache = FileCache(maxsize=None)
 
-    @async_debug()
+    @debug
     async def extract(self):
         """
         Extract
@@ -82,7 +82,7 @@ class BaseExtractor:
             if not self.reuse_web_driver:
                 await self._release_web_driver()
 
-    @async_debug()
+    @debug
     async def _acquire_web_driver(self):
         """Acquire web driver"""
         implicit_wait = self.configuration.get(self.WAIT_TAG, settings.WAIT_IMPLICIT_DEFAULT)
@@ -92,12 +92,12 @@ class BaseExtractor:
             implicit_wait=implicit_wait,
             loop=self.loop)
 
-    @async_debug()
+    @debug
     async def _release_web_driver(self):
         """Release web driver"""
         await self._deprovision_web_driver(web_driver=self.web_driver, loop=self.loop)
 
-    @async_debug()
+    @debug()
     @classmethod
     async def _provision_web_driver(cls, web_driver_brand=None, web_driver_type=None,
                                     web_driver_kwargs=None, implicit_wait=None, loop=None):
@@ -113,7 +113,7 @@ class BaseExtractor:
         web_driver.last_fetch_timestamp = None
         return web_driver
 
-    @async_debug()
+    @debug
     @classmethod
     async def _deprovision_web_driver(cls, web_driver, loop=None):
         """Deprovision web driver"""
@@ -121,14 +121,14 @@ class BaseExtractor:
         if web_driver:
             await run_in_executor(loop, None, web_driver.quit)
 
-    @async_debug()
+    @debug
     async def _perform_page_fetch(self, url):
         """Perform page fetch of given URL by running in executor"""
         future_page = self._execute_in_future(self.web_driver.get, url)
         self.web_driver.last_fetch_timestamp = datetime.datetime.utcnow()
         await future_page
 
-    @async_debug()
+    @debug
     async def _extract_content(self, element, configuration, index=1, **kwds):
         """
         Extract content
@@ -169,7 +169,7 @@ class BaseExtractor:
         instance = self.model(**content_map)
         return instance
 
-    # @async_debug(context="self.content_map.get('source_url')")
+    # @debug(context="self.content_map.get('source_url')")
     async def _extract_field(self, field, element, configuration, index=1):
         """
         Extract field
@@ -194,7 +194,7 @@ class BaseExtractor:
                 field, source, element, configuration, index)
         return configuration
 
-    # @async_debug()
+    # @debug
     async def _execute_operation_series(self, field, source, target, configuration, index=1):
         """
         Execute operation series
@@ -227,7 +227,7 @@ class BaseExtractor:
                     latest = await operation.execute(new_target, index)
         return latest
 
-    # @async_debug()
+    # @debug
     async def _execute_operation(self, field, source, target, configuration, index=1):
         """
         Execute operation
@@ -255,7 +255,7 @@ class BaseExtractor:
         """Load cached content"""
         return False
 
-    # @async_debug(context="self.content_map.get('source_url')")
+    # @debug(context="self.content_map.get('source_url')")
     async def _update_status(self, status):
         """Update status in memory only"""
         if status is self.status:
@@ -263,7 +263,7 @@ class BaseExtractor:
         self.status = ExtractionStatus(status)
         return True
 
-    # @sync_debug(context="self.content_map.get('source_url')")
+    # @debug(context="self.content_map.get('source_url')")
     def _execute_in_future(self, func, *args, **kwds):
         """Run in executor with kwds support & default loop/executor"""
         return run_in_executor(self.loop, None, func, *args, **kwds)
@@ -385,14 +385,14 @@ class SourceExtractor(BaseExtractor):
     PATH_DELIMITER = '/'
     QUERY_STRING_DELIMITER = '?'
 
-    @async_debug()
+    @debug
     async def _perform_extraction(self, url=None):
         """Perform extraction by fetching & extracting page given URL"""
         url = url or self.page_url
         await self._perform_page_fetch(url)
         await self._perform_page_extraction()
 
-    @async_debug()
+    @debug
     async def _perform_page_extraction(self, *args, **kwds):
         """Perform page extraction for single content source"""
         try:
@@ -408,7 +408,7 @@ class SourceExtractor(BaseExtractor):
             self.extracted_content = content
             await self.cache.store_content(content)
 
-    @async_debug()
+    @debug
     @classmethod
     async def extract_in_parallel(cls, model, urls_by_domain, search_domain,
                                   search_web_driver=None, delay_configuration=None, loop=None):
@@ -453,7 +453,7 @@ class SourceExtractor(BaseExtractor):
         source_results = chain(*series_results)
         return source_results
 
-    @async_debug()
+    @debug
     @classmethod
     async def extract_in_series(cls, model, urls, web_driver=None, web_driver_brand=None,
                                 reuse_web_driver=None, delay_configuration=None, loop=None):
@@ -514,7 +514,7 @@ class SourceExtractor(BaseExtractor):
 
         return source_results
 
-    @async_debug()
+    @debug
     @classmethod
     async def _delay_if_necessary(cls, delay_config, last_fetch_timestamp):
         delay = human_dwell_time(**delay_config)
@@ -525,7 +525,7 @@ class SourceExtractor(BaseExtractor):
         if remaining_delay:
             await asyncio.sleep(delay)
 
-    @sync_debug()
+    @debug
     @classmethod
     def provision_extractors(cls, model, urls=None, web_driver=None,
                              web_driver_brand=None, reuse_web_driver=None, loop=None):
@@ -659,7 +659,7 @@ class MultiExtractor(BaseExtractor):
     FRESHNESS_THRESHOLD_TAG = 'freshness_threshold'
     ITEMS_TAG = 'items'
 
-    @async_debug()
+    @debug
     async def _perform_extraction(self, url=None):
         """
         Perform extraction
@@ -681,7 +681,7 @@ class MultiExtractor(BaseExtractor):
                 more_pages = await self._perform_next_page_extraction(page, via_url)
                 page += 1
 
-    @async_debug()
+    @debug
     async def _perform_next_page_extraction(self, page, via_url):
         """
         Perform next page extraction
@@ -712,7 +712,7 @@ class MultiExtractor(BaseExtractor):
         await self._perform_page_extraction(page=page)
         return page < self.pages
 
-    @async_debug()
+    @debug
     async def _perform_page_extraction(self, page=1):
         """
         Perform page extraction
@@ -776,7 +776,7 @@ class MultiExtractor(BaseExtractor):
             source_results = await self._extract_sources(self.extracted_content)
             await self._combine_results(self.extracted_content, source_results)
 
-    @async_debug()
+    @debug
     async def _extract_sources(self, extracted_content):
         """Extract sources given extracted content"""
         search_domain = derive_domain(self.page_url)
@@ -798,7 +798,7 @@ class MultiExtractor(BaseExtractor):
             delay_configuration=self.delay_configuration,
             loop=self.loop)
 
-    @async_debug()
+    @debug
     async def _combine_results(self, extracted_content, source_results):
         """Combine results extracted from search with source content"""
         for source_result in source_results:
@@ -816,7 +816,7 @@ class MultiExtractor(BaseExtractor):
 
                 setattr(content_result, field, source_value)
 
-    @async_debug(context="self.page_url")
+    @debug(context="self.page_url")
     async def _load_cached_content(self):
         """Load cached content, returning True if available and fresh"""
         status, last_extracted = await self.cache.retrieve_extractor_info()
@@ -829,7 +829,7 @@ class MultiExtractor(BaseExtractor):
             return True
         return False
 
-    @sync_debug()
+    @debug
     def _should_use_cached_content(self, status, last_extracted):
         """Determine if cached content is available and fresh"""
         # TODO: Check last extracted after configuration last modified
@@ -840,7 +840,7 @@ class MultiExtractor(BaseExtractor):
 
         return False
 
-    @async_debug(context="self.content_map.get('source_url')")
+    @debug(context="self.content_map.get('source_url')")
     async def _update_status(self, status):
         """Update extractor/overall status, caching as necessary"""
         if status.value < self.status.value:
@@ -853,7 +853,7 @@ class MultiExtractor(BaseExtractor):
         await self.cache.store_extraction_status(status, overall_status, has_changed)
         return True
 
-    @async_debug(context="self.content_map.get('source_url')")
+    @debug(context="self.content_map.get('source_url')")
     async def _apply_status_change(self, status):
         """Apply status change; return overall status & has_changed"""
         old_overall_status = await self._determine_overall_status()
@@ -865,7 +865,7 @@ class MultiExtractor(BaseExtractor):
         has_changed = new_overall_status is not old_overall_status
         return new_overall_status, has_changed
 
-    @async_debug(context="self.content_map.get('source_url')")
+    @debug(context="self.content_map.get('source_url')")
     async def _determine_overall_status(self):
         """Determine overall extraction status of the cohort"""
         minimum = min(self.cohort_status_values)
@@ -883,7 +883,7 @@ class MultiExtractor(BaseExtractor):
         """Cohort status values are emitted by the returned generator"""
         return (extractor.status.value for extractor in self.cohort.values())
 
-    @sync_debug()
+    @debug
     @classmethod
     def provision_extractors(cls, model, search_data=None, web_driver=None, web_driver_brand=None,
                              reuse_web_driver=None, loop=None):
@@ -977,7 +977,7 @@ class MultiExtractor(BaseExtractor):
             return OrderedDict()
         return OrderedDict(search_data)
 
-    @sync_debug()
+    @debug
     def _form_page_url(self, configuration, search_data):
         """Form page URL given extractor configuration & search terms"""
         url_config = self.configuration[self.URL_TAG]
