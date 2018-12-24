@@ -11,7 +11,7 @@ import aioredis
 import wrapt
 
 import settings
-from utils.debug import async_debug, sync_debug
+from utils.debug import debug
 from utils.signature import CallSign
 from utils.singleton import Singleton
 from utils.tools import is_instance_method, is_nonstring_sequence
@@ -21,7 +21,7 @@ ENCODING_DEFAULT = 'utf-8'
 
 class AsyncCache(Singleton):
     """AsyncCache manages async connections to Redis key-value store"""
-    @sync_debug()
+    @debug
     def initialize(self, loop=None):
         """Initialize AsyncCache singleton"""
         self.client = None
@@ -31,7 +31,7 @@ class AsyncCache(Singleton):
         else:
             loop.run_until_complete(self.connect(loop))
 
-    @async_debug()
+    @debug
     async def connect(self, loop=None):
         """Connect to Redis via pool, set client, and return it"""
         loop = loop or self.loop or asyncio.get_event_loop()
@@ -43,7 +43,7 @@ class AsyncCache(Singleton):
             self.client = redis
         return redis
 
-    @async_debug()
+    @debug
     async def disconnect(self):
         """Disconnect from Redis, await clean up, and remove client"""
         redis = self.client
@@ -52,7 +52,7 @@ class AsyncCache(Singleton):
             await redis.wait_closed()
             self.client = None
 
-    @sync_debug()
+    @debug
     def terminate(self, loop=None):
         """Terminate AsyncCache from outside the event loop"""
         loop = loop or self.loop or asyncio.get_event_loop()

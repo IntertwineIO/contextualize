@@ -11,7 +11,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 import settings
 from utils.async import run_in_executor
-from utils.debug import async_debug, sync_debug
+from utils.debug import debug
 from utils.enum import FlexEnum
 from utils.iterable import one, one_max, one_min
 from utils.time import GranularDateTime
@@ -78,7 +78,7 @@ class ExtractionOperation:
     TransformMethod = FlexEnum('TransformMethod', 'EXCISE JOIN SPLIT')
     # SetMethod = FlexEnum('SetMethod', 'SET')
 
-    # @async_debug(context='self.context')
+    # @debug(context='self.context')
     async def execute(self, target, index=1):
         """
         Execute
@@ -131,7 +131,7 @@ class ExtractionOperation:
 
         return delist(values)
 
-    # @async_debug(context='self.context')
+    # @debug(context='self.context')
     async def _find_elements(self, element, index=1):
         """
         Find elements
@@ -181,7 +181,7 @@ class ExtractionOperation:
         if not isinstance(value, (type(self.web_driver), WebElement)):
             raise TypeError(f'Expected driver or element. Received: {value}')
 
-    # @sync_debug(context='self.context')
+    # @debug(context='self.context')
     def _derive_find_method(self, element):
         """Derive find (method, by) from operation and given element"""
         element_tag = self.ELEMENTS_TAG if self.is_multiple else self.ELEMENT_TAG
@@ -191,7 +191,7 @@ class ExtractionOperation:
         find_by = getattr(By, self.find_method.name)
         return find_method, find_by
 
-    # @async_debug(context='self.context')
+    # @debug(context='self.context')
     async def _click_elements(self, elements):
         """
         Click elements sequentially
@@ -203,7 +203,7 @@ class ExtractionOperation:
             future_dom = self._execute_in_future(element.click)
             await future_dom
 
-    # @async_debug(context='self.context')
+    # @debug(context='self.context')
     async def _extract_values(self, elements):
         """Extract values via the operation's extract method/args"""
         extracted_values = []
@@ -229,7 +229,7 @@ class ExtractionOperation:
 
         return extracted_values
 
-    # @async_debug(context='self.context')
+    # @debug(context='self.context')
     async def _get_values(self, values):
         """Get values from another field of the same item"""
         retrieved_values = []
@@ -242,7 +242,7 @@ class ExtractionOperation:
 
         return retrieved_values
 
-    # @async_debug(context='self.context')
+    # @debug(context='self.context')
     async def _parse_values(self, values):
         """Parse values via the operation's parse method/args"""
         parsed_values = []
@@ -276,7 +276,7 @@ class ExtractionOperation:
 
         return parsed_values
 
-    # @async_debug(context='self.context')
+    # @debug(context='self.context')
     async def _format_values(self, values):
         """Format values via the operation's format method/args"""
         formatted_values = []
@@ -304,7 +304,7 @@ class ExtractionOperation:
 
         return formatted_values
 
-    # @async_debug(context='self.context')
+    # @debug(context='self.context')
     async def _transform_values(self, values):
         """Transform values via the operation's transform method/args"""
         transformed_values = []

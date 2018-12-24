@@ -177,6 +177,11 @@ def derive_qualname(obj):
     return qualname
 
 
+def get_base_name(obj):
+    """Get base name - the first qualifying name - from an object"""
+    return obj.__qualname__.split('.')[0]
+
+
 def get_related_json(base, field, payload=None, strict=False):
     """
     Get related JSON
@@ -265,6 +270,16 @@ def is_namedtuple(obj):
 def is_nonstring_sequence(obj):
     """Check if object is non-string sequence: list, tuple, range..."""
     if (isinstance(obj, basestring) or hasattr(obj, 'items') or not hasattr(obj, '__getitem__')):
+        return False
+    try:
+        iter(obj)
+        return True
+    except TypeError:
+        return False
+
+
+def is_packed(obj):
+    if isinstance(obj, str):
         return False
     try:
         iter(obj)
