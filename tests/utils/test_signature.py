@@ -79,8 +79,7 @@ def obtain_open_results(func, normalized_func, args, kwargs):
 
 
 def validate_normalize_decorator_results(func, args, kwargs):
-    normalize_wrapper = normalize()
-    normalized_func = normalize_wrapper(func)
+    normalized_func = normalize(func)
 
     if func is open:
         results, normalized_results = obtain_open_results(func, normalized_func, args, kwargs)
@@ -115,40 +114,34 @@ def argh(func, instance, args, kwargs):
     return func(*args, **kwargs)
 
 
-@argh
-def full_signature(a, c=13, *argz, e=15, g, **kwargz):
-    local_dict = locals()
-    for arg_name in 'a c argz e g kwargz'.split():
+def print_locals(local_dict, names):
+    for arg_name in names.split():
         arg_value = local_dict[arg_name]
         print(f'{arg_name}: {arg_value}')
+
+
+# @argh
+def full_signature(a, c=13, *argz, e=15, g, **kwargz):
+    print_locals(locals(), 'a c argz e g kwargz')
     return a, c, argz, e, g, kwargz
 
 
 class F:
-    @argh
+    # @argh
     def imethod(self, a, c=13, *argz, e=15, g, **kwargz):
-        local_dict = locals()
-        for arg_name in 'a c argz e g kwargz'.split():
-            arg_value = local_dict[arg_name]
-            print(f'{arg_name}: {arg_value}')
+        print_locals(locals(), 'a c argz e g kwargz')
         return a, c, argz, e, g, kwargz
 
-    @argh
+    # @argh
     @classmethod
     def cmethod(cls, a, c=13, *argz, e=15, g, **kwargz):
-        local_dict = locals()
-        for arg_name in 'a c argz e g kwargz'.split():
-            arg_value = local_dict[arg_name]
-            print(f'{arg_name}: {arg_value}')
+        print_locals(locals(), 'a c argz e g kwargz')
         return a, c, argz, e, g, kwargz
 
-    @argh
+    # @argh
     @staticmethod
     def smethod(a, c=13, *argz, e=15, g, **kwargz):
-        local_dict = locals()
-        for arg_name in 'a c argz e g kwargz'.split():
-            arg_value = local_dict[arg_name]
-            print(f'{arg_name}: {arg_value}')
+        print_locals(locals(), 'a c argz e g kwargz')
         return a, c, argz, e, g, kwargz
 
 
