@@ -6,6 +6,7 @@ import inspect
 import wrapt
 from pprint import PrettyPrinter
 
+from utils.decor import factory_direct
 from utils.tools import WIDTH
 
 DELIMITER = '–'  # chr(8211)
@@ -41,12 +42,13 @@ def derive_offset_space(offset=None, indent=4):
     return ' ' * new_offset * indent
 
 
-def evaluate_context(self, context):
+def evaluate_context(self, context, func, *args, **kwargs):
+    """Evaluate context, which may reference self/func/args/kwargs"""
     try:
-        evaluated_context = eval(context)
-    except Exception:
-        evaluated_context = None
-    return str(evaluated_context)
+        evaluated_context = str(eval(context))
+    except Exception as e:
+        evaluated_context = f'Exception encountered in evaluating context: {e}'
+    return evaluated_context
 
 
 def loop_repr(loop):
@@ -61,10 +63,11 @@ def print_enter_info(func, context, instance, args, kwargs,
     """Print enter info for function to be called/awaited"""
     print(SEPARATOR)
     async_ = 'async ' if is_async else ''
-    print(f'{offset_space}Entering {async_}{func.__name__}')
+    print(f'{offset_space}Entering {async_}{func.__qualname__} ({func.__module__})')
+    if context is not None:
+        context_text = evaluate_context(instance, context, func, *args, **kwargs)
+        format_text('context', context_text, offset_space)
     if instance is not None:
-        if context is not None:
-            format_text('context', evaluate_context(instance, context), offset_space)
         format_text('instance', repr(instance), offset_space)
     format_text('args', printer.pformat(args), offset_space)
     format_text('kwargs', printer.pformat(kwargs), offset_space)
@@ -81,10 +84,11 @@ def print_exit_info(func, context, instance, args, kwargs,
     """Print exit info for function upon its return"""
     print(SEPARATOR)
     async_ = 'async ' if is_async else ''
-    print(f'{offset_space}Returning from {async_}{func.__name__}')
+    print(f'{offset_space}Returning from {async_}{func.__qualname__} ({func.__module__})')
+    if context is not None:
+        context_text = evaluate_context(instance, context, func, *args, **kwargs)
+        format_text('context', context_text, offset_space)
     if instance is not None:
-        if context is not None:
-            format_text('context', evaluate_context(instance, context), offset_space)
         format_text('instance', repr(instance), offset_space)
     format_text('args', printer.pformat(args), offset_space)
     format_text('kwargs', printer.pformat(kwargs), offset_space)
@@ -96,18 +100,23 @@ def print_exit_info(func, context, instance, args, kwargs,
     print(SEPARATOR)
 
 
-def sync_debug(offset=None, indent=4, context=None):
+def debug(*args, offset=None, indent=4, context=None):
     """
-    Sync Debug
+    Debug
 
-    Decorator for synchronous functions to provide debugging info:
+    Debug decorator factory for regular and async functions. May be used
+    on functions and methods. For @classmethods and @staticmethods,
+    @debug may be either the inner or outer wrapper. For properties,
+    @debug must be the inner wrapper.
+
+    Debugging information:
     - Upon entering: args/kwargs, instance repr (if method) & start time
     - Upon exiting: args/kwargs, instance repr (if method), return value
       & end/elapsed time (args/kwargs/instance are repeated since the
-      return message can be far removed from the await message)
-    - Each message is offset based on the degree to which the function
-      follows other functions also decorated by Debug/Async Debug
+      return message can be far removed from the enter message)
     - Horizontal separators visually delineate each message
+    - Each message is offset by the degree to which the function follows
+      other @debug decorated functions since the last gather/wait
 
     I/O:
     offset=None:    By default, offset increases automatically with each
@@ -115,70 +124,52 @@ def sync_debug(offset=None, indent=4, context=None):
                     allows it to be overridden
     indent=4:       Integer specifying the number of spaces to be used
                     for each level of offset
+    context=None:   String to be evaluated & printed as enter/exit info;
+                    May reference `self`, `func`, `args`, or `kwargs`.
     """
-    @wrapt.decorator
-    def sync_debug_wrapper(func, instance, args, kwargs):
+    def debug_decorator(func):
+
         if asyncio.iscoroutinefunction(func):
-            raise TypeError('Function decorated with sync_debug must not be async.')
-        loop = asyncio.get_event_loop()
-        offset_space = derive_offset_space(offset, indent)
-        width = WIDTH - len(offset_space)
-        printer = PrettyPrinter(indent=indent, width=width)
-        print_enter_info(func, context, instance, args, kwargs,
-                         printer, offset_space, loop)
+            @wrapt.decorator
+            async def async_debug_wrapper(func, instance, args, kwargs):
+                loop = asyncio.get_event_loop()
+                offset_space = derive_offset_space(offset, indent)
+                printer = PrettyPrinter(indent=indent, width=WIDTH - len(offset_space))
 
-        true_start_time = loop.time()
-        result = func(*args, **kwargs)
-        end_time = loop.time()
-        elapsed_time = end_time - true_start_time
+                print_enter_info(func, context, instance, args, kwargs,
+                                 printer, offset_space, loop, is_async=True)
 
-        print_exit_info(func, context, instance, args, kwargs,
-                        result, end_time, elapsed_time,
-                        printer, offset_space, loop)
-        return result
+                true_start_time = loop.time()
+                result = await func(*args, **kwargs)
+                end_time = loop.time()
+                elapsed_time = end_time - true_start_time
 
-    return sync_debug_wrapper
+                print_exit_info(func, context, instance, args, kwargs,
+                                result, end_time, elapsed_time,
+                                printer, offset_space, loop, is_async=True)
+                return result
 
+            return async_debug_wrapper(func)
 
-def async_debug(offset=None, indent=4, context=None):
-    """
-    Async Debug
+        @wrapt.decorator
+        def sync_debug_wrapper(func, instance, args, kwargs):
+            loop = asyncio.get_event_loop()
+            offset_space = derive_offset_space(offset, indent)
+            printer = PrettyPrinter(indent=indent, width=WIDTH - len(offset_space))
 
-    Decorator for async functions/methods to provide debugging info:
-    - Upon entering: args/kwargs, instance repr (if method) & start time
-    - Upon exiting: args/kwargs, instance repr (if method), return value
-      & end/elapsed time (args/kwargs/instance are repeated since the
-      return message can be far removed from the await message)
-    - Each message is offset based on the degree to which the function
-      follows other functions also decorated by Debug/Async Debug
-    - Horizontal separators visually delineate each message
+            print_enter_info(func, context, instance, args, kwargs,
+                             printer, offset_space, loop)
 
-    I/O:
-    offset=None:    By default, offset increases automatically with each
-                    level of decorated debug call, but this parameter
-                    allows it to be overridden
-    indent=4:       Integer specifying the number of spaces to be used
-                    for each level of offset
-    """
-    @wrapt.decorator
-    async def async_debug_wrapper(func, instance, args, kwargs):
-        if not asyncio.iscoroutinefunction(func):
-            raise TypeError('Function decorated with async_debug must be async.')
-        loop = asyncio.get_event_loop()
-        offset_space = derive_offset_space(offset, indent)
-        width = WIDTH - len(offset_space)
-        printer = PrettyPrinter(indent=indent, width=width)
-        print_enter_info(func, context, instance, args, kwargs,
-                         printer, offset_space, loop, is_async=True)
+            true_start_time = loop.time()
+            result = func(*args, **kwargs)
+            end_time = loop.time()
+            elapsed_time = end_time - true_start_time
 
-        true_start_time = loop.time()
-        result = await func(*args, **kwargs)
-        end_time = loop.time()
-        elapsed_time = end_time - true_start_time
+            print_exit_info(func, context, instance, args, kwargs,
+                            result, end_time, elapsed_time,
+                            printer, offset_space, loop)
+            return result
 
-        print_exit_info(func, context, instance, args, kwargs,
-                        result, end_time, elapsed_time,
-                        printer, offset_space, loop, is_async=True)
-        return result
+        return sync_debug_wrapper(func)
 
-    return async_debug_wrapper
+    return factory_direct(debug_decorator, *args)
