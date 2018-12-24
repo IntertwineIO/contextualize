@@ -7,6 +7,7 @@ from itertools import chain, groupby, zip_longest
 
 import wrapt
 
+from utils.decor import factory_direct
 from utils.iterable import consume
 from utils.sentinel import Sentinel
 from utils.tools import is_selfish
@@ -345,20 +346,25 @@ class CallSign:
         return repr(self.signature).replace(self.SIGNATURE_TAG, self.class_name)
 
 
-def normalize(enhance_sort=False):
-    """Normalize decorator for standardizing call arguments"""
-    def call_sign_wrapper(func):
+def normalize(*args, enhance_sort=False):
+    """Normalize decorator (factory) for standardizing call arguments"""
+    def normalize_decorator(func):
         # Cache call_sign as CallSign's getfullargspec is expensive
         call_sign = CallSign(func, enhance_sort=enhance_sort)
 
+        if asyncio.iscoroutinefunction(func):
+            @wrapt.decorator
+            async def async_normalize_wrapper(func, instance, args, kwargs):
+                normalized = call_sign.normalize(*args, **kwargs)
+                return await func(*normalized.args, **normalized.kwargs)
+
+            return async_normalize_wrapper(func)
+
         @wrapt.decorator
         def normalize_wrapper(func, instance, args, kwargs):
-            if asyncio.iscoroutinefunction(func):
-                raise TypeError('Function decorated with normalize must not be async.')
-
             normalized = call_sign.normalize(*args, **kwargs)
             return func(*normalized.args, **normalized.kwargs)
 
         return normalize_wrapper(func)
 
-    return call_sign_wrapper
+    return factory_direct(normalize_decorator, *args)
