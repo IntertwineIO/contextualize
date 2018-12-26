@@ -88,13 +88,13 @@ def decorator_factory(*args, **kwargs):
         print('exiting decorator')
         return enwrapped
 
-    print('entering factory direct')
+    print(f'entering factory direct with {args}')
     decorated = factory_direct(decorator, *args)
     print('exiting factory direct')
     return decorated
 
 
-class D:
+class A:
     PROPS = 'kudos!'
 
     @decorator_factory
@@ -102,14 +102,14 @@ class D:
         print_locals(locals(), 'a c argz e g kwargz')
         return a, c, argz, e, g, kwargz
 
-    @decorator_factory
     @classmethod
+    @decorator_factory
     def classy(cls, a, c=13, *argz, e=15, g, **kwargz):
         print_locals(locals(), 'a c argz e g kwargz')
         return a, c, argz, e, g, kwargz
 
-    @decorator_factory
     @staticmethod
+    @decorator_factory
     def staticy(a, c=13, *argz, e=15, g, **kwargz):
         print_locals(locals(), 'a c argz e g kwargz')
         return a, c, argz, e, g, kwargz
@@ -120,19 +120,49 @@ class D:
         return self.PROPS
 
 
+class B:
+    PROPS = 'kudos!'
+
+    @decorator_factory(kwarg1='alpha', kwarg2='beta')
+    def instance(self, a, c=13, *argz, e=15, g, **kwargz):
+        print_locals(locals(), 'a c argz e g kwargz')
+        return a, c, argz, e, g, kwargz
+
+    @classmethod
+    @decorator_factory(kwarg1='alpha', kwarg2='beta')
+    def classy(cls, a, c=13, *argz, e=15, g, **kwargz):
+        print_locals(locals(), 'a c argz e g kwargz')
+        return a, c, argz, e, g, kwargz
+
+    @staticmethod
+    @decorator_factory(kwarg1='alpha', kwarg2='beta')
+    def staticy(a, c=13, *argz, e=15, g, **kwargz):
+        print_locals(locals(), 'a c argz e g kwargz')
+        return a, c, argz, e, g, kwargz
+
+    @property
+    @decorator_factory(kwarg1='alpha', kwarg2='beta')
+    def propsy(self):
+        return self.PROPS
+
+
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ('idx', 'func',         'args',         'kwargs',       'check_func'),
+    ('idx', 'klass',    'func',         'args',         'kwargs',       'check_func'),
     [
-     (0,     D().instance,  [1],            {'g': 7},        C().instance),
-     (1,     D.classy,      [1],            {'g': 7},        C.classy),
-     (2,     D.staticy,     [1],            {'g': 7},        C.staticy),
-     (3,     D.propsy,      None,           None,            C.propsy),
+     (0,     A,          A().instance,  [1],            {'g': 7},        C().instance),
+     (1,     A,          A.classy,      [1],            {'g': 7},        C.classy),
+     (2,     A,          A.staticy,     [1],            {'g': 7},        C.staticy),
+     (3,     A,          A.propsy,      None,           None,            C.propsy),
+     (4,     B,          B().instance,  [1],            {'g': 7},        C().instance),
+     (5,     B,          B.classy,      [1],            {'g': 7},        C.classy),
+     (6,     B,          B.staticy,     [1],            {'g': 7},        C.staticy),
+     (7,     B,          B.propsy,      None,           None,            C.propsy),
      ])
-def test_factory_direct_calls(idx, func, args, kwargs, check_func):
-    """Test factory direct calls"""
+def test_factory_direct_calls(idx, klass, func, args, kwargs, check_func):
+    """Test factory direct decorator calls"""
     if isinstance(func, property):
-        value = func.fget(D())
+        value = func.fget(klass())
         check_value = check_func.fget(C())
     else:
         value = func(*args, **kwargs)
