@@ -105,9 +105,8 @@ def debug(*args, offset=None, indent=4, context=None):
     Debug
 
     Debug decorator factory for regular and async functions. May be used
-    on functions and methods. For @classmethods and @staticmethods,
-    @debug may be either the inner or outer wrapper. For properties,
-    @debug must be the inner wrapper.
+    on functions and methods. For class methods, static methods, and
+    properties, @debug must be the inner wrapper.
 
     Debugging information:
     - Upon entering: args/kwargs, instance repr (if method) & start time

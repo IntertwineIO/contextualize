@@ -97,8 +97,8 @@ class BaseExtractor:
         """Release web driver"""
         await self._deprovision_web_driver(web_driver=self.web_driver, loop=self.loop)
 
-    @debug()
     @classmethod
+    @debug()
     async def _provision_web_driver(cls, web_driver_brand=None, web_driver_type=None,
                                     web_driver_kwargs=None, implicit_wait=None, loop=None):
         """Provision web driver"""
@@ -113,8 +113,8 @@ class BaseExtractor:
         web_driver.last_fetch_timestamp = None
         return web_driver
 
-    @debug
     @classmethod
+    @debug
     async def _deprovision_web_driver(cls, web_driver, loop=None):
         """Deprovision web driver"""
         loop = loop or asyncio.get_event_loop()
@@ -408,8 +408,8 @@ class SourceExtractor(BaseExtractor):
             self.extracted_content = content
             await self.cache.store_content(content)
 
-    @debug
     @classmethod
+    @debug
     async def extract_in_parallel(cls, model, urls_by_domain, search_domain,
                                   search_web_driver=None, delay_configuration=None, loop=None):
         """
@@ -453,8 +453,8 @@ class SourceExtractor(BaseExtractor):
         source_results = chain(*series_results)
         return source_results
 
-    @debug
     @classmethod
+    @debug
     async def extract_in_series(cls, model, urls, web_driver=None, web_driver_brand=None,
                                 reuse_web_driver=None, delay_configuration=None, loop=None):
         """
@@ -514,8 +514,8 @@ class SourceExtractor(BaseExtractor):
 
         return source_results
 
-    @debug
     @classmethod
+    @debug
     async def _delay_if_necessary(cls, delay_config, last_fetch_timestamp):
         delay = human_dwell_time(**delay_config)
         now = datetime.datetime.utcnow()
@@ -525,8 +525,8 @@ class SourceExtractor(BaseExtractor):
         if remaining_delay:
             await asyncio.sleep(delay)
 
-    @debug
     @classmethod
+    @debug
     def provision_extractors(cls, model, urls=None, web_driver=None,
                              web_driver_brand=None, reuse_web_driver=None, loop=None):
         """
@@ -883,8 +883,8 @@ class MultiExtractor(BaseExtractor):
         """Cohort status values are emitted by the returned generator"""
         return (extractor.status.value for extractor in self.cohort.values())
 
-    @debug
     @classmethod
+    @debug
     def provision_extractors(cls, model, search_data=None, web_driver=None, web_driver_brand=None,
                              reuse_web_driver=None, loop=None):
         """

@@ -30,7 +30,7 @@ def factory_direct(decorator, *args):
         if len(args) > 1:
             factory_name = get_base_name(decorator)
             raise TypeError(f'{factory_name!r} only accepts keyword arguments as a factory')
-        if not callable(func) and not isinstance(func, (classmethod, staticmethod)):
+        if not callable(func):
             factory_name = get_base_name(decorator)
             type_name = type(func).__qualname__
             raise TypeError(f'{factory_name!r} must decorate a function, not a {type_name}')
