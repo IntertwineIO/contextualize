@@ -3,6 +3,8 @@
 from collections import OrderedDict, namedtuple
 from datetime import datetime
 
+import tzlocal
+
 from utils.enum import FlexEnum
 
 
@@ -133,3 +135,48 @@ class GranularDateTime(datetime):
                 dt_list[0] = year.zfill(4)
             dt_string = '-'.join(dt_list)
             return cls.strptime(dt_string, *cls.TEMPLATES)
+
+    @classmethod
+    def fromtimestamp(cls, timestamp, tz=None, resolution=None):
+        """
+        From Timestamp
+
+        Construct local datetime from timestamp at the given resolution.
+
+        I/O:
+        timestamp:          Unix Epoch time
+        tz=None:            Time zone object of localized datetime
+        resolution=None:    The number of seconds represented by each
+                            timestamp unit. If not specified, 1 second
+                            is attempted, failing over to 0.001 seconds.
+        """
+        # See https://stackoverflow.com/a/40769643/4182210
+        timezone = tz or tzlocal.get_localzone()
+        if resolution:
+            return super().fromtimestamp(timestamp * resolution, tz=timezone)
+        try:
+            return super().fromtimestamp(timestamp, tz=timezone)
+        except ValueError:
+            timestamp /= 1000
+            return super().fromtimestamp(timestamp, tz=timezone)
+
+    @classmethod
+    def utcfromtimestamp(cls, timestamp, resolution=None):
+        """
+        UTC From Timestamp
+
+        Construct UTC datetime from timestamp at the given resolution.
+
+        I/O:
+        timestamp:          Unix Epoch time
+        resolution=None:    The number of seconds represented by each
+                            timestamp unit. If not specified, 1 second
+                            is attempted, failing over to 0.001 seconds.
+        """
+        if resolution:
+            return super().utcfromtimestamp(timestamp * resolution)
+        try:
+            return super().utcfromtimestamp(timestamp)
+        except ValueError:
+            timestamp /= 1000
+            return super().utcfromtimestamp(timestamp)
