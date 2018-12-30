@@ -181,7 +181,7 @@ class ExtractionOperation:
         if not isinstance(value, (type(self.web_driver), WebElement)):
             raise TypeError(f'Expected driver or element. Received: {value}')
 
-    # @debug(context='self.context')
+    @debug(context='self.context')
     def _derive_find_method(self, element):
         """Derive find (method, by) from operation and given element"""
         element_tag = self.ELEMENTS_TAG if self.is_multiple else self.ELEMENT_TAG
@@ -394,7 +394,7 @@ class ExtractionOperation:
     @staticmethod
     def _configure_method(configuration, method_enum):
         """Configure method based on the given method enum"""
-        method_keys = method_enum.as_set(transform=str.lower)
+        method_keys = set(method_enum.names(transform=str.lower))
         method_key = one_max(k for k in configuration if k in method_keys)
         if not method_key:
             return None, None
