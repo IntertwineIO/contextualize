@@ -353,6 +353,18 @@ class FileCache:
                          first parameter that is not self/cls/meta.
     """
     @wrapt.decorator
+    def __call__(self, func, instance, args, kwargs):
+        """Decorate function, returning decorated version of function"""
+        if asyncio.iscoroutinefunction(func):
+            raise TypeError('Function decorated with FileCache must not be async.')
+
+        if self.func is None:
+            self._initialize_decorated(func, self.path_parameter)
+
+        file_cached = self._file_cache_wrapper(self.lyrical_cache(func))
+        return file_cached(*args, **kwargs)
+
+    @wrapt.decorator
     def _file_cache_wrapper(self, lyrical_func, instance, args, kwargs):
         """Clear cached file if modified and call lyrical func"""
         if asyncio.iscoroutinefunction(lyrical_func):
@@ -372,17 +384,11 @@ class FileCache:
 
         return lyrical_func(*args, **kwargs)
 
-    @wrapt.decorator
-    def __call__(self, func, instance, args, kwargs):
-        """Decorate function, returning decorated version of function"""
-        if asyncio.iscoroutinefunction(func):
-            raise TypeError('Function decorated with FileCache must not be async.')
-
-        if self.func is None:
-            self._initialize_decorated(func, self.path_parameter)
-
-        file_cache = self._file_cache_wrapper(self.lyrical_cache(func))
-        return file_cache(*args, **kwargs)
+    @debug
+    def get_file_timestamp(self, file_path):
+        """Get last modified timestamp of file at given path"""
+        cached_file_info = self.file_info.get(file_path, FileInfo(0, 0))
+        return cached_file_info.last_modified
 
     def _initialize_decorated(self, func, path_parameter):
         """Initialize attributes from decorated function"""
