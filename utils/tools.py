@@ -121,16 +121,17 @@ def delist(obj):
     Delist
 
     Unpack the given obj as follows:
-    If obj is not a list, return the obj.
-    If obj is a list with 2 or more items, return the list.
-    If obj is a list with a single item, return the item.
     If obj is an empty list, return None.
+    If obj is not a list, return the obj.
+    If obj is a list with a single item, return the item.
+    If obj is a list with 2 or more items, raise TooManyValuesError.
     """
     if isinstance(obj, list):
         if not obj:
             return None
         if len(obj) == 1:
             return obj[0]
+        raise TooManyValuesError(expected=1, received=obj)
 
     return obj
 
@@ -140,9 +141,9 @@ def enlist(obj):
     Enlist
 
     Package the given obj as a list as follows:
+    If obj is None, return an empty list.
     If obj is already a list, return the obj.
     If obj is not a list, return list containing obj.
-    If obj is None, return an empty list.
     """
     if obj is None:
         return []

@@ -2,6 +2,9 @@
 # -*- coding: utf-8 -*-
 import pytest
 
+from exceptions import TooManyValuesError
+
+
 from utils.tools import (
     derive_domain, delist, enlist, get_related_json, is_child_class, is_instance_method,
     is_class_method, is_static_method, logical_xor, xor_constrain
@@ -56,15 +59,20 @@ def test_derive_domain(idx, url, base, check):
      (3,    [42],                                42),
      (4,    'foo',                              'foo'),
      (5,    ['bar'],                            'bar'),
-     (6,    [42, 'bar'],                        [42, 'bar']),
-     (7,    [None],                              None),
+     (6,    [None],                              None),
+     (7,    [42, 'bar'],                         TooManyValuesError),
      ])
 def test_delist(idx, obj, check):
     """Test delist utility"""
-    delisted = delist(obj)
-    assert delisted == check
-    if not isinstance(obj, list):
-        assert delisted is obj
+    if is_child_class(check, Exception):
+        with pytest.raises(check):
+            delist(obj)
+
+    else:
+        delisted = delist(obj)
+        assert delisted == check
+        if not isinstance(obj, list):
+            assert delisted is obj
 
 
 @pytest.mark.unit
@@ -77,8 +85,8 @@ def test_delist(idx, obj, check):
      (3,    [42],                               [42]),
      (4,    'foo',                              ['foo']),
      (5,    ['bar'],                            ['bar']),
-     (6,    [42, 'bar'],                        [42, 'bar']),
-     (7,    [None],                             [None]),
+     (6,    [None],                             [None]),
+     (7,    [42, 'bar'],                        [42, 'bar']),
      ])
 def test_enlist(idx, obj, check):
     """Test enlist utility"""
