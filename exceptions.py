@@ -17,13 +17,13 @@ class BaseException(Exception):
         super().__init__(self, message)
 
 
-class NoneValueError(BaseException):
+class NoneValueError(BaseException, ValueError):
     """Expected non-null value; received: None"""
 
 
-class TooFewValuesError(BaseException):
+class TooFewValuesError(BaseException, ValueError):
     """Expected number: {expected}; received: {received}"""
 
 
-class TooManyValuesError(BaseException):
+class TooManyValuesError(BaseException, ValueError):
     """Expected number: {expected}; received: {received}"""
