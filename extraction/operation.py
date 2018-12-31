@@ -181,7 +181,7 @@ class ExtractionOperation:
         if not isinstance(value, (type(self.web_driver), WebElement)):
             raise TypeError(f'Expected driver or element. Received: {value}')
 
-    @debug(context='self.context')
+    # @debug(context='self.context')
     def _derive_find_method(self, element):
         """Derive find (method, by) from operation and given element"""
         element_tag = self.ELEMENTS_TAG if self.is_multiple else self.ELEMENT_TAG
