@@ -3,8 +3,8 @@
 import pytest
 
 from utils.tools import (
-    derive_domain, get_related_json, is_child_class, is_instance_method, is_class_method,
-    is_static_method, logical_xor, xor_constrain
+    derive_domain, delist, enlist, get_related_json, is_child_class, is_instance_method,
+    is_class_method, is_static_method, logical_xor, xor_constrain
 )
 
 
@@ -44,6 +44,48 @@ def test_derive_domain(idx, url, base, check):
             assert value is check
         else:
             assert value == check
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ('idx', 'obj',                              'check'),
+    [
+     (0,     None,                               None),
+     (1,    [],                                  None),
+     (2,     42,                                 42),
+     (3,    [42],                                42),
+     (4,    'foo',                              'foo'),
+     (5,    ['bar'],                            'bar'),
+     (6,    [42, 'bar'],                        [42, 'bar']),
+     (7,    [None],                              None),
+     ])
+def test_delist(idx, obj, check):
+    """Test delist utility"""
+    delisted = delist(obj)
+    assert delisted == check
+    if not isinstance(obj, list):
+        assert delisted is obj
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ('idx', 'obj',                              'check'),
+    [
+     (0,     None,                              []),
+     (1,    [],                                 []),
+     (2,     42,                                [42]),
+     (3,    [42],                               [42]),
+     (4,    'foo',                              ['foo']),
+     (5,    ['bar'],                            ['bar']),
+     (6,    [42, 'bar'],                        [42, 'bar']),
+     (7,    [None],                             [None]),
+     ])
+def test_enlist(idx, obj, check):
+    """Test enlist utility"""
+    enlisted = enlist(obj)
+    assert enlisted == check
+    if isinstance(obj, list):
+        assert enlisted is obj
 
 
 sun = dict(name='Sun')
