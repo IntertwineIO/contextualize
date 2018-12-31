@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import asyncio
+from contextlib import suppress
 from functools import partial
 
 from parse import parse
@@ -10,6 +11,7 @@ from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait
 
 import settings
+from exceptions import TooManyValuesError
 from utils.async import run_in_executor
 from utils.debug import debug
 from utils.enum import FlexEnum
@@ -129,7 +131,10 @@ class ExtractionOperation:
         if self.transform_method:
             values = await self._transform_values(values)
 
-        return delist(values)
+        with suppress(TooManyValuesError):
+            values = delist(values)
+
+        return values
 
     # @debug(context='self.context')
     async def _find_elements(self, element, index=1):
@@ -394,7 +399,7 @@ class ExtractionOperation:
     @staticmethod
     def _configure_method(configuration, method_enum):
         """Configure method based on the given method enum"""
-        method_keys = method_enum.as_set(transform=str.lower)
+        method_keys = set(method_enum.names(transform=str.lower))
         method_key = one_max(k for k in configuration if k in method_keys)
         if not method_key:
             return None, None

@@ -26,6 +26,7 @@ from utils.enum import FlexEnum
 from utils.iterable import one
 from utils.mixins import Hashable
 from utils.statistics import HumanDwellTime, human_dwell_time, human_selection_shuffle
+from utils.time import GranularDateTime
 from utils.tools import PP, derive_domain, enlist, is_nonstring_sequence, xor_constrain
 
 
@@ -98,7 +99,7 @@ class BaseExtractor:
         await self._deprovision_web_driver(web_driver=self.web_driver, loop=self.loop)
 
     @classmethod
-    @debug()
+    @debug
     async def _provision_web_driver(cls, web_driver_brand=None, web_driver_type=None,
                                     web_driver_kwargs=None, implicit_wait=None, loop=None):
         """Provision web driver"""
@@ -831,12 +832,15 @@ class MultiExtractor(BaseExtractor):
 
     @debug
     def _should_use_cached_content(self, status, last_extracted):
-        """Determine if cached content is available and fresh"""
-        # TODO: Check last extracted after configuration last modified
+        """Determine if cached content is available, fresh, and valid"""
         if status and status.indicates_results() and last_extracted:
             now = datetime.datetime.utcnow()
             freshness = now - last_extracted
-            return freshness < self.freshness_threshold
+            configuration_cache = self.configuration_file_cache
+            configuration_timestamp = configuration_cache.get_file_timestamp(self.file_path)
+            configuration_last_modified = GranularDateTime.utcfromtimestamp(configuration_timestamp)
+            return (freshness < self.freshness_threshold and
+                    last_extracted > configuration_last_modified)
 
         return False
 
