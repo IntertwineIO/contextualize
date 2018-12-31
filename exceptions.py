@@ -22,8 +22,8 @@ class NoneValueError(BaseException, ValueError):
 
 
 class TooFewValuesError(BaseException, ValueError):
-    """Expected number: {expected}; received: {received}"""
+    """Expected at least: {expected}; received: {received}"""
 
 
 class TooManyValuesError(BaseException, ValueError):
-    """Expected number: {expected}; received: {received}"""
+    """Expected at most: {expected}; received: {received}"""
