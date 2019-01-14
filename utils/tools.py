@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import ast
 import importlib
 import inspect
 import re
@@ -344,31 +345,43 @@ def load_class(specifier):
     return cls
 
 
-def multi_parse(templates, string):
+def multi_parse(templates, text):
     """
-    Multi parse attempts to parse the string with each of the templates
+    Multi parse attempts to parse the text with each of the templates
     until successful and returns the parse result.
 
     I/O:
-    templates:  sequence of templates
-    string:     string to be parsed
-    return:     first successful parse result
+    templates:      sequence of templates
+    text:           string to be parsed
+    return:         first successful parse result
     """
     for template in templates:
-        parsed = parse(template, string)
+        parsed = parse(template, text)
         if parsed:
             return parsed
 
     raise ValueError(
-        f"'{string}' does not match any template: {templates}")
+        f"'{text}' does not match any template: {templates}")
+
+
+def numify(text, default=object):
+    """Convert text string to number, raising on error if no default"""
+    try:
+        return ast.literal_eval(text)
+    except (SyntaxError, ValueError):
+        if default is object:
+            raise
+        return default
 
 
 def read_file(path):
+    """Read file at given path"""
     with open(path) as file:
         return file.read()
 
 
 def write_file(path, content):
+    """Write file at given path with given content"""
     with open(path, 'w') as file:
         file.write(content)
 
