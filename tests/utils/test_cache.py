@@ -286,7 +286,7 @@ class C:
                          ([1, -9], dict(c=20), 1)]),
      ])
 @pytest.mark.parametrize(
-    ('func'), [quadratic_roots, C().imethod, C().cmethod, C().smethod])
+    'func', [quadratic_roots, C().imethod, C().cmethod, C().smethod])
 def test_lyrical_cache_on_custom_functions(idx, func, maxsize, call_args_and_cache_hits):
     validate_lyrical_cache_calls(idx, func, maxsize, call_args_and_cache_hits)
     validate_lyrical_cache_hits(idx, func, maxsize, call_args_and_cache_hits)
@@ -473,7 +473,7 @@ FileProcedure = namedtuple('FileProcedure', 'io path content cache_hit')
                          ]),
      ])
 @pytest.mark.parametrize(
-    ('func'), [read_file, FR().imethod, FR().cmethod, FR().smethod])
+    'func', [read_file, FR().imethod, FR().cmethod, FR().smethod])
 def test_file_cache(idx, func, maxsize, procedures):
     validate_file_cache_calls(idx, func, maxsize, procedures)
     validate_file_cache_hits(idx, func, maxsize, procedures)

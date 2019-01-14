@@ -175,7 +175,7 @@ class F:
      (23,    ((1, 3), dict(c=13, g=7)),                   TypeError),
      (24,    ((1, 3, 4, 5), dict(d=14, e=5, h=8)),        TypeError),
      ])
-@pytest.mark.parametrize(('func'), (full_signature, F().imethod, F().cmethod, F().smethod))
+@pytest.mark.parametrize('func', (full_signature, F().imethod, F().cmethod, F().smethod))
 def test_call_sign_on_full_signature_functions(idx, func, arguments, check):
     validate_call_sign(idx, func, arguments, check)
 
@@ -222,7 +222,7 @@ class N:
      (18,    ((1,), dict(g=7, b=2)),                      TypeError),
      (19,    ((1, 3, 2), dict(g=7)),                      TypeError),
      ])
-@pytest.mark.parametrize(('func'), (named_signature, N().imethod, N().cmethod, N().smethod))
+@pytest.mark.parametrize('func', (named_signature, N().imethod, N().cmethod, N().smethod))
 def test_call_sign_on_named_signature_functions(idx, func, arguments, check):
     validate_call_sign(idx, func, arguments, check)
 
@@ -259,7 +259,7 @@ class V:
      (8,     ((1, 2), dict(a=1, b=2)),                  ((1, 2), OD(a=1, b=2))),
      (9,     ((1, 2, 3), dict(a=1, b=2, c=3)),          ((1, 2, 3), OD(a=1, b=2, c=3))),
      ])
-@pytest.mark.parametrize(('func'), (var_signature, V().imethod, V().cmethod, V().smethod))
+@pytest.mark.parametrize('func', (var_signature, V().imethod, V().cmethod, V().smethod))
 def test_call_sign_on_var_signature_functions(idx, func, arguments, check):
     validate_call_sign(idx, func, arguments, check)
 
@@ -302,7 +302,7 @@ class PK:
      (14,    ((), {}),                                   TypeError),
      ])
 @pytest.mark.parametrize(
-    ('func'), (positional_or_keyword_signature, PK().imethod, PK().cmethod, PK().smethod))
+    'func', (positional_or_keyword_signature, PK().imethod, PK().cmethod, PK().smethod))
 def test_call_sign_on_positional_or_keyword_signature_functions(idx, func, arguments, check):
     validate_call_sign(idx, func, arguments, check)
 
@@ -338,7 +338,7 @@ class VP:
      (9,     ((1, 2, 3), dict(c=3)),                     TypeError),
      ])
 @pytest.mark.parametrize(
-    ('func'), (var_positional_signature, VP().imethod, VP().cmethod, VP().smethod))
+    'func', (var_positional_signature, VP().imethod, VP().cmethod, VP().smethod))
 def test_call_sign_on_var_positional_signature_functions(idx, func, arguments, check):
     validate_call_sign(idx, func, arguments, check)
 
@@ -376,7 +376,7 @@ class KO:
      (9,     ((1,), dict(e=5, g=7)),                     TypeError),
      ])
 @pytest.mark.parametrize(
-    ('func'), (keyword_only_signature, KO().imethod, KO().cmethod, KO().smethod))
+    'func', (keyword_only_signature, KO().imethod, KO().cmethod, KO().smethod))
 def test_call_sign_on_keyword_only_signature_functions(idx, func, arguments, check):
     validate_call_sign(idx, func, arguments, check)
 
@@ -414,7 +414,7 @@ class VK:
      (9,     ((1, 2), dict(a=1, b=2, c=3)),              TypeError),
      ])
 @pytest.mark.parametrize(
-    ('func'), (var_keyword_signature, VK().imethod, VK().cmethod, VK().smethod))
+    'func', (var_keyword_signature, VK().imethod, VK().cmethod, VK().smethod))
 def test_call_sign_on_var_keyword_signature_functions(idx, func, arguments, check):
     validate_call_sign(idx, func, arguments, check)
 
