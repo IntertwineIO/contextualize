@@ -75,6 +75,22 @@ def test_get_by_reference(idx, reference, check):
         assert value == check
 
 
+@pytest.mark.unit
+def test_configure_scope():
+    for scope in EO.Scope:
+        configuration = {EO.SCOPE_TAG: scope.name.lower()}
+        configured = EO._configure_scope(configuration)
+        assert configured is scope
+
+    configuration = {'not_scope': 'foo'}
+    configured = EO._configure_scope(configuration)
+    assert configured is EO.SCOPE_DEFAULT
+
+    with pytest.raises(KeyError):
+        configuration = {EO.SCOPE_TAG: 'foo'}
+        configured = EO._configure_scope(configuration)
+
+
 CLASS_NAME = EO.FindMethod.CLASS_NAME
 XPATH = EO.FindMethod.XPATH
 
@@ -107,8 +123,8 @@ def test_configure_method(idx, configuration, method_enum, check):
 
 
 @pytest.mark.unit
-def test_method_types_have_unique_names():
-    """Confirm method types have unique names (non-case-sensitive)"""
+def test_names_are_unique_across_method_types():
+    """Confirm names are unique across method types (non-case-sensitive)"""
     all_method_names = set()
     for method_type in METHOD_TYPES:
         method_names = set(method_type.names(transform=str.lower))
