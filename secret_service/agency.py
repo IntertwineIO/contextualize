@@ -8,8 +8,8 @@ from collections import OrderedDict
 from functools import lru_cache
 from itertools import chain
 
+from contextualize.content.base import Extractable
 from utils.enum import FlexEnum
-from utils.mixins import Extractable
 from utils.tools import PP
 
 Browser = FlexEnum('Browser', 'CHROME FIREFOX')

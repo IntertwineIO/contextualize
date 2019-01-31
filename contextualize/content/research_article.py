@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from utils.mixins import Extractable
+from contextualize.content.base import Extractable
 
 
 class ResearchArticle(Extractable):

@@ -4,12 +4,12 @@ import datetime
 import pytest
 from enum import Enum
 
-from content import ResearchArticle
-from utils.mixins import Extractable, Hashable
+from contextualize.content.base import Extractable, Hashable
+from contextualize.content.research_article import ResearchArticle
 
 
 HASHED_CONTENT = {
-    '__model__': 'content.ResearchArticle',
+    '__model__': 'contextualize.content.research_article.ResearchArticle',
     'author_names': 'Erin Roark Murphy; Brittany H Eghaneyan',
     'doi': 'https://doi.org/10.1093/bjsw/bcx163',
     'granularity_published': 'utils.time.Granularity.DAY',
@@ -92,6 +92,7 @@ def test_hashable(idx, model_class, hashed_content, to_encoding, from_encoding, 
     if exception is None:
         hashed_content['issue'] = None  # Test explicit None
         assert 'issue_date' not in hashed_content  # Test no key
+
         content1 = model_class.from_hash(hashed_content)
         assert content1.issue is None  # Confirm None when explicit
         assert content1.issue_date is None  # Confirm None if no key

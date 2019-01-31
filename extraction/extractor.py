@@ -14,6 +14,7 @@ from selenium.common.exceptions import NoSuchElementException
 from url_normalize import url_normalize
 
 import settings
+from contextualize.content.base import Hashable
 from exceptions import NoneValueError
 from extraction.caching import MultiExtractorCache, SourceExtractorCache
 from extraction.definitions import ExtractionStatus
@@ -24,7 +25,6 @@ from utils.cache import FileCache
 from utils.debug import debug
 from utils.enum import FlexEnum
 from utils.iterable import one
-from utils.mixins import Hashable
 from utils.statistics import HumanDwellTime, human_dwell_time, human_selection_shuffle
 from utils.time import GranularDateTime
 from utils.tools import PP, derive_domain, enlist, is_nonstring_sequence, xor_constrain
