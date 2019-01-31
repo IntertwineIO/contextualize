@@ -162,8 +162,8 @@ class ExtractionOperation:
         element = delist(element)
         self._validate_element(element)
         find_method, find_by = self._derive_find_method(element)
-        args = (self._render_references(a) for a in self.find_args)
-        template = one(args)
+        arguments = (self._render_references(a) for a in self.find_args)
+        template = one(arguments)
         selector = template.format(index=index)
 
         if self.wait_method:
@@ -212,8 +212,8 @@ class ExtractionOperation:
     async def _extract_values(self, elements):
         """Extract values via the operation's extract method/args"""
         extracted_values = []
-        args = (self._render_references(a) for a in self.extract_args)
-        field = one(args)
+        arguments = (self._render_references(a) for a in self.extract_args)
+        field = one(arguments)
         extract_method = self.extract_method
 
         if extract_method is self.ExtractionMethod.GETATTR:
@@ -238,11 +238,11 @@ class ExtractionOperation:
     async def _get_values(self, values):
         """Get values from another field of the same item"""
         retrieved_values = []
-        args = self.get_args
+        arguments = self.get_args
 
         if self.get_method is self.GetMethod.GET:
             # Ignore current values; get new ones based on get_args
-            tags = one_min(args)
+            tags = one_min(arguments)
             retrieved_values = [self._get_by_reference_tag(t) for t in tags]
 
         return retrieved_values
@@ -251,10 +251,10 @@ class ExtractionOperation:
     async def _parse_values(self, values):
         """Parse values via the operation's parse method/args"""
         parsed_values = []
-        args = (self._render_references(a) for a in self.parse_args)
+        arguments = (self._render_references(a) for a in self.parse_args)
 
         if self.parse_method is self.ParseMethod.PARSE:
-            templates = one_min(args)
+            templates = one_min(arguments)
             for value in values:
                 if not value:
                     parsed_values.append(value)
@@ -271,7 +271,7 @@ class ExtractionOperation:
                         operation=repr(self), extractor=repr(self.extractor), error=e))
 
         elif self.parse_method is self.ParseMethod.STRPTIME:
-            templates = one_min(args)
+            templates = one_min(arguments)
             for value in values:
                 if value is None:
                     parsed_values.append(None)
@@ -285,10 +285,10 @@ class ExtractionOperation:
     async def _format_values(self, values):
         """Format values via the operation's format method/args"""
         formatted_values = []
-        args = (self._render_references(a) for a in self.format_args)
+        arguments = (self._render_references(a) for a in self.format_args)
 
         if self.format_method is self.FormatMethod.FORMAT:
-            template = one(args)
+            template = one(arguments)
             content_map = self.extractor.content_map
             fields = {} if content_map is None else content_map
             if self.VALUE_TAG in fields:
@@ -302,7 +302,7 @@ class ExtractionOperation:
             del fields[self.VALUE_TAG]
 
         elif self.format_method is self.FormatMethod.STRFTIME:
-            template = one(args)
+            template = one(arguments)
             for value in values:
                 formatted = value.strftime(template)
                 formatted_values.append(formatted)
@@ -313,10 +313,10 @@ class ExtractionOperation:
     async def _transform_values(self, values):
         """Transform values via the operation's transform method/args"""
         transformed_values = []
-        args = (self._render_references(a) for a in self.transform_args)
+        arguments = (self._render_references(a) for a in self.transform_args)
 
         if self.transform_method is self.TransformMethod.EXCISE:
-            snippets = one_min(args)
+            snippets = one_min(arguments)
             for value in values:
                 cleansed_value = value
                 for snippet in snippets:
@@ -324,12 +324,12 @@ class ExtractionOperation:
                 transformed_values.append(cleansed_value)
 
         elif self.transform_method is self.TransformMethod.JOIN:
-            delimiter = one(args)
+            delimiter = one(arguments)
             joined_values = delimiter.join(values)
             transformed_values.append(joined_values)
 
         elif self.transform_method is self.TransformMethod.SPLIT:
-            delimiter = one(args)
+            delimiter = one(arguments)
             for value in values:
                 split_values = value.split(delimiter)
                 transformed_values.extend(split_values)
@@ -434,19 +434,21 @@ class ExtractionOperation:
         format_method, format_args = cls._configure_method(configuration, cls.FormatMethod)
         transform_method, transform_args = cls._configure_method(configuration, cls.TransformMethod)
 
-        return cls(scope, is_multiple,
-                   find_method, find_args,
-                   wait_method, wait_args, wait, click,
-                   extract_method, extract_args,
-                   get_method, get_args,
-                   parse_method, parse_args,
-                   format_method, format_args,
-                   transform_method, transform_args,
-                   field, source, extractor)
+        return cls(scope=scope, is_multiple=is_multiple,
+                   find_method=find_method, find_args=find_args,
+                   wait_method=wait_method, wait_args=wait_args,
+                   wait=wait, click=click,
+                   extract_method=extract_method, extract_args=extract_args,
+                   get_method=get_method, get_args=get_args,
+                   parse_method=parse_method, parse_args=parse_args,
+                   format_method=format_method, format_args=format_args,
+                   transform_method=transform_method, transform_args=transform_args,
+                   field=field, source=source, extractor=extractor)
 
     def __init__(self, scope, is_multiple,
                  find_method, find_args,
-                 wait_method, wait_args, wait, click,
+                 wait_method, wait_args,
+                 wait, click,
                  extract_method, extract_args,
                  get_method, get_args,
                  parse_method, parse_args,
