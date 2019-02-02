@@ -3,8 +3,8 @@
 from collections import OrderedDict
 from itertools import product
 
+from contextualize.extraction.caching import ContentCache
 from contextualize.services.extraction_service import ExtractionService
-from extraction.caching import ContentCache
 from utils.tools import get_related_json
 
 ENCODING_DEFAULT = 'utf-8'

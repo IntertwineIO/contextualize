@@ -6,8 +6,8 @@ from collections import OrderedDict
 from sanic import Blueprint
 from sanic import response
 
+from contextualize.extraction.definitions import ExtractionStatus
 from contextualize.services.community_service import CommunityService
-from extraction.definitions import ExtractionStatus
 from utils.api import HTTPMethod as HTTP
 
 BLUEPRINT = 'community'

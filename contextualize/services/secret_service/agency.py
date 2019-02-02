@@ -87,7 +87,7 @@ class SecretService:
 
     def extract_data(self):
         """Extract user agent data"""
-        from extraction.extractor import MultiExtractor
+        from contextualize.extraction.extractor import MultiExtractor
 
         loop = asyncio.get_event_loop()
         search_terms = OrderedDict(browser=self.browser.name.lower())

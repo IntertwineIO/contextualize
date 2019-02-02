@@ -73,7 +73,7 @@ class Hashable(FieldMixin):
         except (KeyError, TypeError):
             raise TypeError('Model key is improperly encoded or missing')
 
-        if cls.form_specifier() != model_specifier:
+        if cls.get_specifier() != model_specifier:
             model = load_class(model_specifier)
             return model.from_hash(hashed, encoding)
 
@@ -103,7 +103,7 @@ class Hashable(FieldMixin):
     def to_hash(self, encoding=None):
         """Convert to ordered dict, optionally encoding as well"""
         cls = self.__class__
-        model_data = (('__model__', cls.form_specifier()),)
+        model_data = (('__model__', cls.get_specifier()),)
         field_data = ((k, serialize(v)) for k, v in self.items() if v is not None)
         serialized = chain(model_data, field_data)
         if encoding:
@@ -119,7 +119,7 @@ class Hashable(FieldMixin):
         return rendered_json
 
     @classmethod
-    def form_specifier(cls):
+    def get_specifier(cls):
         return f'{cls.__module__}.{cls.__qualname__}'
 
     @classmethod

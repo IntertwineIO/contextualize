@@ -7,7 +7,7 @@ from asyncio import Future
 from unittest.mock import Mock, patch
 
 from contextualize.exceptions import TooManyValuesError
-from extraction.operation import ExtractionOperation as EO
+from contextualize.extraction.operation import ExtractionOperation as EO
 from testing.builders.extraction_operation_builder import ExtractionOperationBuilder
 from utils.tools import is_child_class
 
@@ -63,7 +63,7 @@ async def test_extract_values(idx, method, arguments, values):
     builder = ExtractionOperationBuilder(extract_method=method, extract_args=arguments)
     operation = builder.build()
 
-    with patch('extraction.operation.ExtractionOperation._execute_in_future') as mock_execute:
+    with patch(f'{EO.__module__}.ExtractionOperation._execute_in_future') as mock_execute:
         mock_execute.side_effect = side_effect_execute_in_future
         extracted_values = await operation._extract_values(elements)
         assert extracted_values == values

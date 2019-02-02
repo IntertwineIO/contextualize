@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from extraction.operation import ExtractionOperation
+from contextualize.extraction.operation import ExtractionOperation
 
 
 class ReferencePath:

@@ -4,7 +4,7 @@ import asyncio
 import datetime
 from collections import OrderedDict
 
-from extraction.definitions import ExtractionStatus
+from contextualize.extraction.definitions import ExtractionStatus
 from utils.debug import debug
 from utils.cache import AsyncCache, CacheKey
 from utils.time import GranularDateTime

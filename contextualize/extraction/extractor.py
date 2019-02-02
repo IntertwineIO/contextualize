@@ -16,10 +16,10 @@ from url_normalize import url_normalize
 import settings
 from contextualize.content.base import Hashable
 from contextualize.exceptions import NoneValueError
+from contextualize.extraction.caching import MultiExtractorCache, SourceExtractorCache
+from contextualize.extraction.definitions import ExtractionStatus
+from contextualize.extraction.operation import ExtractionOperation
 from contextualize.services.secret_service.agency import SecretService
-from extraction.caching import MultiExtractorCache, SourceExtractorCache
-from extraction.definitions import ExtractionStatus
-from extraction.operation import ExtractionOperation
 from utils.async import run_in_executor
 from utils.cache import FileCache
 from utils.debug import debug
