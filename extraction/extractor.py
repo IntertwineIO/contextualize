@@ -15,8 +15,8 @@ from url_normalize import url_normalize
 
 import settings
 from contextualize.content.base import Hashable
+from contextualize.exceptions import NoneValueError
 from contextualize.services.secret_service.agency import SecretService
-from exceptions import NoneValueError
 from extraction.caching import MultiExtractorCache, SourceExtractorCache
 from extraction.definitions import ExtractionStatus
 from extraction.operation import ExtractionOperation

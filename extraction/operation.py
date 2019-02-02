@@ -11,7 +11,7 @@ from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait
 
 import settings
-from exceptions import TooManyValuesError
+from contextualize.exceptions import TooManyValuesError
 from utils.async import run_in_executor
 from utils.debug import debug
 from utils.enum import FlexEnum

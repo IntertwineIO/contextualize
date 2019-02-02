@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 from parse import parse
 
-from exceptions import TooFewValuesError, TooManyValuesError
+from contextualize.exceptions import TooFewValuesError, TooManyValuesError
 
 INDENT = 4
 WIDTH = 200

@@ -3,7 +3,7 @@
 from collections import deque
 from itertools import islice
 
-from exceptions import TooFewValuesError, TooManyValuesError
+from contextualize.exceptions import TooFewValuesError, TooManyValuesError
 from utils.tools import is_iterator
 
 VALUE_DELIMITER = ', '

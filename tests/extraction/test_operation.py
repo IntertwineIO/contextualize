@@ -6,7 +6,7 @@ import pytest
 from asyncio import Future
 from unittest.mock import Mock, patch
 
-from exceptions import TooManyValuesError
+from contextualize.exceptions import TooManyValuesError
 from extraction.operation import ExtractionOperation as EO
 from testing.builders.extraction_operation_builder import ExtractionOperationBuilder
 from utils.tools import is_child_class

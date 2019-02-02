@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import pytest
 
-from exceptions import TooManyValuesError
+from contextualize.exceptions import TooManyValuesError
 
 
 from utils.tools import (
