@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from sanic import Sanic
 
-from .community import bp as community
+from contextualize.api.community import bp as community
 from utils.cache import AsyncCache
 
 APPLICATION = 'contextualize'
