@@ -5,7 +5,7 @@ from contextualize.content.base import Extractable
 
 class ResearchArticle(Extractable):
     """ResearchArticle"""
-    EXTRACTOR_DIRECTORY = 'extractors'
+    PROVIDER_DIRECTORY = 'contextualize/providers'
 
     @classmethod
     def deserialize_issue_date(cls, dt_string, **field_hash):
