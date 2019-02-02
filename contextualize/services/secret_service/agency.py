@@ -9,15 +9,18 @@ from functools import lru_cache
 from itertools import chain
 
 from contextualize.content.base import Extractable
+from utils.cache import AsyncCache
 from utils.enum import FlexEnum
 from utils.tools import PP
+
+BASE_DIRECTORY = '/'.join(__name__.split('.')[:-1])
 
 Browser = FlexEnum('Browser', 'CHROME FIREFOX')
 
 
 class SecretAgent(Extractable):
     """SecretAgent, a user agent class"""
-    BASE_DIRECTORY = 'secret_service/extractors'
+    EXTRACTOR_DIRECTORY = f'{BASE_DIRECTORY}/extractors'
     # UNIQUE_FIELD = 'user_agent'
 
     @classmethod
@@ -51,7 +54,7 @@ class SecretAgent(Extractable):
 class SecretService:
     """Secret Service, a service class for managing Secret Agents"""
     DEFAULT_BROWSER = Browser.CHROME
-    BASE_DIRECTORY = 'secret_service'
+    AGENT_FILE_DIRECTORY = f'{BASE_DIRECTORY}'
     FILE_IDENTIFIER = 'agents'
     FILE_TYPE = 'csv'
     CSV_FORMAT = dict(delimiter='|', quotechar='"')
@@ -69,15 +72,13 @@ class SecretService:
         user_agents = self._data.get(self.browser)
 
         try:
-            selected_agent = SecretAgent(*random.choice(user_agents))
+            return SecretAgent(*random.choice(user_agents))
         except Exception as e:
             PP.pprint(dict(
                 msg='Unable to generate random agent; using default',
                 type='unable_to_generate_random_agent', error=e,
                 file_path=self.file_path, browser=self.browser, secret_service=repr(self)))
             return SecretAgent.default()
-
-        return selected_agent
 
     def acquire_data(self):
         """Acquire user agent data by extracting and saving it"""
@@ -96,6 +97,8 @@ class SecretService:
         agent_dicts = chain(*(task.result().values() for task in done))
         self._data[self.browser] = [list(d.values()) for d in agent_dicts]
 
+        cache = AsyncCache()
+        cache.terminate(loop)
         loop.close()
 
     def save_data(self, file_path=None):
@@ -136,7 +139,7 @@ class SecretService:
         """Form file path for given browser"""
         browser_name = browser.name.lower()
         file_name = f'{browser_name}_{cls.FILE_IDENTIFIER}.{cls.FILE_TYPE}'
-        return os.path.join(cls.BASE_DIRECTORY, file_name)
+        return os.path.join(cls.AGENT_FILE_DIRECTORY, file_name)
 
     def __init__(self, browser=None, file_path=None):
         self.browser = Browser.cast(browser) if browser else self.DEFAULT_BROWSER

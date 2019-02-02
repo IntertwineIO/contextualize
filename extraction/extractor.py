@@ -15,11 +15,11 @@ from url_normalize import url_normalize
 
 import settings
 from contextualize.content.base import Hashable
+from contextualize.services.secret_service.agency import SecretService
 from exceptions import NoneValueError
 from extraction.caching import MultiExtractorCache, SourceExtractorCache
 from extraction.definitions import ExtractionStatus
 from extraction.operation import ExtractionOperation
-from secret_service.agency import SecretService
 from utils.async import run_in_executor
 from utils.cache import FileCache
 from utils.debug import debug
@@ -348,7 +348,7 @@ class BaseExtractor:
         self.status = None
 
         self.model = model
-        self.base_directory = model.BASE_DIRECTORY
+        self.base_directory = model.EXTRACTOR_DIRECTORY
         self.directory = directory
         self.file_path = self._form_file_path(self.base_directory, self.directory)
         self.configuration = self._marshall_configuration(self.file_path)
@@ -570,7 +570,7 @@ class SourceExtractor(BaseExtractor):
 
     def _derive_directory(self, model, page_url):
         """Derive directory from base set on model and page URL"""
-        base_directory = model.BASE_DIRECTORY
+        base_directory = model.EXTRACTOR_DIRECTORY
         clipped_url = self._clip_url(page_url)
         url_path = clipped_url.split(self.PATH_DELIMITER)
         base_url = url_path[0]
@@ -928,7 +928,7 @@ class MultiExtractor(BaseExtractor):
 
         yield:                  Fully configured search extractors
         """
-        base = model.BASE_DIRECTORY
+        base = model.EXTRACTOR_DIRECTORY
         dir_nodes = os.walk(base)
         directories = (cls._debase_directory(base, dn[0]) for dn in dir_nodes
                        if cls.FILE_NAME in dn[2])
