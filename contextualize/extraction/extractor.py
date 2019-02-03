@@ -13,7 +13,6 @@ from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from url_normalize import url_normalize
 
-import settings
 from contextualize.content.base import Hashable
 from contextualize.exceptions import NoneValueError
 from contextualize.extraction.caching import MultiExtractorCache, SourceExtractorCache
@@ -46,6 +45,8 @@ class BaseExtractor:
 
     WebDriverInfo = namedtuple('WebDriverInfo', 'brand type kwargs')
 
+    # All wait times and delays in seconds
+    WAIT_IMPLICIT_DEFAULT = 3
     DELAY_DEFAULTS = HumanDwellTime(
         mu=0, sigma=0.5, base=1, multiplier=1, minimum=1, maximum=3)
 
@@ -86,7 +87,7 @@ class BaseExtractor:
     @debug
     async def _acquire_web_driver(self):
         """Acquire web driver"""
-        implicit_wait = self.configuration.get(self.WAIT_TAG, settings.WAIT_IMPLICIT_DEFAULT)
+        implicit_wait = self.configuration.get(self.WAIT_TAG, self.WAIT_IMPLICIT_DEFAULT)
         self.web_driver = await self._provision_web_driver(
             web_driver_type=self.web_driver_type,
             web_driver_kwargs=self.web_driver_kwargs,
@@ -109,7 +110,7 @@ class BaseExtractor:
 
         web_driver = await run_in_executor(loop, None, web_driver_type, **web_driver_kwargs)
         # Configure web driver to allow waiting on each operation
-        implicit_wait = settings.WAIT_IMPLICIT_DEFAULT if implicit_wait is None else implicit_wait
+        implicit_wait = cls.WAIT_IMPLICIT_DEFAULT if implicit_wait is None else implicit_wait
         web_driver.implicitly_wait(implicit_wait)
         web_driver.last_fetch_timestamp = None
         return web_driver
@@ -656,9 +657,11 @@ class MultiExtractor(BaseExtractor):
     NEXT_PAGE_CLICK_TAG = 'next_page_click'
     NEXT_PAGE_URL_TAG = 'next_page_url'
 
+    ITEMS_TAG = 'items'
     EXTRACT_SOURCES_TAG = 'extract_sources'
     FRESHNESS_THRESHOLD_TAG = 'freshness_threshold'
-    ITEMS_TAG = 'items'
+
+    FRESHNESS_THRESHOLD_DEFAULT = 30  # days
 
     @debug
     async def _perform_extraction(self, url=None):
@@ -969,7 +972,7 @@ class MultiExtractor(BaseExtractor):
 
     def _derive_freshness_threshold(self, configuration):
         freshness_threshold = configuration.get(self.FRESHNESS_THRESHOLD_TAG,
-                                                settings.FRESHNESS_THRESHOLD_DEFAULT)
+                                                self.FRESHNESS_THRESHOLD_DEFAULT)
         return datetime.timedelta(days=freshness_threshold)
 
     @staticmethod

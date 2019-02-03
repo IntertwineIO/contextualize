@@ -10,7 +10,6 @@ from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait
 
-import settings
 from contextualize.exceptions import TooManyValuesError
 from utils.async import run_in_executor
 from utils.debug import debug
@@ -43,6 +42,10 @@ class ExtractionOperation:
     FindMethod = FlexEnum('FindMethod',
                           'CLASS_NAME CSS_SELECTOR ID LINK_TEXT NAME '
                           'PARTIAL_LINK_TEXT TAG_NAME XPATH')
+
+    # Wait times in seconds
+    WAIT_EXPLICIT_DEFAULT = 10
+    WAIT_POLL_INTERVAL = 0.2
 
     WaitMethod = FlexEnum('WaitMethod', [
         'ELEMENT_LOCATED_TO_BE_SELECTED',           # locator
@@ -167,9 +170,9 @@ class ExtractionOperation:
         selector = template.format(index=index)
 
         if self.wait_method:
-            explicit_wait = self.wait or settings.WAIT_EXPLICIT_DEFAULT
+            explicit_wait = self.wait or self.WAIT_EXPLICIT_DEFAULT
             wait = WebDriverWait(self.web_driver, explicit_wait,
-                                 poll_frequency=settings.WAIT_POLL_INTERVAL)
+                                 poll_frequency=self.WAIT_POLL_INTERVAL)
             wait_method_name = self.wait_method.name.lower()
             wait_condition_method = getattr(expected_conditions, wait_method_name)
             locator = (find_by, selector)
