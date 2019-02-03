@@ -7,10 +7,10 @@ from itertools import chain, groupby, zip_longest
 
 import wrapt
 
-from utils.decor import factory_direct
-from utils.iterable import consume
-from utils.sentinel import Sentinel
-from utils.tools import is_selfish
+from contextualize.utils.decor import factory_direct
+from contextualize.utils.iterable import consume
+from contextualize.utils.sentinel import Sentinel
+from contextualize.utils.tools import is_selfish
 
 
 class CallSign:

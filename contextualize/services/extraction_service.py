@@ -4,8 +4,8 @@ import asyncio
 
 from contextualize.content.research_article import ResearchArticle
 from contextualize.extraction.extractor import MultiExtractor
-from utils.debug import debug
-from utils.tools import PP
+from contextualize.utils.debug import debug
+from contextualize.utils.tools import PP
 
 
 class ExtractionService:

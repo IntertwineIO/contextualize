@@ -19,14 +19,14 @@ from contextualize.extraction.caching import MultiExtractorCache, SourceExtracto
 from contextualize.extraction.definitions import ExtractionStatus
 from contextualize.extraction.operation import ExtractionOperation
 from contextualize.services.secret_service.agency import SecretService
-from utils.async import run_in_executor
-from utils.cache import FileCache
-from utils.debug import debug
-from utils.enum import FlexEnum
-from utils.iterable import one
-from utils.statistics import HumanDwellTime, human_dwell_time, human_selection_shuffle
-from utils.time import GranularDateTime
-from utils.tools import PP, derive_domain, enlist, is_nonstring_sequence, xor_constrain
+from contextualize.utils.async import run_in_executor
+from contextualize.utils.cache import FileCache
+from contextualize.utils.debug import debug
+from contextualize.utils.enum import FlexEnum
+from contextualize.utils.iterable import one
+from contextualize.utils.statistics import HumanDwellTime, human_dwell_time, human_selection_shuffle
+from contextualize.utils.time import GranularDateTime
+from contextualize.utils.tools import PP, derive_domain, enlist, is_nonstring_sequence, xor_constrain
 
 
 class BaseExtractor:

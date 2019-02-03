@@ -11,10 +11,10 @@ import aioredis
 import wrapt
 
 import settings
-from utils.debug import debug
-from utils.signature import CallSign
-from utils.singleton import Singleton
-from utils.tools import is_instance_method, is_nonstring_sequence
+from contextualize.utils.debug import debug
+from contextualize.utils.signature import CallSign
+from contextualize.utils.singleton import Singleton
+from contextualize.utils.tools import is_instance_method, is_nonstring_sequence
 
 ENCODING_DEFAULT = 'utf-8'
 

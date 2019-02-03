@@ -4,10 +4,10 @@ import json
 from collections import OrderedDict
 from itertools import chain
 
-from utils.enum import FlexEnum
-from utils.serialization import NULL, serialize_nonstandard, serialize
-from utils.time import GranularDateTime
-from utils.tools import PP, derive_attributes, load_class
+from contextualize.utils.enum import FlexEnum
+from contextualize.utils.serialization import NULL, serialize_nonstandard, serialize
+from contextualize.utils.time import GranularDateTime
+from contextualize.utils.tools import PP, derive_attributes, load_class
 
 
 class FieldMixin:

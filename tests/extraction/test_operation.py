@@ -8,8 +8,8 @@ from unittest.mock import Mock, patch
 
 from contextualize.exceptions import TooManyValuesError
 from contextualize.extraction.operation import ExtractionOperation as EO
+from contextualize.utils.tools import is_child_class
 from testing.builders.extraction_operation_builder import ExtractionOperationBuilder
-from utils.tools import is_child_class
 
 METHOD_TYPES = {method_type for name, method_type in inspect.getmembers(EO)
                 if name.endswith('Method')}

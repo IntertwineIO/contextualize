@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from utils.enum import FlexEnum
+from contextualize.utils.enum import FlexEnum
 
 
 class ExtractionStatus(FlexEnum):

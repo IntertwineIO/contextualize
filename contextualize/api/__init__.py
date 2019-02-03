@@ -3,7 +3,7 @@
 from sanic import Sanic
 
 from contextualize.api.community import bp as community
-from utils.cache import AsyncCache
+from contextualize.utils.cache import AsyncCache
 
 APPLICATION = 'contextualize'
 

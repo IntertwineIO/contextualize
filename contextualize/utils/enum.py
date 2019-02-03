@@ -5,7 +5,7 @@ from collections import OrderedDict
 from enum import Enum
 from functools import lru_cache
 
-from utils.tools import derive_qualname, is_class_name, load_class
+from contextualize.utils.tools import derive_qualname, is_class_name, load_class
 
 
 class FlexEnum(Enum):

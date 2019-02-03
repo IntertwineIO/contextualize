@@ -5,7 +5,7 @@ import pytest
 from contextualize.exceptions import TooManyValuesError
 
 
-from utils.tools import (
+from contextualize.utils.tools import (
     derive_domain, delist, enlist, get_related_json, is_child_class, is_instance_method,
     is_class_method, is_static_method, logical_xor, xor_constrain
 )

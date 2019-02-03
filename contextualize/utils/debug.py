@@ -6,8 +6,8 @@ import inspect
 import wrapt
 from pprint import PrettyPrinter
 
-from utils.decor import factory_direct
-from utils.tools import WIDTH
+from contextualize.utils.decor import factory_direct
+from contextualize.utils.tools import WIDTH
 
 DELIMITER = '–'  # chr(8211)
 SEPARATOR = DELIMITER * WIDTH

@@ -12,7 +12,7 @@ HASHED_CONTENT = {
     '__model__': 'contextualize.content.research_article.ResearchArticle',
     'author_names': 'Erin Roark Murphy; Brittany H Eghaneyan',
     'doi': 'https://doi.org/10.1093/bjsw/bcx163',
-    'granularity_published': 'utils.time.Granularity.DAY',
+    'granularity_published': 'contextualize.utils.time.Granularity.DAY',
     'publication': 'The British Journal of Social Work',
     'published_timestamp': '2018-02-22T00:00:00',
     'publisher': 'Oxford University Press',
@@ -48,7 +48,7 @@ HASHED_CONTENT = {
      ])
 def test_field_mixin(idx, model_class, hashed_content):
     """Test field mixin core methods"""
-    from utils.time import GranularDateTime, Granularity  # noqa: F401
+    from contextualize.utils.time import GranularDateTime, Granularity  # noqa: F401
 
     hashed_content = hashed_content.copy()
 

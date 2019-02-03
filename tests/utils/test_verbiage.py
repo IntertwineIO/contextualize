@@ -3,8 +3,8 @@
 import pytest
 from itertools import permutations
 
-from utils.tools import numify
-from utils.verbiage import Plurality, a, an
+from contextualize.utils.tools import numify
+from contextualize.utils.verbiage import Plurality, a, an
 
 
 @pytest.mark.unit

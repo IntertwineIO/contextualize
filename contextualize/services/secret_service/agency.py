@@ -9,9 +9,9 @@ from functools import lru_cache
 from itertools import chain
 
 from contextualize.content.base import Extractable
-from utils.cache import AsyncCache
-from utils.enum import FlexEnum
-from utils.tools import PP
+from contextualize.utils.cache import AsyncCache
+from contextualize.utils.enum import FlexEnum
+from contextualize.utils.tools import PP
 
 BASE_DIRECTORY = '/'.join(__name__.split('.')[:-1])
 

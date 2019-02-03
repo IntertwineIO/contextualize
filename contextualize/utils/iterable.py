@@ -4,7 +4,7 @@ from collections import deque
 from itertools import islice
 
 from contextualize.exceptions import TooFewValuesError, TooManyValuesError
-from utils.tools import is_iterator
+from contextualize.utils.tools import is_iterator
 
 VALUE_DELIMITER = ', '
 MORE_VALUES = '...'

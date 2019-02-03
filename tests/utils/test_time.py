@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import pytest
 
-from utils.time import GranularDateTime, Granularity
+from contextualize.utils.time import GranularDateTime, Granularity
 
 
 @pytest.mark.unit

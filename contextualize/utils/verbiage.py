@@ -272,8 +272,6 @@ class Plurality:
 
     Usage:
 
-    >>> from utils.verbiage import Plurality
-
     >>> f"We have {Plurality(0, 'g/oose/eese')}."
     'We have 0 geese.'
     >>> f"We have {Plurality(1, 'g/oose/eese')}."

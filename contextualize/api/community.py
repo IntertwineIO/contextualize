@@ -8,7 +8,7 @@ from sanic import response
 
 from contextualize.extraction.definitions import ExtractionStatus
 from contextualize.services.community_service import CommunityService
-from utils.api import HTTPMethod as HTTP
+from contextualize.utils.api import HTTPMethod as HTTP
 
 BLUEPRINT = 'community'
 bp = Blueprint(BLUEPRINT)

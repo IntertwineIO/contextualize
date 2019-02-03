@@ -5,9 +5,9 @@ import datetime
 from collections import OrderedDict
 
 from contextualize.extraction.definitions import ExtractionStatus
-from utils.debug import debug
-from utils.cache import AsyncCache, CacheKey
-from utils.time import GranularDateTime
+from contextualize.utils.cache import AsyncCache, CacheKey
+from contextualize.utils.debug import debug
+from contextualize.utils.time import GranularDateTime
 
 ENCODING_DEFAULT = 'utf-8'
 

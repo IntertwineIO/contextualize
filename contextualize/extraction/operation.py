@@ -11,12 +11,12 @@ from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait
 
 from contextualize.exceptions import TooManyValuesError
-from utils.async import run_in_executor
-from utils.debug import debug
-from utils.enum import FlexEnum
-from utils.iterable import one, one_max, one_min
-from utils.time import GranularDateTime
-from utils.tools import PP, delist, enlist, multi_parse
+from contextualize.utils.async import run_in_executor
+from contextualize.utils.debug import debug
+from contextualize.utils.enum import FlexEnum
+from contextualize.utils.iterable import one, one_max, one_min
+from contextualize.utils.time import GranularDateTime
+from contextualize.utils.tools import PP, delist, enlist, multi_parse
 
 
 class ExtractionOperation:

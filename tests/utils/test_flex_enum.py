@@ -3,8 +3,8 @@
 import pytest
 from collections import OrderedDict
 
-from utils.enum import FlexEnum
-from utils.tools import is_child_class, is_iterator
+from contextualize.utils.enum import FlexEnum
+from contextualize.utils.tools import is_child_class, is_iterator
 
 
 # Functional enum declaration

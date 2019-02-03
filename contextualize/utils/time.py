@@ -5,7 +5,7 @@ from datetime import datetime
 
 import tzlocal
 
-from utils.enum import FlexEnum
+from contextualize.utils.enum import FlexEnum
 
 
 DateTimeInfo = namedtuple(

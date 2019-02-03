@@ -1,4 +1,4 @@
-from utils.tools import get_base_name
+from contextualize.utils.tools import get_base_name
 
 
 def factory_direct(decorator, *args):

@@ -5,7 +5,7 @@ from itertools import product
 
 from contextualize.extraction.caching import ContentCache
 from contextualize.services.extraction_service import ExtractionService
-from utils.tools import get_related_json
+from contextualize.utils.tools import get_related_json
 
 ENCODING_DEFAULT = 'utf-8'
 

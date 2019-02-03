@@ -6,8 +6,8 @@ from decimal import Decimal
 from enum import Enum
 
 from contextualize.extraction.extractor import BaseExtractor
-from utils.enum import FlexEnum
-from utils.serialization import NULL, serialize, serialize_nonstandard
+from contextualize.utils.enum import FlexEnum
+from contextualize.utils.serialization import NULL, serialize, serialize_nonstandard
 
 
 class Color:

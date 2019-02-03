@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import pytest
 
-from utils.sentinel import Sentinel
+from contextualize.utils.sentinel import Sentinel
 
 
 @pytest.mark.unit
