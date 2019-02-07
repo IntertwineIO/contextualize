@@ -2,7 +2,7 @@ import os
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 
-class ScopedHTTPHandler(SimpleHTTPRequestHandler):
+class DirectoryScopedHTTPHandler(SimpleHTTPRequestHandler):
     """Web handler scoped to server's base_path within current working directory"""
     def translate_path(self, path):
         relative_path = path.lstrip('/')
@@ -10,8 +10,8 @@ class ScopedHTTPHandler(SimpleHTTPRequestHandler):
         return super().translate_path(scoped_path)
 
 
-class ScopedHTTPServer(HTTPServer):
+class DirectoryScopedHTTPServer(HTTPServer):
     """Web server scoped to base_path within current working directory"""
-    def __init__(self, server_address, handler_class=ScopedHTTPHandler, base_path='/'):
+    def __init__(self, server_address, handler_class=DirectoryScopedHTTPHandler, base_path='/'):
         self.base_path = base_path
         super().__init__(server_address, handler_class)

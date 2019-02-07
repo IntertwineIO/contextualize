@@ -9,7 +9,7 @@ import aiohttp
 import pytest
 import uvloop
 
-from contextualize.utils.testing.servers.web_server import ScopedHTTPServer
+from contextualize.utils.testing.servers.web_server import DirectoryScopedHTTPServer
 from settings import TEST_WEB_SERVER_ADDRESS
 
 TEST_WEB_SERVER_BASE_PATH = '/tests'
@@ -31,7 +31,9 @@ def seed():
 @pytest.fixture(scope='session')
 def web_server():
     """Pytest fixture to serve up a directory via HTTP"""
-    with ScopedHTTPServer(TEST_WEB_SERVER_ADDRESS, base_path=TEST_WEB_SERVER_BASE_PATH) as httpd:
+    with DirectoryScopedHTTPServer(TEST_WEB_SERVER_ADDRESS,
+                                   base_path=TEST_WEB_SERVER_BASE_PATH) as httpd:
+
         thread = threading.Thread(target=httpd.serve_forever,
                                   name='test_web_server_thread',
                                   daemon=True)
