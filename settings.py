@@ -2,12 +2,11 @@
 # -*- coding: utf-8 -*-
 from collections import namedtuple
 
-WebAddress = namedtuple('WebAddress', 'address port')
+WebAddress = namedtuple('WebAddress', 'host port')
 
 REDIS_ADDRESS = 'redis://localhost'
 
-TEST_WEB_SERVER_SCHEME = 'http://'
-TEST_WEB_SERVER_ADDRESS = WebAddress('localhost', 8888)
-TEST_WEB_SERVER_BASE_URL = (f'{TEST_WEB_SERVER_SCHEME}'
-                            f'{TEST_WEB_SERVER_ADDRESS.address}:'
-                            f'{TEST_WEB_SERVER_ADDRESS.port}')
+TEST_WEB_SERVER_HOST = 'localhost'
+TEST_WEB_SERVER_PORT = 8888
+TEST_WEB_SERVER_ADDRESS = WebAddress(TEST_WEB_SERVER_HOST, TEST_WEB_SERVER_PORT)
+TEST_WEB_SERVER_BASE_URL = f'http://{TEST_WEB_SERVER_HOST}:{TEST_WEB_SERVER_PORT}'

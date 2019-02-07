@@ -12,8 +12,8 @@ import uvloop
 from contextualize.utils.testing.servers.web_server import ScopedHTTPServer
 from settings import TEST_WEB_SERVER_ADDRESS
 
-EVENT_LOOP_SCOPE = 'session'
 TEST_WEB_SERVER_BASE_PATH = '/tests'
+EVENT_LOOP_SCOPE = 'session'
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
