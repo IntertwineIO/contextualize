@@ -70,7 +70,6 @@ class FlexEnum(Enum):
         return container(cls.members(*enumables))
 
     @classmethod
-    @lru_cache(maxsize=None)
     def as_list(cls, *enumables, names=False, values=False, transform=None, **kwds):
         """List of given enumables, optionally transformed"""
         return cls.contain(
@@ -79,16 +78,22 @@ class FlexEnum(Enum):
     @classmethod
     @lru_cache(maxsize=None)
     def as_tuple(cls, *enumables, names=False, values=False, transform=None, **kwds):
-        """Tuple of given enumables, optionally transformed"""
+        """Tuple of given enumables, optionally transformed; cached"""
         return cls.contain(
             tuple, *enumables, names=names, values=values, transform=transform, **kwds)
 
     @classmethod
-    @lru_cache(maxsize=None)
     def as_set(cls, *enumables, names=False, values=False, transform=None, **kwds):
         """Set of given enumables, optionally transformed"""
         return cls.contain(
             set, *enumables, names=names, values=values, transform=transform, **kwds)
+
+    @classmethod
+    @lru_cache(maxsize=None)
+    def as_frozenset(cls, *enumables, names=False, values=False, transform=None, **kwds):
+        """Frozen set of given enumables, optionally transformed; cached"""
+        return cls.contain(
+            frozenset, *enumables, names=names, values=values, transform=transform, **kwds)
 
     @classmethod
     def items(cls, *enumables, swap=False, labels=False, transform=None, inverse=False):
@@ -121,7 +126,6 @@ class FlexEnum(Enum):
         return pairs
 
     @classmethod
-    @lru_cache(maxsize=None)
     def as_map(cls, *enumables, swap=False, labels=False, transform=None, inverse=False):
         """
         Ordered enum map of pair 2-tuples, (name, value) by default

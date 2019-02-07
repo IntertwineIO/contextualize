@@ -32,6 +32,6 @@ async def test_web_server_fixture(web_server):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_web_server_via_web_client_fixture(web_server, web_client_session):
-    response = await fetch(web_client_session, TEST_URL)
+    response = await fetch(TEST_URL, web_client_session)
     assert response.text == 'Hello World!'
     assert response.status == 200
