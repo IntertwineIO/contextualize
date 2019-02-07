@@ -25,7 +25,7 @@ async def fetch(url, session):
 async def test_web_server_fixture(web_server):
     async with aiohttp.ClientSession() as session:
         response = await fetch(TEST_URL, session)
-        assert response.text == 'Hello World!'
+        assert response.text.strip() == 'Hello World!'
         assert response.status == 200
 
 
@@ -33,5 +33,5 @@ async def test_web_server_fixture(web_server):
 @pytest.mark.asyncio
 async def test_web_server_via_web_client_fixture(web_server, web_client_session):
     response = await fetch(TEST_URL, web_client_session)
-    assert response.text == 'Hello World!'
+    assert response.text.strip() == 'Hello World!'
     assert response.status == 200
