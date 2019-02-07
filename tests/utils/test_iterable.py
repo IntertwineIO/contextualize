@@ -4,9 +4,9 @@ import pytest
 from collections import namedtuple
 from enum import Enum
 
-from exceptions import TooFewValuesError, TooManyValuesError
-from utils.iterable import InfinIterator, constrain, one, one_max, one_min
-from utils.tools import is_child_class, is_iterator
+from contextualize.exceptions import TooFewValuesError, TooManyValuesError
+from contextualize.utils.iterable import InfinIterator, constrain, one, one_max, one_min
+from contextualize.utils.tools import is_child_class, is_iterator
 
 
 MAX_ITERABLE_SIZE = 5

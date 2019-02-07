@@ -9,9 +9,9 @@ from datetime import date
 from enum import Enum
 from unittest.mock import Mock, patch
 
-from utils.cache import CacheKey, FileCache, LyricalCache
-from utils.signature import CallSign
-from utils.tools import is_instance_method, read_file, write_file, reset_files
+from contextualize.utils.cache import CacheKey, FileCache, LyricalCache
+from contextualize.utils.signature import CallSign
+from contextualize.utils.tools import is_instance_method, read_file, write_file, reset_files
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 A_FILE = 'a_file.txt'
@@ -160,7 +160,7 @@ def validate_lyrical_cache_hits(idx, func, maxsize, call_args_and_cache_hits):
 
     # Use call sign of func, not call sign of wrapped
     call_sign = CallSign.manifest(func)
-    with patch('utils.cache.CallSign.manifest') as mock_manifest_call_sign:
+    with patch('contextualize.utils.cache.CallSign.manifest') as mock_manifest_call_sign:
         mock_manifest_call_sign.return_value = call_sign
         lyrical_cache = LyricalCache(maxsize=maxsize)
         wrapped_and_cached = lyrical_cache(wrapped)
@@ -348,7 +348,7 @@ def validate_file_cache_hits(idx, func, maxsize, procedures):
 
     # Use signature of func, not signature of wrapped
     signature = inspect.signature(func)
-    with patch('utils.cache.inspect.signature') as mock_signature:
+    with patch('contextualize.utils.cache.inspect.signature') as mock_signature:
         mock_signature.return_value = signature
 
         file_cache = FileCache(maxsize=maxsize, path_parameter='path')

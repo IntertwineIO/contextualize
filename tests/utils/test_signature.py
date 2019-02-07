@@ -9,8 +9,8 @@ from itertools import chain
 
 import wrapt
 
-from utils.signature import CallSign, normalize
-from utils.tools import is_child_class, reset_files
+from contextualize.utils.signature import CallSign, normalize
+from contextualize.utils.tools import is_child_class, reset_files
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 FILE = 'a_file.txt'

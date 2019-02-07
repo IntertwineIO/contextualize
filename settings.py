@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from collections import namedtuple
+
+WebAddress = namedtuple('WebAddress', 'host port')
 
 REDIS_ADDRESS = 'redis://localhost'
 
-WAIT_IMPLICIT_DEFAULT = 3  # seconds
-WAIT_EXPLICIT_DEFAULT = 10  # seconds
-WAIT_POLL_INTERVAL = 0.2  # seconds
-
-FRESHNESS_THRESHOLD_DEFAULT = 30  # days
+TEST_WEB_SERVER_HOST = 'localhost'
+TEST_WEB_SERVER_PORT = 8888
+TEST_WEB_SERVER_ADDRESS = WebAddress(TEST_WEB_SERVER_HOST, TEST_WEB_SERVER_PORT)
+TEST_WEB_SERVER_BASE_URL = f'http://{TEST_WEB_SERVER_HOST}:{TEST_WEB_SERVER_PORT}'

@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import json
 import pytest
 from datetime import datetime, date, time
 from decimal import Decimal
 from enum import Enum
 
-from extraction.extractor import BaseExtractor
-from utils.enum import FlexEnum
-from utils.serialization import NULL, serialize, serialize_nonstandard
+from contextualize.extraction.extractor import BaseExtractor
+from contextualize.utils.enum import FlexEnum
+from contextualize.utils.serialization import NULL, serialize, serialize_nonstandard
 
 
 class Color:
@@ -42,7 +41,7 @@ class Color:
      (Color.AdditivePrimary.GREEN, 'test_serialization.Color.AdditivePrimary.GREEN'),
      (Color.SubtractivePrimary.YELLOW, 'test_serialization.Color.SubtractivePrimary.YELLOW'),
      (BaseExtractor.WebDriverBrand.CHROME,
-        'extraction.extractor.BaseExtractor.WebDriverBrand.CHROME'),
+        'contextualize.extraction.extractor.BaseExtractor.WebDriverBrand.CHROME'),
      ])
 def test_serialize_nonstandard(value, check):
     """Test serialize "nonstandard" (i.e. not handled by json.dumps)"""

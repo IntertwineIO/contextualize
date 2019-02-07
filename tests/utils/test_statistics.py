@@ -3,7 +3,9 @@
 import math
 import pytest
 
-from utils.statistics import HUMAN_SELECTION_LAMBDA, human_dwell_time, human_selection_shuffle
+from contextualize.utils.statistics import (
+    HUMAN_SELECTION_LAMBDA, human_dwell_time, human_selection_shuffle
+)
 
 
 @pytest.mark.unit

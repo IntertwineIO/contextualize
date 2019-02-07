@@ -3,7 +3,7 @@
 import pytest
 from copy import copy
 
-from utils.singleton import Singleton
+from contextualize.utils.singleton import Singleton
 
 
 # Equivalent to the following for A, B, C, etc.:

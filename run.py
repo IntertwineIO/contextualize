@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from api import app
+from contextualize.api import app
 
 
 def main():

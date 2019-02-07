@@ -3,8 +3,8 @@
 import pytest
 from collections import OrderedDict
 
-from utils.enum import FlexEnum
-from utils.tools import is_child_class, is_iterator
+from contextualize.utils.enum import FlexEnum
+from contextualize.utils.tools import is_child_class, is_iterator
 
 
 # Functional enum declaration
@@ -81,9 +81,24 @@ def test_flex_enum_names(enum_class, enumables, transform, enum_names):
         count += 1
 
     assert count == len(enum_names)
-    assert enum_class.as_list(*enumables, names=True, transform=transform) == enum_names
-    assert enum_class.as_tuple(*enumables, names=True, transform=transform) == tuple(enum_names)
-    assert enum_class.as_set(*enumables, names=True, transform=transform) == set(enum_names)
+
+    enum_as_tuple = enum_class.as_tuple(*enumables, names=True, transform=transform)
+    assert enum_as_tuple == tuple(enum_names)
+
+    enum_as_frozenset = enum_class.as_frozenset(*enumables, names=True, transform=transform)
+    assert enum_as_frozenset == frozenset(enum_names)
+
+    enum_as_list = enum_class.as_list(*enumables, names=True, transform=transform)
+    assert enum_as_list == enum_names
+    enum_as_list.append('extra')
+    enum_as_list2 = enum_class.as_list(*enumables, names=True, transform=transform)
+    assert enum_as_list2 == enum_names
+
+    enum_as_set = enum_class.as_set(*enumables, names=True, transform=transform)
+    assert enum_as_set == set(enum_names)
+    enum_as_set.add('extra')
+    enum_as_set2 = enum_class.as_set(*enumables, names=True, transform=transform)
+    assert enum_as_set2 == set(enum_names)
 
 
 @pytest.mark.unit
@@ -108,6 +123,7 @@ def test_flex_enum_values(enum_class, enumables, transform, enum_values):
     assert enum_class.as_list(*enumables, values=True, transform=transform) == enum_values
     assert enum_class.as_tuple(*enumables, values=True, transform=transform) == tuple(enum_values)
     assert enum_class.as_set(*enumables, values=True, transform=transform) == set(enum_values)
+    assert enum_class.as_frozenset(*enumables, values=True, transform=transform) == set(enum_values)
 
 
 def minus_1(x): return x - 1
@@ -157,6 +173,39 @@ def test_flex_enum_items(enum_class, swap, labels, transform, inverse, enumables
     if labels and not swap:
         assert tuple(enum_items) == enum_class.as_labels(
             *enumables, transform=transform, inverse=inverse)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    'enum_class, enumables, transform',
+    [(Fruit, [], None),
+     (Fruit, [], str.lower),
+     (Fruit, [Fruit.CANTALOUPE], None),
+     (Fruit, [Fruit.CANTALOUPE, 'BANANA', 1], str.capitalize),
+     (Roshambo, [Roshambo.ROCK, 'ROCK', 'PAPER'], str.capitalize),
+     ])
+def test_flex_enum_mutable_container_not_cached(enum_class, enumables, transform):
+    """Test ensuring FlexEnum mutable container methods not cached"""
+    enum_names = list(enum_class.names(*enumables, transform=transform))
+
+    enum_as_list = enum_class.as_list(*enumables, names=True, transform=transform)
+    assert enum_as_list == enum_names
+    enum_as_list.append('extra')
+    enum_as_list2 = enum_class.as_list(*enumables, names=True, transform=transform)
+    assert enum_as_list2 == enum_names
+
+    enum_as_set = enum_class.as_set(*enumables, names=True, transform=transform)
+    assert enum_as_set == set(enum_names)
+    enum_as_set.add('extra')
+    enum_as_set2 = enum_class.as_set(*enumables, names=True, transform=transform)
+    assert enum_as_set2 == set(enum_names)
+
+    enum_dict = OrderedDict(enum_class.items(*enumables, transform=transform))
+    enum_as_map = enum_class.as_map(*enumables, transform=transform)
+    assert enum_as_map == enum_dict
+    enum_as_map['extra'] = 'value'
+    enum_as_map2 = enum_class.as_map(*enumables, transform=transform)
+    assert enum_as_map2 == enum_dict
 
 
 class First:

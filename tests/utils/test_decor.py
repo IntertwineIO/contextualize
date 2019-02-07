@@ -3,7 +3,7 @@
 import pytest
 import wrapt
 
-from utils.decor import factory_direct
+from contextualize.utils.decor import factory_direct
 
 
 @wrapt.decorator

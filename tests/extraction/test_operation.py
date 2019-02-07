@@ -1,78 +1,179 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import inspect
-import pytest
-from unittest.mock import MagicMock
+from asyncio import Future
+from unittest.mock import Mock, patch
 
-from exceptions import TooManyValuesError
-from extraction.operation import ExtractionOperation as EO
-from utils.tools import is_child_class
+import pytest
+from contextualize.exceptions import TooManyValuesError
+from contextualize.extraction.operation import ExtractionOperation as EO
+from contextualize.utils.tools import is_child_class
+from contextualize.utils.testing.builders.extraction_operation_builder import (
+    ExtractionOperationBuilder
+)
 
 METHOD_TYPES = {method_type for name, method_type in inspect.getmembers(EO)
                 if name.endswith('Method')}
 
 
-class ReferencePath:
-
-    def __init__(self, path, value):
-        path_component_names = path.split('.')
-        path_length = len(path_component_names)
-        if not path_length:
-            raise ValueError(f'Invalid path: {path}')
-        self.name = path_component_names[0]
-        if path_length == 1:
-            setattr(self, self.name, value)
-        else:
-            sub_path = '.'.join(path_component_names[1:])
-            cls = self.__class__
-            sub_component = cls(sub_path, value)
-            setattr(self, self.name, sub_component)
-
-    def __repr__(self):
-        path_component_names = []
-        value = self
-        while isinstance(value, type(self)):
-            name = value.name
-            path_component_names.append(name)
-            value = getattr(value, name)
-
-        path = '.'.join(path_component_names)
-        return f"ReferencePath('{path}', {value})"
-
-
-content_map = {
-    'alpha': 'dog',
-    'beta': ReferencePath('max', 1975),
-    'gamma': ReferencePath('ray.burst', '110328A'),
-    'delta': ReferencePath('delta.delta', 'ΔΔΔ')
-}
+def side_effect_execute_in_future(func, *args, **kwds):
+    future = Future()
+    future.set_result(func(*args, **kwds))
+    return future
 
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    'idx, reference, check',
-    [(0, 'alpha', 'dog'),
-     (1, 'beta.max', 1975),
-     (2, 'gamma.ray.burst', '110328A'),
-     (3, 'delta.delta.delta', 'ΔΔΔ'),
-     (4, 'aleph', KeyError),
-     (5, 'beta.carotene', AttributeError),
+    'idx, method,                           arguments,          values',
+    [(0,  EO.ExtractionMethod.GETATTR,      ['text'],           ['value1']),
+     (1,  EO.ExtractionMethod.GETATTR,      ['text'],           ['value1', 'value2']),
+     (2,  EO.ExtractionMethod.ATTRIBUTE,    ['href'],           ['value1']),
+     (3,  EO.ExtractionMethod.ATTRIBUTE,    ['href'],           ['value1', 'value2']),
+     (4,  EO.ExtractionMethod.PROPERTY,     ['content'],        ['value1']),
+     (5,  EO.ExtractionMethod.PROPERTY,     ['content'],        ['value1', 'value2']),
+     ])
+@pytest.mark.asyncio
+async def test_extract_values(idx, method, arguments, values):
+    """Test extract values"""
+    elements = [Mock() for _ in values]
+
+    for mock_element, value in zip(elements, values):
+
+        if method is EO.ExtractionMethod.GETATTR:
+            setattr(mock_element, arguments[0], value)
+
+        elif method is EO.ExtractionMethod.ATTRIBUTE:
+            def side_effect_get_attribute(name, value=value):  # hack due to closure late-binding
+                return value if name == arguments[0] else 'something else'
+            mock_element.get_attribute = Mock(side_effect=side_effect_get_attribute)
+
+        elif method is EO.ExtractionMethod.PROPERTY:
+            def side_effect_get_property(name, value=value):  # hack due to closure late-binding
+                return value if name == arguments[0] else 'something else'
+            mock_element.get_property = Mock(side_effect=side_effect_get_property)
+
+        else:
+            raise ValueError('Unknown extraction method')
+
+    builder = ExtractionOperationBuilder(extract_method=method, extract_args=arguments)
+    operation = builder.build()
+
+    with patch(f'{EO.__module__}.ExtractionOperation._execute_in_future') as mock_execute:
+        mock_execute.side_effect = side_effect_execute_in_future
+        extracted_values = await operation._extract_values(elements)
+        assert extracted_values == values
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    'idx, method,               arguments,                          values',
+    [(0,  EO.GetMethod.GET,     ['<alpha>'],                        ['dog']),
+     (1,  EO.GetMethod.GET,     ['<alpha>', '<beta.max>'],          ['dog', 1975]),
+     ])
+@pytest.mark.asyncio
+async def test_get_values(idx, method, arguments, values):
+    """Test get values"""
+    builder = ExtractionOperationBuilder(get_method=method, get_args=arguments)
+    operation = builder.build()
+
+    extracted_values = await operation._get_values('this is ignored'.split())
+    assert extracted_values == values
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    'idx, reference,                 check',
+    [(0, 'alpha',                   'dog'),
+     (1, 'beta.max',                 1975),
+     (2, 'gamma.ray.burst',         '110328A'),
+     (3, 'delta.delta.delta',       'ΔΔΔ'),
+     (4, 'aleph',                    KeyError),
+     (5, 'beta.carotene',            AttributeError),
      ])
 def test_get_by_reference(idx, reference, check):
-    """Test ExtractionOperation._get_by_reference"""
-    mock_extractor = MagicMock()
-    mock_extractor.content_map = content_map
+    """Test _get_by_reference and _get_by_reference_tag)"""
+    builder = ExtractionOperationBuilder()
+    operation = builder.build()
 
-    operation = EO.from_configuration(
-        {}, field='test_field', source='test_source', extractor=mock_extractor)
+    reference_tag = EO.REFERENCE_TEMPLATE.format(reference)
 
     if is_child_class(check, Exception):
         with pytest.raises(check):
-            value = operation._get_by_reference(reference)
+            operation._get_by_reference(reference)
+
+        with pytest.raises(check):
+            operation._get_by_reference_tag(reference_tag)
 
     else:
-        value = operation._get_by_reference(reference)
-        assert value == check
+        value_by_reference = operation._get_by_reference(reference)
+        assert value_by_reference == check
+
+        value_by_reference_tag = operation._get_by_reference_tag(reference_tag)
+        assert value_by_reference_tag == check
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    'idx, template,                                  check',
+    [(0, '<alpha>',                                 'dog'),
+     (1, 'hot <alpha>',                             'hot dog'),
+     (2, '<alpha> house',                           'dog house'),
+     (3, 'Hot<alpha>haus',                          'Hotdoghaus'),
+     (4, '<beta.max> hot <alpha>s',                 '1975 hot dogs'),
+     (5, 'hot <alpha> cooked by <gamma.ray.burst>', 'hot dog cooked by 110328A'),
+     (6, '<delta.delta.delta> circa <beta.max>',    'ΔΔΔ circa 1975'),
+     ])
+def test_render_references(idx, template, check):
+    """Test ExtractionOperation._render_references"""
+    builder = ExtractionOperationBuilder()
+    operation = builder.build()
+
+    if is_child_class(check, Exception):
+        with pytest.raises(check):
+            rendered = operation._render_references(template)
+
+    else:
+        rendered = operation._render_references(template)
+        assert rendered == check
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    'idx,  latest,     prior,      parent,     driver,      scope,              check',
+    [(0,  'latest',   'prior',    'parent',    'driver',    EO.Scope.LATEST,    ['latest']),
+     (1,  'latest',   'prior',    'parent',    'driver',    EO.Scope.PRIOR,     ['prior']),
+     (2,  'latest',   'prior',    'parent',    'driver',    EO.Scope.PARENT,    ['parent']),
+     (2,  'latest',   'prior',    'parent',    'driver',    EO.Scope.PAGE,      ['driver']),
+     (3,  [1, 2, 3],  [4, 5, 6],   7,           8,          EO.Scope.LATEST,    [1, 2, 3]),
+     (4,  [1, 2, 3],  [4, 5, 6],   7,           8,          EO.Scope.PRIOR,     [4, 5, 6]),
+     (5,  [1, 2, 3],  [4, 5, 6],   7,           8,          EO.Scope.PARENT,    [7]),
+     (5,  [1, 2, 3],  [4, 5, 6],   7,           8,          EO.Scope.PAGE,      [8]),
+     ])
+def test_select_targets(idx, latest, prior, parent, driver, scope, check):
+    """Test ExtractionOperation._select_targets"""
+    builder = ExtractionOperationBuilder()
+    operation = builder.build()
+    operation.web_driver = driver
+    operation.scope = scope
+
+    targets = operation._select_targets(latest, prior, parent)
+    assert targets == check
+
+
+@pytest.mark.unit
+def test_configure_scope():
+    for scope in EO.Scope:
+        configuration = {EO.SCOPE_TAG: scope.name.lower()}
+        configured = EO._configure_scope(configuration)
+        assert configured is scope
+
+    configuration = {'not_scope': 'foo'}
+    configured = EO._configure_scope(configuration)
+    assert configured is EO.SCOPE_DEFAULT
+
+    with pytest.raises(KeyError):
+        configuration = {EO.SCOPE_TAG: 'foo'}
+        configured = EO._configure_scope(configuration)
 
 
 CLASS_NAME = EO.FindMethod.CLASS_NAME
@@ -107,8 +208,8 @@ def test_configure_method(idx, configuration, method_enum, check):
 
 
 @pytest.mark.unit
-def test_method_types_have_unique_names():
-    """Confirm method types have unique names (non-case-sensitive)"""
+def test_names_are_unique_across_method_types():
+    """Confirm names are unique across method types (non-case-sensitive)"""
     all_method_names = set()
     for method_type in METHOD_TYPES:
         method_names = set(method_type.names(transform=str.lower))
