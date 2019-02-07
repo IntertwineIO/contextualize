@@ -1,11 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import asyncio
 import inspect
-import pytest
 from asyncio import Future
 from unittest.mock import Mock, patch
 
+import pytest
 from contextualize.exceptions import TooManyValuesError
 from contextualize.extraction.operation import ExtractionOperation as EO
 from contextualize.utils.tools import is_child_class
@@ -15,12 +14,6 @@ from contextualize.utils.testing.builders.extraction_operation_builder import (
 
 METHOD_TYPES = {method_type for name, method_type in inspect.getmembers(EO)
                 if name.endswith('Method')}
-
-
-@pytest.mark.asyncio
-async def test_example(event_loop):
-    """An async test!"""
-    await asyncio.sleep(0, loop=event_loop)
 
 
 def side_effect_execute_in_future(func, *args, **kwds):
