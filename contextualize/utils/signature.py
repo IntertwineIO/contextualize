@@ -291,7 +291,7 @@ class CallSign:
         try:
             return self._is_selfish
         except AttributeError:
-            self._is_selfish = is_selfish(self.func)
+            self._is_selfish = is_selfish(self.func, self.signature)
             return self._is_selfish
 
     def _derive_parameters(self):
