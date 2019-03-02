@@ -10,7 +10,8 @@ from itertools import chain
 import wrapt
 
 from contextualize.utils.signature import CallSign, normalize
-from contextualize.utils.tools import is_child_class, reset_files
+from contextualize.utils.testing.tools import reset_files
+from contextualize.utils.tools import is_child_class
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 FILE = 'a_file.txt'
