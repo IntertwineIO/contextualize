@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from contextlib import contextmanager
+
 
 def read_file(path):
     """Read file at given path"""
