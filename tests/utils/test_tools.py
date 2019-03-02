@@ -7,7 +7,7 @@ from contextualize.exceptions import TooManyValuesError
 
 from contextualize.utils.tools import (
     derive_domain, delist, enlist, get_related_json, is_child_class, is_instance_method,
-    is_class_method, is_static_method, logical_xor, xor_constrain
+    is_class_method, is_static_method, is_selfish, logical_xor, xor_constrain
 )
 
 
@@ -155,16 +155,38 @@ def func():
     pass
 
 
-class C:
-    def imethod(self):
+def func_params(a, b=None):
+    pass
+
+
+class M(type):
+    def __new__(meta, name, bases, attr):
+        new_cls = super().__new__(meta, name, bases, attr)
+        new_cls.universe = 42
+        return new_cls
+
+
+class C(metaclass=M):
+    def imethod():
+        pass
+
+    def imethod_params(self, a, b=None):
         pass
 
     @classmethod
-    def cmethod(cls):
+    def cmethod():
+        pass
+
+    @classmethod
+    def cmethod_params(cls, a, b=None):
         pass
 
     @staticmethod
     def smethod():
+        pass
+
+    @staticmethod
+    def smethod_params(a, b=None):
         pass
 
     def __repr__(self):
@@ -181,6 +203,7 @@ class C:
      (3,     C().smethod,   False),
      (4,     C.cmethod,     False),
      (5,     C.smethod,     False),
+     (6,     M.__new__,     False),
      ])
 def test_is_instance_method(idx, func, check):
     assert is_instance_method(func) is check
@@ -196,6 +219,8 @@ def test_is_instance_method(idx, func, check):
      (3,     C().smethod,   False),
      (4,     C.cmethod,     True),
      (5,     C.smethod,     False),
+     # Unintuitive, but correct: https://docs.python.org/3.4/reference/datamodel.html#object.__new__
+     (6,     M.__new__,     False),
      ])
 def test_is_class_method(idx, func, check):
     assert is_class_method(func) is check
@@ -211,9 +236,33 @@ def test_is_class_method(idx, func, check):
      (3,     C().smethod,   C,      True),
      (4,     C.cmethod,     C,      False),
      (5,     C.smethod,     C,      True),
+     # Unintuitive, but correct: https://docs.python.org/3.4/reference/datamodel.html#object.__new__
+     (6,     M.__new__,     M,      True),
      ])
 def test_is_static_method(idx, func, cls, check):
     assert is_static_method(func, cls) is check
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ('idx', 'func',                'check'),
+    [
+     (0,     func,                  False),
+     (1,     C().imethod,           True),
+     (2,     C().cmethod,           True),
+     (3,     C().smethod,           False),
+     (4,     C.cmethod,             True),
+     (5,     C.smethod,             False),
+     (6,     func_params,           False),
+     (7,     C().imethod_params,    True),
+     (8,     C().cmethod_params,    True),
+     (9,     C().smethod_params,    False),
+     (10,    C.cmethod_params,      True),
+     (11,    C.smethod_params,      False),
+     (12,    M.__new__,             True),
+     ])
+def test_is_selfish(idx, func, check):
+    assert is_selfish(func) is check
 
 
 @pytest.mark.unit

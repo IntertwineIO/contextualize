@@ -32,12 +32,12 @@ def is_module_name(name):
         return True
     return MODULE_NAME_PATTERN.match(name)
 
-SELF_REFERENTIAL_PARAMS = {'self', 'cls', 'meta'}
+SELFISH_PARAMETER_NAMES = {'self', 'cls', 'meta'}
 
 def derive_args(func):
     """Derive args from the given function"""
     args = inspect.getfullargspec(func).args
-    if args and args[0] in SELF_REFERENTIAL_PARAMS:
+    if args and is_selfish_name(args[0]):
         del args[0]
     return args
 
@@ -290,14 +290,47 @@ def is_packed(obj):
         return False
 
 
-def is_selfish(func):
-    """Check if function requires a self/cls/meta parameter"""
+def is_selfish_name(name):
+    """Return True if name is self/cls/meta"""
+    return name in SELFISH_PARAMETER_NAMES
+
+
+def is_selfish(func, signature=None):
+    """
+    Is selfish
+
+    Check if function begins with a self/cls/meta parameter:
+
+    Unbound functions*: False
+    Instance methods:   True
+    Class methods:      True
+    Static methods*+:   False
+    Builtins:           False
+
+    * Unbound and static methods return True if they have self/cls/meta
+    as a first parameter. This means is_selfish returns True in a
+    decorator before @classmethod is applied, as typically desired.
+
+    + Return True for __new__, though it is technically a static method,
+    since it should always begin with cls or meta (for a metaclass).
+
+    I/O:
+    func:           The callable to be evaluated.
+    signature=None: Since signature inspection can be expensive, allow
+                    the function's signature to optionally be passed, in
+                    case it is already available to the caller.
+    """
     if inspect.isbuiltin(func):
         return False
     try:
         return func.__self__ is not None
     except AttributeError:
-        return False
+        signature = signature or inspect.signature(func)
+        parameters = signature.parameters
+        if not parameters:
+            return False
+        first = next(iter(parameters.keys()))
+        return is_selfish_name(first)
 
 
 def load_class(specifier):
