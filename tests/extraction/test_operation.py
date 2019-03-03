@@ -91,7 +91,7 @@ async def test_get_values(idx, method, arguments, values):
      (5, 'beta.carotene',            AttributeError),
      ])
 def test_get_by_reference(idx, reference, check):
-    """Test _get_by_reference and _get_by_reference_tag)"""
+    """Test _get_by_reference and _get_by_reference_tag"""
     builder = ExtractionOperationBuilder()
     operation = builder.build()
 
