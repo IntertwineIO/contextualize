@@ -26,7 +26,9 @@ from contextualize.utils.enum import FlexEnum
 from contextualize.utils.iterable import one
 from contextualize.utils.statistics import HumanDwellTime, human_dwell_time, human_selection_shuffle
 from contextualize.utils.time import GranularDateTime
-from contextualize.utils.tools import PP, derive_domain, enlist, is_nonstring_sequence, xor_constrain
+from contextualize.utils.tools import (
+    PP, derive_domain, enlist, is_nonstring_sequence, xor_constrain
+)
 
 
 class BaseExtractor:
@@ -38,7 +40,7 @@ class BaseExtractor:
     ELEMENTS_TAG = 'elements'
     IS_ENABLED_TAG = 'is_enabled'
     SOURCE_URL_TAG = 'source_url'
-    WAIT_TAG = 'wait'
+    IMPLICIT_WAIT_TAG = 'wait'
 
     WebDriverBrand = FlexEnum('WebDriverBrand', 'CHROME FIREFOX')
     WEB_DRIVER_BRAND_DEFAULT = WebDriverBrand.CHROME
@@ -46,7 +48,7 @@ class BaseExtractor:
     WebDriverInfo = namedtuple('WebDriverInfo', 'brand type kwargs')
 
     # All wait times and delays in seconds
-    WAIT_IMPLICIT_DEFAULT = 3
+    IMPLICIT_WAIT_DEFAULT = 3
     DELAY_DEFAULTS = HumanDwellTime(
         mu=0, sigma=0.5, base=1, multiplier=1, minimum=1, maximum=3)
 
@@ -87,7 +89,7 @@ class BaseExtractor:
     @debug
     async def _acquire_web_driver(self):
         """Acquire web driver"""
-        implicit_wait = self.configuration.get(self.WAIT_TAG, self.WAIT_IMPLICIT_DEFAULT)
+        implicit_wait = self.configuration.get(self.IMPLICIT_WAIT_TAG, self.IMPLICIT_WAIT_DEFAULT)
         self.web_driver = await self._provision_web_driver(
             web_driver_type=self.web_driver_type,
             web_driver_kwargs=self.web_driver_kwargs,
@@ -110,7 +112,7 @@ class BaseExtractor:
 
         web_driver = await run_in_executor(loop, None, web_driver_type, **web_driver_kwargs)
         # Configure web driver to allow waiting on each operation
-        implicit_wait = cls.WAIT_IMPLICIT_DEFAULT if implicit_wait is None else implicit_wait
+        implicit_wait = cls.IMPLICIT_WAIT_DEFAULT if implicit_wait is None else implicit_wait
         web_driver.implicitly_wait(implicit_wait)
         web_driver.last_fetch_timestamp = None
         return web_driver
@@ -214,7 +216,7 @@ class BaseExtractor:
         """
         latest = prior = parent = target
         for operation_config in configuration:
-            operation = ExtractionOperation.from_configuration(
+            operation = ExtractionOperation.from_dict(
                 configuration=operation_config,
                 field=field,
                 source=source,
@@ -245,7 +247,7 @@ class BaseExtractor:
         index=1:        Index of given content element within a series
         return:         Extracted field value
         """
-        operation = ExtractionOperation.from_configuration(
+        operation = ExtractionOperation.from_dict(
             configuration=configuration,
             field=field,
             source=source,
@@ -277,8 +279,8 @@ class BaseExtractor:
         return os.path.join(base, directory, self.FILE_NAME)
 
     @configuration_file_cache
-    def _marshall_configuration(self, file_path):
-        """Marshall configuration from file, given a file path"""
+    def _marshal_configuration(self, file_path):
+        """Marshal configuration from file, given a file path"""
         with open(file_path) as stream:
             return yaml.safe_load(stream)
 
@@ -343,16 +345,18 @@ class BaseExtractor:
         return cls.WebDriverInfo(web_driver_brand, web_driver_type, web_driver_kwargs)
 
     def __init__(self, model, directory, web_driver=None, web_driver_brand=None,
-                 reuse_web_driver=None, loop=None):
+                 reuse_web_driver=None, use_cache=True, loop=None):
+
         self.loop = loop or asyncio.get_event_loop()
         self.created_timestamp = self.loop.time()
+        self.use_cache = use_cache
         self.status = None
 
         self.model = model
         self.base_directory = model.PROVIDER_DIRECTORY
         self.directory = directory
         self.file_path = self._form_file_path(self.base_directory, self.directory)
-        self.configuration = self._marshall_configuration(self.file_path)
+        self.configuration = self._marshal_configuration(self.file_path)
         self.is_enabled = self.configuration.get(self.IS_ENABLED_TAG, True)
         self.delay_configuration = self._configure_delay(self.configuration)
         self.content_configuration = self.configuration[self.CONTENT_TAG]
@@ -408,12 +412,14 @@ class SourceExtractor(BaseExtractor):
             raise
         else:
             self.extracted_content = content
-            await self.cache.store_content(content)
+            if self.use_cache:
+                await self.cache.store_content(content)
 
     @classmethod
     @debug
     async def extract_in_parallel(cls, model, urls_by_domain, search_domain,
-                                  search_web_driver=None, delay_configuration=None, loop=None):
+                                  search_web_driver=None, delay_configuration=None,
+                                  use_cache=True, loop=None):
         """
         Extract in parallel
 
@@ -433,6 +439,9 @@ class SourceExtractor(BaseExtractor):
 
         delay_configuration=None:   Configuration to stagger extractions
 
+        use_cache=True:             If True (default), cache results and
+                                    check for previously cached results.
+
         loop=None:                  Event loop (optional)
 
         return:                     List of extracted content instances
@@ -445,6 +454,7 @@ class SourceExtractor(BaseExtractor):
                    web_driver=search_web_driver if domain == search_domain else None,
                    web_driver_brand=web_driver_brand,
                    delay_configuration=delay_configuration,
+                   use_cache=use_cache,
                    loop=loop)
                    for domain, urls in urls_by_domain.items()]
 
@@ -458,7 +468,8 @@ class SourceExtractor(BaseExtractor):
     @classmethod
     @debug
     async def extract_in_series(cls, model, urls, web_driver=None, web_driver_brand=None,
-                                reuse_web_driver=None, delay_configuration=None, loop=None):
+                                reuse_web_driver=None, delay_configuration=None,
+                                use_cache=True, loop=None):
         """
         Extract in series
 
@@ -481,6 +492,9 @@ class SourceExtractor(BaseExtractor):
 
         delay_configuration=None:   Configuration to stagger extractions
 
+        use_cache=True:             If True (default), cache results and
+                                    check for previously cached results.
+
         loop=None:                  Event loop (optional)
 
         return:                     List of extracted content instances
@@ -502,6 +516,7 @@ class SourceExtractor(BaseExtractor):
                 urls=urls,
                 web_driver=web_driver,
                 reuse_web_driver=True,  # use same web driver for series
+                use_cache=use_cache,
                 loop=loop)
 
             for source_extractor in source_extractors:
@@ -530,7 +545,8 @@ class SourceExtractor(BaseExtractor):
     @classmethod
     @debug
     def provision_extractors(cls, model, urls=None, web_driver=None,
-                             web_driver_brand=None, reuse_web_driver=None, loop=None):
+                             web_driver_brand=None, reuse_web_driver=None,
+                             use_cache=True, loop=None):
         """
         Provision Extractors
 
@@ -550,6 +566,9 @@ class SourceExtractor(BaseExtractor):
                                 after extraction. Defaults to True
                                 if web driver provided, else False.
 
+        use_cache=True:         If True (default), cache results and
+                                check for previously cached results.
+
         loop=None:              Event loop (optional)
 
         yield:                  Fully configured source extractors
@@ -561,6 +580,7 @@ class SourceExtractor(BaseExtractor):
                                 web_driver=web_driver,
                                 web_driver_brand=web_driver_brand,
                                 reuse_web_driver=reuse_web_driver,
+                                use_cache=use_cache,
                                 loop=loop)
 
                 if extractor.is_enabled:
@@ -616,7 +636,7 @@ class SourceExtractor(BaseExtractor):
         return clipped_url
 
     def __init__(self, model, page_url, web_driver=None, web_driver_brand=None,
-                 reuse_web_driver=None, loop=None):
+                 reuse_web_driver=None, use_cache=True, loop=None):
 
         page_url = url_normalize(page_url)
         directory = self._derive_directory(model, page_url)
@@ -626,10 +646,12 @@ class SourceExtractor(BaseExtractor):
                          web_driver=web_driver,
                          web_driver_brand=web_driver_brand,
                          reuse_web_driver=reuse_web_driver,
+                         use_cache=use_cache,
                          loop=loop)
 
         self.page_url = page_url
-        self.cache = SourceExtractorCache(model=self.model, loop=self.loop)
+        self.cache = SourceExtractorCache(model=self.model,
+                                          loop=self.loop) if self.use_cache else None
         self.status = ExtractionStatus.INITIALIZED
 
 
@@ -764,7 +786,8 @@ class MultiExtractor(BaseExtractor):
                         extractor=repr(self), configuration=content_config))
 
                 # TODO: store all results for a page at once instead of incrementally
-                await self.cache.store_search_result(content, rank)
+                if self.use_cache:
+                    await self.cache.store_search_result(content, rank)
                 self.extracted_content[unique_key] = content
 
         else:
@@ -800,6 +823,7 @@ class MultiExtractor(BaseExtractor):
             search_domain=search_domain,
             search_web_driver=self.web_driver,
             delay_configuration=self.delay_configuration,
+            use_cache=self.use_cache,
             loop=self.loop)
 
     @debug
@@ -823,6 +847,9 @@ class MultiExtractor(BaseExtractor):
     @debug(context="self.page_url")
     async def _load_cached_content(self):
         """Load cached content, returning True if available and fresh"""
+        if not self.use_cache:
+            return False
+
         status, last_extracted = await self.cache.retrieve_extractor_info()
 
         if self._should_use_cached_content(status, last_extracted):
@@ -836,7 +863,7 @@ class MultiExtractor(BaseExtractor):
     @debug
     def _should_use_cached_content(self, status, last_extracted):
         """Determine if cached content is available, fresh, and valid"""
-        if status and status.indicates_results() and last_extracted:
+        if self.use_cache and status and status.indicates_results() and last_extracted:
             now = datetime.datetime.utcnow()
             freshness = now - last_extracted
             configuration_cache = self.configuration_file_cache
@@ -857,7 +884,8 @@ class MultiExtractor(BaseExtractor):
             return False
 
         overall_status, has_changed = await self._apply_status_change(status)
-        await self.cache.store_extraction_status(status, overall_status, has_changed)
+        if self.use_cache:
+            await self.cache.store_extraction_status(status, overall_status, has_changed)
         return True
 
     @debug(context="self.content_map.get('source_url')")
@@ -893,7 +921,7 @@ class MultiExtractor(BaseExtractor):
     @classmethod
     @debug
     def provision_extractors(cls, model, search_data=None, web_driver=None, web_driver_brand=None,
-                             reuse_web_driver=None, loop=None):
+                             reuse_web_driver=None, use_cache=True, loop=None):
         """
         Provision Extractors
 
@@ -927,6 +955,9 @@ class MultiExtractor(BaseExtractor):
                                 after extraction. Defaults to True
                                 if web driver provided, else False.
 
+        use_cache=True:         If True (default), cache results and
+                                check for previously cached results.
+
         loop=None:              Event loop (optional)
 
         yield:                  Fully configured search extractors
@@ -945,6 +976,7 @@ class MultiExtractor(BaseExtractor):
                                 web_driver=web_driver,
                                 web_driver_brand=web_driver_brand,
                                 reuse_web_driver=reuse_web_driver,
+                                use_cache=use_cache,
                                 loop=loop)
 
                 if extractor.is_enabled:
@@ -1115,18 +1147,21 @@ class MultiExtractor(BaseExtractor):
         return terms
 
     def __init__(self, model, directory, search_data=None, web_driver=None, web_driver_brand=None,
-                 reuse_web_driver=None, loop=None):
+                 reuse_web_driver=None, use_cache=True, loop=None):
 
         super().__init__(model=model,
                          directory=directory,
                          web_driver=web_driver,
                          web_driver_brand=web_driver_brand,
                          reuse_web_driver=reuse_web_driver,
+                         use_cache=use_cache,
                          loop=loop)
 
         self.search_data = self._prepare_search_data(search_data)
-        self.cache = MultiExtractorCache(directory=self.directory, search_data=self.search_data,
-                                         model=self.model, loop=self.loop)
+        self.cache = MultiExtractorCache(directory=self.directory,
+                                         search_data=self.search_data,
+                                         model=self.model,
+                                         loop=self.loop) if self.use_cache else None
         self.freshness_threshold = self._derive_freshness_threshold(self.configuration)
         self.page_url = self._form_page_url(self.configuration, self.search_data)
 

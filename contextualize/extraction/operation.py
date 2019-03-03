@@ -411,12 +411,12 @@ class ExtractionOperation:
         return method_type, method_args
 
     @classmethod
-    def from_configuration(cls, configuration, field=None, source=None, extractor=None):
+    def from_dict(cls, configuration, field=None, source=None, extractor=None):
         """
-        From configuration
+        From dict
 
-        Construct operation from the given configuration, within the
-        context of a field, source, and extractor.
+        Construct operation from the given configuration dictionary,
+        within the context of a field, source, and extractor.
 
         I/O:
         configuration:   dictionary representation of an operation

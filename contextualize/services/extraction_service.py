@@ -13,7 +13,7 @@ class ExtractionService:
     @debug
     async def extract_content(self):
         extractors = MultiExtractor.provision_extractors(
-            ResearchArticle, self.search_data, loop=self.loop)
+            ResearchArticle, self.search_data, use_cache=True, loop=self.loop)
         futures = {extractor.extract() for extractor in extractors}
         done, pending = await asyncio.wait(futures)
         PP.pprint([task.result() for task in done])

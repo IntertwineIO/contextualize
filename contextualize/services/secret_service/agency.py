@@ -91,7 +91,8 @@ class SecretService:
 
         loop = asyncio.get_event_loop()
         search_terms = OrderedDict(browser=self.browser.name.lower())
-        extractors = MultiExtractor.provision_extractors(SecretAgent, search_terms, loop=loop)
+        extractors = MultiExtractor.provision_extractors(
+            SecretAgent, search_terms, use_cache=False, loop=loop)
         futures = {extractor.extract() for extractor in extractors}
         done, pending = loop.run_until_complete(asyncio.wait(futures))
         agent_dicts = chain(*(task.result().values() for task in done))
