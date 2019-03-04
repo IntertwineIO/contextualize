@@ -17,7 +17,7 @@ class BaseConfiguration(DotNotatableOrderedDict):
     pass
 
 
-class BaseExtractorConfiguration(BaseConfiguration):
+class ExtractorConfiguration(BaseConfiguration):
 
     IS_ENABLED_TAG = 'is_enabled'
     IMPLICIT_WAIT_TAG = 'wait'
@@ -36,7 +36,7 @@ class BaseExtractorConfiguration(BaseConfiguration):
 
     @classmethod
     def from_file(cls, file_path, source, extractor):
-        constructor_class = (cls if cls is not BaseExtractorConfiguration
+        constructor_class = (cls if cls is not ExtractorConfiguration
                              else cls._derive_class_from_file_path(file_path))
         marshalled = constructor_class._marshal_from_file(file_path)
         return constructor_class.from_dict(marshalled, source, extractor)
@@ -74,12 +74,12 @@ class BaseExtractorConfiguration(BaseConfiguration):
         return cls(**init_kwargs)
 
 
-class SourceExtractorConfiguration(BaseExtractorConfiguration):
+class SourceExtractorConfiguration(ExtractorConfiguration):
     """SourceExtractorConfiguration is currently a subset of Multi..."""
     FILE_NAME = 'source.yaml'
 
 
-class MultiExtractorConfiguration(BaseExtractorConfiguration):
+class MultiExtractorConfiguration(ExtractorConfiguration):
 
     FILE_NAME = 'multi.yaml'
     EXTRACT_SOURCES_TAG = 'extract_sources'
