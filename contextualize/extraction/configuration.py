@@ -192,8 +192,7 @@ class FieldConfigurable:
                                                   extractor=extractor)
                     for operation_config in configuration]
 
-        raise TypeError(f"Expected dict or list for '{field}'. "
-                        f"Received '{type(configuration)}': {configuration}")
+        return configuration
 
 
 class ItemsConfiguration(FieldConfigurable, BaseConfiguration):
