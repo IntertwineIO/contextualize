@@ -16,6 +16,10 @@ from url_normalize import url_normalize
 from contextualize.content.base import Hashable
 from contextualize.exceptions import NoneValueError
 from contextualize.extraction.caching import MultiExtractorCache, SourceExtractorCache
+from contextualize.extraction.configuration import (
+    DelayConfiguration, ExtractorConfiguration, MultiExtractorConfiguration,
+    SourceExtractorConfiguration
+)
 from contextualize.extraction.definitions import ExtractionStatus
 from contextualize.extraction.operation import ExtractionOperation
 from contextualize.services.secret_service.agency import SecretService
@@ -24,7 +28,9 @@ from contextualize.utils.cache import FileCache
 from contextualize.utils.debug import debug
 from contextualize.utils.enum import FlexEnum
 from contextualize.utils.iterable import one
-from contextualize.utils.statistics import HumanDwellTime, human_dwell_time, human_selection_shuffle
+from contextualize.utils.statistics import (
+    human_dwell_time, human_selection_shuffle
+)
 from contextualize.utils.time import GranularDateTime
 from contextualize.utils.tools import (
     PP, derive_domain, enlist, is_nonstring_sequence, xor_constrain
@@ -35,22 +41,12 @@ class BaseExtractor:
 
     FILE_NAME = NotImplementedError
 
-    CONTENT_TAG = 'content'
-    DELAY_TAG = 'delay'
-    ELEMENTS_TAG = 'elements'
-    IS_ENABLED_TAG = 'is_enabled'
     SOURCE_URL_TAG = 'source_url'
-    IMPLICIT_WAIT_TAG = 'wait'
 
     WebDriverBrand = FlexEnum('WebDriverBrand', 'CHROME FIREFOX')
     WEB_DRIVER_BRAND_DEFAULT = WebDriverBrand.CHROME
 
     WebDriverInfo = namedtuple('WebDriverInfo', 'brand type kwargs')
-
-    # All wait times and delays in seconds
-    IMPLICIT_WAIT_DEFAULT = 3
-    DELAY_DEFAULTS = HumanDwellTime(
-        mu=0, sigma=0.5, base=1, multiplier=1, minimum=1, maximum=3)
 
     Status = ExtractionStatus
 
@@ -64,7 +60,7 @@ class BaseExtractor:
         Extract content via the configured extractor. Return content if
         extractor is enabled and extraction is successful, else None.
         """
-        if not self.is_enabled:
+        if not self.configuration.is_enabled:
             PP.pprint(dict(
                 msg='WARNING: extracting with disabled extractor',
                 type='extractor_disabled_warning', extractor=repr(self)))
@@ -73,8 +69,8 @@ class BaseExtractor:
         if await self._load_cached_content():
             return self.extracted_content
 
+        # TODO: Add WebDriverPool context manager to acquire/release
         try:
-            # TODO: Add WebDriverPool with context manager to provision
             if not self.web_driver:
                 await self._acquire_web_driver()
             await self._update_status(ExtractionStatus.STARTED)
@@ -89,11 +85,10 @@ class BaseExtractor:
     @debug
     async def _acquire_web_driver(self):
         """Acquire web driver"""
-        implicit_wait = self.configuration.get(self.IMPLICIT_WAIT_TAG, self.IMPLICIT_WAIT_DEFAULT)
         self.web_driver = await self._provision_web_driver(
             web_driver_type=self.web_driver_type,
             web_driver_kwargs=self.web_driver_kwargs,
-            implicit_wait=implicit_wait,
+            implicit_wait=self.configuration.implicit_wait,
             loop=self.loop)
 
     @debug
@@ -112,7 +107,8 @@ class BaseExtractor:
 
         web_driver = await run_in_executor(loop, None, web_driver_type, **web_driver_kwargs)
         # Configure web driver to allow waiting on each operation
-        implicit_wait = cls.IMPLICIT_WAIT_DEFAULT if implicit_wait is None else implicit_wait
+        implicit_wait = (ExtractorConfiguration.IMPLICIT_WAIT_DEFAULT if implicit_wait is None
+                         else implicit_wait)
         web_driver.implicitly_wait(implicit_wait)
         web_driver.last_fetch_timestamp = None
         return web_driver
@@ -133,7 +129,7 @@ class BaseExtractor:
         await future_page
 
     @debug
-    async def _extract_content(self, element, configuration, index=1, **kwds):
+    async def _extract_content(self, element, index=1, **kwds):
         """
         Extract content
 
@@ -141,12 +137,10 @@ class BaseExtractor:
 
         I/O:
         element:        Selenium web driver or element
-        configuration:  Configuration dictionary in which keys are
-                        content fields and values are extraction
-                        operations
         index=1:        Index of given element within a series
         return:         Instance of content model (e.g. ResearchArticle)
         """
+        configuration = self.configuration.content
         self.content_map = content_map = OrderedDict(kwds)
         # Allow field to be otherwise set without overwriting
         fields_to_extract = (field for field in self.model.fields() if field not in content_map)
@@ -162,7 +156,10 @@ class BaseExtractor:
                     error=e, field=field, content_map=content_map, extractor=repr(self)))
 
             try:
-                content_map[field] = await self._extract_field(field, element, field_config, index)
+                content_map[field] = await self._extract_field(field=field,
+                                                               element=element,
+                                                               configuration=field_config,
+                                                               index=index)
 
             except Exception as e:  # e.g. NoSuchElementException
                 PP.pprint(dict(
@@ -190,11 +187,10 @@ class BaseExtractor:
         return:         Extracted field value
         """
         source = self.content_map.get(self.model.UNIQUE_FIELD) if self.content_map else None
+        if isinstance(configuration, ExtractionOperation):
+            return await configuration.execute(target=element, index=index)
         if isinstance(configuration, list):
             return await self._execute_operation_series(
-                field, source, element, configuration, index)
-        if isinstance(configuration, dict):
-            return await self._execute_operation(
                 field, source, element, configuration, index)
         return configuration
 
@@ -215,13 +211,7 @@ class BaseExtractor:
         return:         Extracted field value
         """
         latest = prior = parent = target
-        for operation_config in configuration:
-            operation = ExtractionOperation.from_dict(
-                configuration=operation_config,
-                field=field,
-                source=source,
-                extractor=self)
-
+        for operation in configuration:
             new_targets = operation._select_targets(latest, prior, parent)
             prior = latest
             if operation.is_multiple:
@@ -230,30 +220,6 @@ class BaseExtractor:
                 for new_target in new_targets:
                     latest = await operation.execute(new_target, index)
         return latest
-
-    # @debug
-    async def _execute_operation(self, field, source, target, configuration, index=1):
-        """
-        Execute operation
-
-        Execute operation to extract the specified field of the given
-        content source based on the target and configuration.
-
-        I/O:
-        field:          Name of field within content
-        source:         Unique field for content item (e.g. source_url)
-        target:         Selenium web driver or element
-        configuration:  An operation dictionary
-        index=1:        Index of given content element within a series
-        return:         Extracted field value
-        """
-        operation = ExtractionOperation.from_dict(
-            configuration=configuration,
-            field=field,
-            source=source,
-            extractor=self)
-
-        return await operation.execute(target, index)
 
     async def _load_cached_content(self):
         """Load cached content"""
@@ -275,33 +241,8 @@ class BaseExtractor:
     # Initialization Methods
 
     def _form_file_path(self, base, directory):
-        """Form file path by combining base and directory"""
+        """Form file path by combining base, directory, and file name"""
         return os.path.join(base, directory, self.FILE_NAME)
-
-    @configuration_file_cache
-    def _marshal_configuration(self, file_path):
-        """Marshal configuration from file, given a file path"""
-        with open(file_path) as stream:
-            return yaml.safe_load(stream)
-
-    def _configure_delay(self, configuration):
-        """Return delay configuration based on defaults and extractor configuration"""
-        delay_config = self.DELAY_DEFAULTS._asdict()
-        if self.DELAY_TAG not in configuration:
-            return delay_config
-        delay_overrides = configuration[self.DELAY_TAG]
-        unsupported = delay_overrides.keys() - delay_config.keys()
-        delay_config.update(delay_overrides)
-
-        if unsupported:
-            for key in unsupported:
-                del delay_config[key]
-            PP.pprint(dict(
-                msg='Unsupported keys in delay configuration',
-                type='unsupported_keys_in_delay_configuration',
-                configuration=delay_overrides, unsupported=unsupported, extractor=repr(self)))
-
-        return delay_config
 
     @classmethod
     def _derive_web_driver_brand(cls, web_driver_type=None):
@@ -326,6 +267,7 @@ class BaseExtractor:
         user_agent = secret_service.random
         if web_driver_brand is cls.WebDriverBrand.CHROME:
             chrome_options = webdriver.ChromeOptions()
+            # Waits for js loads on click are unreliable when headless
             # chrome_options.add_argument('--headless')
             chrome_options.add_argument('--disable-extensions')
             chrome_options.add_argument('--disable-infobars')
@@ -356,10 +298,8 @@ class BaseExtractor:
         self.base_directory = model.PROVIDER_DIRECTORY
         self.directory = directory
         self.file_path = self._form_file_path(self.base_directory, self.directory)
-        self.configuration = self._marshal_configuration(self.file_path)
-        self.is_enabled = self.configuration.get(self.IS_ENABLED_TAG, True)
-        self.delay_configuration = self._configure_delay(self.configuration)
-        self.content_configuration = self.configuration[self.CONTENT_TAG]
+        self.configuration = ExtractorConfiguration.from_file(file_path=self.file_path,
+                                                              extractor=self)
 
         self.web_driver = web_driver
         self.reuse_web_driver = bool(web_driver) if reuse_web_driver is None else reuse_web_driver
@@ -381,7 +321,7 @@ class BaseExtractor:
 
 class SourceExtractor(BaseExtractor):
 
-    FILE_NAME = 'source.yaml'
+    FILE_NAME = SourceExtractorConfiguration.FILE_NAME
 
     HTTPS_TAG = 'https://'
     HTTP_TAG = 'http://'
@@ -403,12 +343,11 @@ class SourceExtractor(BaseExtractor):
         """Perform page extraction for single content source"""
         try:
             content = await self._extract_content(self.web_driver,
-                                                  self.content_configuration,
                                                   source_url=self.page_url)
         except Exception as e:
             PP.pprint(dict(
                 msg='Extract content failure', type='extract_content_failure',
-                error=e, extractor=repr(self), configuration=self.content_configuration))
+                error=e, extractor=repr(self), configuration=self.configuration.content))
             raise
         else:
             self.extracted_content = content
@@ -418,7 +357,7 @@ class SourceExtractor(BaseExtractor):
     @classmethod
     @debug
     async def extract_in_parallel(cls, model, urls_by_domain, search_domain,
-                                  search_web_driver=None, delay_configuration=None,
+                                  search_web_driver, delay_configuration,
                                   use_cache=True, loop=None):
         """
         Extract in parallel
@@ -427,24 +366,23 @@ class SourceExtractor(BaseExtractor):
         domain, source URLs are extracted in series with delays.
 
         I/O:
-        model:                      Extractable content class
+        model:                  Extractable content class
 
-        urls_by_domain:             Dict of URL lists keyed by domain
+        urls_by_domain:         Dict of URL lists keyed by domain
 
-        search_domain:              Domain of search page for urls
+        search_domain:          Domain of search page for urls
 
-        search_web_driver=None:     Selenium webdriver used by search;
-                                    urls matching the search domain use
-                                    the search web driver
+        search_web_driver:      Selenium webdriver used by search; used
+                                to fetch urls matching the search domain
 
-        delay_configuration=None:   Configuration to stagger extractions
+        delay_configuration:    Configuration to stagger extractions
 
-        use_cache=True:             If True (default), cache results and
-                                    check for previously cached results.
+        use_cache=True:         If True (default), cache results and
+                                check for previously cached results.
 
-        loop=None:                  Event loop (optional)
+        loop=None:              Event loop (optional)
 
-        return:                     List of extracted content instances
+        return:                 List of extracted content instances
         """
         web_driver_brand = cls._derive_web_driver_brand(type(search_web_driver))
 
@@ -508,7 +446,7 @@ class SourceExtractor(BaseExtractor):
         # TODO: replace with WebDriverPool.provision_web_driver(web_driver) as web_driver:
         # Context manager should set web_driver._should_reuse on web driver returned
         try:
-            delay_config = delay_configuration or cls.DELAY_DEFAULTS._asdict()
+            delay_configuration = delay_configuration or DelayConfiguration()
             source_results = []
 
             source_extractors = cls.provision_extractors(
@@ -520,7 +458,7 @@ class SourceExtractor(BaseExtractor):
                 loop=loop)
 
             for source_extractor in source_extractors:
-                await cls._delay_if_necessary(delay_config, web_driver.last_fetch_timestamp)
+                await cls._delay_if_necessary(delay_configuration, web_driver.last_fetch_timestamp)
                 source_result = await source_extractor.extract()
                 if source_result:
                     source_results.append(source_result)
@@ -533,8 +471,8 @@ class SourceExtractor(BaseExtractor):
 
     @classmethod
     @debug
-    async def _delay_if_necessary(cls, delay_config, last_fetch_timestamp):
-        delay = human_dwell_time(**delay_config)
+    async def _delay_if_necessary(cls, delay_configuration, last_fetch_timestamp):
+        delay = delay_configuration.random_delay()
         now = datetime.datetime.utcnow()
         delta_since_last_fetch = now - last_fetch_timestamp
         elapsed_seconds = delta_since_last_fetch.total_seconds()
@@ -583,7 +521,7 @@ class SourceExtractor(BaseExtractor):
                                 use_cache=use_cache,
                                 loop=loop)
 
-                if extractor.is_enabled:
+                if extractor.configuration.is_enabled:
                     yield extractor
             # FileNotFoundError, ruamel.yaml.scanner.ScannerError, ValueError
             except Exception as e:
@@ -617,7 +555,7 @@ class SourceExtractor(BaseExtractor):
 
         raise FileNotFoundError(f'Source extractor configuration not found for {page_url}')
 
-    # TODO: rewrite to use urlparse and include www in directories
+    # TODO: rewrite to use urlparse and include www in directories?
     def _clip_url(self, url):
         """Clip URL to just contain host and path"""
         start = 0
@@ -638,7 +576,7 @@ class SourceExtractor(BaseExtractor):
     def __init__(self, model, page_url, web_driver=None, web_driver_brand=None,
                  reuse_web_driver=None, use_cache=True, loop=None):
 
-        page_url = url_normalize(page_url)
+        self.page_url = url_normalize(page_url)
         directory = self._derive_directory(model, page_url)
 
         super().__init__(model=model,
@@ -649,7 +587,6 @@ class SourceExtractor(BaseExtractor):
                          use_cache=use_cache,
                          loop=loop)
 
-        self.page_url = page_url
         self.cache = SourceExtractorCache(model=self.model,
                                           loop=self.loop) if self.use_cache else None
         self.status = ExtractionStatus.INITIALIZED
@@ -657,33 +594,7 @@ class SourceExtractor(BaseExtractor):
 
 class MultiExtractor(BaseExtractor):
 
-    FILE_NAME = 'multi.yaml'
-
-    # URL tags
-    INDEX_TAG = 'index'
-    SERIES_TAG = 'series'
-    TEMPLATES_TAG = 'templates'
-    DELIMITER_TAG = 'delimiter'
-    TERM_TAG = 'term'
-    URL_TAG = 'url'
-    URL_TEMPLATE_TAG = 'url_template'
-
-    TOKEN_TEMPLATE = '{{{}}}'
-    URLClauseSeries = FlexEnum('URLClauseSeries', 'TOPIC TERM CUSTOM')
-
-    # Pagination tags
-    PAGINATION_TAG = 'pagination'
-    PAGES_TAG = 'pages'
-    PAGE_SIZE_TAG = 'page_size'
-    NEXT_PAGE_TAG = 'next_page'
-    NEXT_PAGE_CLICK_TAG = 'next_page_click'
-    NEXT_PAGE_URL_TAG = 'next_page_url'
-
-    ITEMS_TAG = 'items'
-    EXTRACT_SOURCES_TAG = 'extract_sources'
-    FRESHNESS_THRESHOLD_TAG = 'freshness_threshold'
-
-    FRESHNESS_THRESHOLD_DEFAULT = 30  # days
+    FILE_NAME = MultiExtractorConfiguration.FILE_NAME
 
     @debug
     async def _perform_extraction(self, url=None):
@@ -698,45 +609,48 @@ class MultiExtractor(BaseExtractor):
         await self._perform_page_fetch(url)
         await self._perform_page_extraction(page=1)
 
-        if self.pages > 1:
-            via_url = bool(self.next_page_url_configuration)
+        if self.configuration.pagination.pages > 1:
             more_pages = True
             page = 2
 
             while more_pages:
-                more_pages = await self._perform_next_page_extraction(page, via_url)
+                more_pages = await self._perform_next_page_extraction(page)
                 page += 1
 
     @debug
-    async def _perform_next_page_extraction(self, page, via_url):
+    async def _perform_next_page_extraction(self, page):
         """
         Perform next page extraction
 
-        Load and extract next page via next page operation. Loading the
-        page involves either clicking a link (i.e. "next") or extracting
-        a URL that is subsequently fetched. As with other "perform"
-        methods, content is extracted, but not returned.
+        Load and extract next page via next page configuration. Loading
+        the page involves either clicking a link (e.g. "next") or
+        extracting a URL that is subsequently fetched. As with other
+        "perform" methods, content is extracted, but not returned.
 
         I/O:
         page:     Page number of results to be extracted
-        via_url:  True if a page must be fetched via an extracted URL
         return:   True if another page should be extracted, else False
         """
+        pagination_configuration = self.configuration.pagination
         try:
             next_page_result = await self._extract_field(
-                self.NEXT_PAGE_TAG, self.web_driver, self.next_page_configuration, page - 1)
+                field=pagination_configuration.next_page_tag,
+                element=self.web_driver,
+                configuration=pagination_configuration.next_page,
+                index=page - 1)
+
         except NoSuchElementException:
             return False  # Last page always fails to find next element
 
-        delay = human_dwell_time(**self.delay_configuration)
+        delay = self.configuration.delay.random_delay()
         await asyncio.sleep(delay)
 
-        # TODO: Simplify logic by allowing an operation to fetch a page
-        if via_url:
+        # TODO: Simplify logic by allowing an operation to fetch a page?
+        if pagination_configuration.via_url:
             await self._perform_page_fetch(url=next_page_result)
 
         await self._perform_page_extraction(page=page)
-        return page < self.pages
+        return page < pagination_configuration.pages
 
     @debug
     async def _perform_page_extraction(self, page=1):
@@ -755,47 +669,45 @@ class MultiExtractor(BaseExtractor):
         I/O:
         page=1:  Page number of content search results to be extracted
         """
-        content_config = self.content_configuration
-        items_config = self.items_configuration
         unique_field = self.model.UNIQUE_FIELD
 
-        elements = await self._extract_field(self.ELEMENTS_TAG, self.web_driver, items_config)
+        elements = await self._extract_field(field=self.configuration.CONTENT_ITEMS_TAG,
+                                             element=self.web_driver,
+                                             configuration=self.configuration.content_items)
 
-        if elements is not None:
-            for index, element in enumerate(elements, start=1):
-                rank = (page - 1) * self.page_size + index
-                try:
-                    content = await self._extract_content(element, content_config, index)
-
-                    unique_key = getattr(content, unique_field)
-                    if not unique_key:
-                        raise ValueError(f"Content missing value for '{unique_field}'")
-
-                except Exception as e:
-                    PP.pprint(dict(
-                        msg='Extract content failure', type='extract_content_failure',
-                        error=e, page=page, index=index, rank=rank,
-                        extractor=repr(self), configuration=content_config))
-
-                if unique_key in self.extracted_content:
-                    PP.pprint(dict(
-                        msg='Unique key collision', type='unique_key_collision',
-                        field=unique_field, unique_key=unique_key,
-                        old_content=self.extracted_content[unique_key], new_content=content,
-                        page=page, index=index, rank=rank,
-                        extractor=repr(self), configuration=content_config))
-
-                # TODO: store all results for a page at once instead of incrementally
-                if self.use_cache:
-                    await self.cache.store_search_result(content, rank)
-                self.extracted_content[unique_key] = content
-
-        else:
+        if elements is None:
             PP.pprint(dict(
-                msg='Extract item results failure', type='extract_item_results_failure',
-                extractor=repr(self), configuration=items_config))
+                msg='Extract content items failure', type='extract_content_items_failure',
+                extractor=repr(self), configuration=self.configuration.content_items))
+            return
 
-        if self.configuration.get(self.EXTRACT_SOURCES_TAG, True):
+        for index, element in enumerate(elements, start=1):
+            rank = (page - 1) * self.configuration.pagination.page_size + index
+            try:
+                content = await self._extract_content(element, index)
+
+                unique_key = getattr(content, unique_field)
+                if not unique_key:
+                    raise ValueError(f"Content missing value for '{unique_field}'")
+
+            except Exception as e:
+                PP.pprint(dict(
+                    msg='Extract content failure', type='extract_content_failure',
+                    error=e, page=page, index=index, rank=rank, extractor=repr(self)))
+
+            if unique_key in self.extracted_content:
+                PP.pprint(dict(
+                    msg='Unique key collision', type='unique_key_collision',
+                    field=unique_field, unique_key=unique_key,
+                    old_content=self.extracted_content[unique_key], new_content=content,
+                    page=page, index=index, rank=rank, extractor=repr(self)))
+
+            # TODO: store all results for a page at once instead of incrementally
+            if self.use_cache:
+                await self.cache.store_search_result(content, rank)
+            self.extracted_content[unique_key] = content
+
+        if self.configuration.extract_sources:
             if unique_field != self.SOURCE_URL_TAG:
                 raise ValueError('Unique field must be '
                                  f"'{self.SOURCE_URL_TAG}' to extract sources")
@@ -822,7 +734,7 @@ class MultiExtractor(BaseExtractor):
             urls_by_domain=urls_by_domain,
             search_domain=search_domain,
             search_web_driver=self.web_driver,
-            delay_configuration=self.delay_configuration,
+            delay_configuration=self.configuration.delay,
             use_cache=self.use_cache,
             loop=self.loop)
 
@@ -866,10 +778,10 @@ class MultiExtractor(BaseExtractor):
         if self.use_cache and status and status.indicates_results() and last_extracted:
             now = datetime.datetime.utcnow()
             freshness = now - last_extracted
-            configuration_cache = self.configuration_file_cache
+            configuration_cache = self.configuration.file_cache
             configuration_timestamp = configuration_cache.get_file_timestamp(self.file_path)
             configuration_last_modified = GranularDateTime.utcfromtimestamp(configuration_timestamp)
-            return (freshness < self.freshness_threshold and
+            return (freshness < self.configuration.freshness_threshold and
                     last_extracted > configuration_last_modified)
 
         return False
@@ -912,11 +824,6 @@ class MultiExtractor(BaseExtractor):
             return ExtractionStatus.PRELIMINARY
 
         return ExtractionStatus(maximum)
-
-    @property
-    def cohort_status_values(self):
-        """Cohort status values are emitted by the returned generator"""
-        return (extractor.status.value for extractor in self.cohort.values())
 
     @classmethod
     @debug
@@ -979,7 +886,7 @@ class MultiExtractor(BaseExtractor):
                                 use_cache=use_cache,
                                 loop=loop)
 
-                if extractor.is_enabled:
+                if extractor.configuration.is_enabled:
                     extractors[directory] = extractor
             # FileNotFoundError, ruamel.yaml.scanner.ScannerError, ValueError
             except Exception as e:
@@ -988,6 +895,15 @@ class MultiExtractor(BaseExtractor):
         for extractor in extractors.values():
             extractor._set_cohort(extractors)
             yield extractor
+
+    def _set_cohort(self, extractors):
+        """Set cohort to dictionary of extractors keyed by directory"""
+        self.cohort = extractors
+
+    @property
+    def cohort_status_values(self):
+        """Cohort status values are emitted by the returned generator"""
+        return (extractor.status.value for extractor in self.cohort.values())
 
     @classmethod
     def _debase_directory(cls, base, path):
@@ -998,15 +914,6 @@ class MultiExtractor(BaseExtractor):
         directory = path.replace(base, '', 1)
         return directory
 
-    def _set_cohort(self, extractors):
-        """Set cohort to dictionary of extractors keyed by directory"""
-        self.cohort = extractors
-
-    def _derive_freshness_threshold(self, configuration):
-        freshness_threshold = configuration.get(self.FRESHNESS_THRESHOLD_TAG,
-                                                self.FRESHNESS_THRESHOLD_DEFAULT)
-        return datetime.timedelta(days=freshness_threshold)
-
     @staticmethod
     def _prepare_search_data(search_data):
         """Prepare search terms by ensuring they are an ordered dict"""
@@ -1015,136 +922,6 @@ class MultiExtractor(BaseExtractor):
         if search_data is None:
             return OrderedDict()
         return OrderedDict(search_data)
-
-    @debug
-    def _form_page_url(self, configuration, search_data):
-        """Form page URL given extractor configuration & search terms"""
-        url_config = self.configuration[self.URL_TAG]
-        # Support shorthand form for hard-coded urls
-        if isinstance(url_config, str):
-            return url_config
-
-        encoded_search_data = OrderedDict(self._encode_search_data(k, v)
-                                          for k, v in search_data.items())
-        url_template = url_config[self.URL_TEMPLATE_TAG]
-
-        return self._form_url_clause(url_template, url_config, encoded_search_data)
-
-    def _encode_search_data(self, key, value):
-        """Return key & URL-encoded value, a list of strings or None"""
-        if value is None:
-            return key, None
-        if isinstance(value, str):
-            return key, [urllib.parse.quote(value)]
-        if is_nonstring_sequence(value):
-            return key, [urllib.parse.quote(v) for v in value]
-        raise TypeError(f"Expected string or list/tuple for '{key}'; "
-                        f"received '{type(value)}': {value}")
-
-    def _form_url_clause(self, template, url_config, search_data, topic=None, term=None, index=1):
-        """
-        Form URL clause
-
-        Form URL clause by recursing depth-first to replace template
-        tokens via URL configuration, search data & clause index.
-
-        I/O:
-        template:     string with 1+ tokens specified via {}
-        url_config:   value of 'url' key in configuration
-        search_data:  encoded search data, an ordered dict
-        topic=None:   search data key to specify any terms
-        term=None:    search data term
-        index=1:      index specified by a URL clause series
-        return:       rendered URL template
-        raise:        NoneValueError if token value is None term
-                      ValueError if unknown token
-                      TypeError if unexpected type in configuration
-        """
-        rendered = template
-        tokens = self._find_tokens(template)
-        for token in tokens:
-            if token == self.INDEX_TAG:
-                value = str(index)
-
-            elif token in search_data or token == self.TERM_TAG:
-                terms = self._get_relevant_search_terms(token, topic, search_data)
-                term_index = index - 1 if term else 0
-                value = terms[term_index]
-
-            elif token in url_config:
-                token_config = url_config[token]
-
-                if isinstance(token_config, str):
-                    value = self._form_url_clause(
-                        token_config, url_config, search_data, topic, term, index)
-
-                elif isinstance(token_config, dict):
-                    value = self._form_url_clause_series(
-                        token_config, url_config, search_data, topic)
-
-                else:
-                    raise TypeError(f"Expected str or dict for '{token}'; "
-                                    f"received '{type(token_config)}': {token_config}")
-            else:
-                raise ValueError(f'Unknown token: {token}')
-
-            rendered = rendered.replace(self.TOKEN_TEMPLATE.format(token), value)
-
-        return rendered
-
-    def _form_url_clause_series(self, series_config, url_config, search_data, topic=None):
-        """Form URL clause series based on series configuration"""
-        series = self.URLClauseSeries[series_config[self.SERIES_TAG]]
-        templates = enlist(series_config[self.TEMPLATES_TAG])
-        delimiter = series_config[self.DELIMITER_TAG]
-        iterable = search_data if series is self.URLClauseSeries.TOPIC else templates
-
-        if series is self.URLClauseSeries.TERM:
-            token = one(token for token in self._find_tokens(templates[0])
-                        if token in search_data or token == self.TERM_TAG)
-            iterable = self._get_relevant_search_terms(token, topic, search_data)
-
-        clauses = []
-        index = 1
-        for i, value in enumerate(iterable):
-            template = templates[i] if i < len(templates) else templates[-1]
-            topic = value if series is self.URLClauseSeries.TOPIC else topic
-            term = value if series is self.URLClauseSeries.TERM else None
-            try:
-                clause = self._form_url_clause(
-                    template, url_config, search_data, topic, term, index)
-            except NoneValueError:
-                continue  # skip clauses with null search topics
-            else:
-                clauses.append(clause)
-                index += 1
-
-        return delimiter.join(clauses)
-
-    def _find_tokens(self, template):
-        """Find & yield tokens in template as defined by {}"""
-        length = len(template)
-        start = end = -1
-        while end < length:
-            start = template.find('{', start + 1)
-            if start == -1:
-                break
-            end = template.find('}', start + 1)
-            if end == -1:
-                break
-            # tokens may not contain tokens, so find innermost
-            new_start = template.rfind('{', start + 1, end)
-            if new_start > start:
-                start = new_start
-            yield template[start + 1:end]
-
-    def _get_relevant_search_terms(self, token, topic, search_data):
-        """Get relevant search terms based on token and topic"""
-        topic = token if token in search_data else topic
-        terms = search_data[topic]
-        if terms is None:
-            raise NoneValueError
-        return terms
 
     def __init__(self, model, directory, search_data=None, web_driver=None, web_driver_brand=None,
                  reuse_web_driver=None, use_cache=True, loop=None):
@@ -1158,30 +935,13 @@ class MultiExtractor(BaseExtractor):
                          loop=loop)
 
         self.search_data = self._prepare_search_data(search_data)
+        self.page_url = self.configuration.url.construct(self.search_data)
         self.cache = MultiExtractorCache(directory=self.directory,
                                          search_data=self.search_data,
                                          model=self.model,
                                          loop=self.loop) if self.use_cache else None
-        self.freshness_threshold = self._derive_freshness_threshold(self.configuration)
-        self.page_url = self._form_page_url(self.configuration, self.search_data)
 
-        pagination_config = self.configuration.get(self.PAGINATION_TAG)
-
-        if pagination_config:
-            self.pages = pagination_config.get(self.PAGES_TAG, float('Inf'))
-            self.page_size = pagination_config[self.PAGE_SIZE_TAG]
-            self.next_page_click_configuration = pagination_config.get(self.NEXT_PAGE_CLICK_TAG)
-            self.next_page_url_configuration = pagination_config.get(self.NEXT_PAGE_URL_TAG)
-            self.next_page_configuration = xor_constrain(
-                self.next_page_click_configuration, self.next_page_url_configuration)
-        else:
-            self.pages = 1
-            self.page_size = self.next_page_configuration = None
-            self.next_page_click_configuration = self.next_page_url_configuration = None
-
-        self.items_configuration = self.configuration[self.ITEMS_TAG]
         self.extracted_content = OrderedDict()
-
         self.cohort = None  # Only set after instantiation
         self.status = ExtractionStatus.INITIALIZED
 
