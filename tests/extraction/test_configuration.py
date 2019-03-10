@@ -24,11 +24,12 @@ from contextualize.utils.tools import is_child_class
 ])
 def test_extractor_configuration(idx, file_path, check):
     """Test Extractor Configuration"""
+    mock_extractor = Mock()
+    mock_extractor.page_url = 'page_url'
     if is_child_class(check, Exception):
         with pytest.raises(check):
-            ExtractorConfiguration.from_file(file_path=file_path, source='source', extractor=Mock())
+            ExtractorConfiguration.from_file(file_path, extractor=mock_extractor)
 
     else:
-        extractor_configuration = ExtractorConfiguration.from_file(
-            file_path=file_path, source='source', extractor=Mock())
-        assert isinstance(extractor_configuration, check)
+        configuration = ExtractorConfiguration.from_file(file_path, extractor=mock_extractor)
+        assert isinstance(configuration, check)
