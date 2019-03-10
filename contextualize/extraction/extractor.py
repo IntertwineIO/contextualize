@@ -140,25 +140,26 @@ class BaseExtractor:
         index=1:        Index of given element within a series
         return:         Instance of content model (e.g. ResearchArticle)
         """
-        configuration = self.configuration.content
+        content_configuration = self.configuration.content
         self.content_map = content_map = OrderedDict(kwds)
         # Allow field to be otherwise set without overwriting
         fields_to_extract = (field for field in self.model.fields() if field not in content_map)
 
         for field in fields_to_extract:
             try:
-                field_config = configuration[field]
+                field_configuration = content_configuration[field]
 
             except KeyError as e:
-                field_config = None
+                field_configuration = None
                 PP.pprint(dict(
-                    msg='Extract field configuration missing', type='extract_field_config_missing',
+                    msg='Extract field configuration missing',
+                    type='extract_field_configuration_missing',
                     error=e, field=field, content_map=content_map, extractor=repr(self)))
 
             try:
                 content_map[field] = await self._extract_field(field=field,
                                                                element=element,
-                                                               configuration=field_config,
+                                                               configuration=field_configuration,
                                                                index=index)
 
             except Exception as e:  # e.g. NoSuchElementException
