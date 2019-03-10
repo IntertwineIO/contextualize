@@ -135,24 +135,13 @@ class MultiExtractorConfiguration(ExtractorConfiguration):
         return datetime.timedelta(days=freshness_threshold)
 
 
-class DelayConfiguration(BaseConfiguration):
+class DelayConfiguration(HumanDwellTime, BaseConfiguration):
 
     DELAY_TAG = 'delay'
 
-    DELAY_DEFAULTS = HumanDwellTime(
-        mu=0, sigma=0.5, base=1, multiplier=1, minimum=1, maximum=3)
-
-    def __init__(self, mu=None, sigma=None, base=None, multiplier=None, minimum=None, maximum=None):
-        self.mu = mu
-        self.sigma = sigma
-        self.base = base
-        self.multiplier = multiplier
-        self.minimum = minimum
-        self.maximum = maximum
-
     @classmethod
     def from_dict(cls, configuration=None):
-        delay_kwargs = cls.DELAY_DEFAULTS._asdict()
+        delay_kwargs = cls.ARGUMENT_DEFAULTS._asdict()
         if configuration:
             delay_kwargs.update(configuration)
             cls.cleanse_kwargs(delay_kwargs)
@@ -161,8 +150,8 @@ class DelayConfiguration(BaseConfiguration):
 
     @classmethod
     def cleanse_kwargs(cls, kwargs):
-        if len(kwargs) > len(cls.DELAY_DEFAULTS):
-            unsupported = kwargs.keys() - cls.DELAY_DEFAULTS._asdict().keys()
+        if len(kwargs) > len(cls.ARGUMENT_DEFAULTS):
+            unsupported = kwargs.keys() - cls.ARGUMENT_DEFAULTS._asdict().keys()
             for key in unsupported:
                 del kwargs[key]
             PP.pprint(dict(

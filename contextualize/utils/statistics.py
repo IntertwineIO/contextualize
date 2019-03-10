@@ -4,6 +4,8 @@ import math
 import random
 from collections import namedtuple
 
+from contextualize.utils.structures import DotNotatableOrderedDict
+
 
 # https://searchenginewatch.com/sew/study/2276184/no-1-position-in-google-gets-33-of-search-traffic-study
 FIRST_SELECTION_PROBABILITY = 0.325
@@ -110,6 +112,33 @@ def human_dwell_time(mu=0, sigma=1, base=0, multiplier=1,
     return base + lognormal_value * multiplier
 
 
-HumanDwellTime = namedtuple('HumanDwellTime',
-                            'mu sigma base multiplier minimum maximum')
+class HumanDwellTime:
 
+    Arguments = namedtuple('HumanDwellTimeArguments', 'mu sigma base multiplier minimum maximum')
+
+    ARGUMENT_DEFAULTS = Arguments(mu=0, sigma=0.5, base=1, multiplier=1, minimum=1, maximum=3)
+
+    def __init__(self,
+                 mu=ARGUMENT_DEFAULTS.mu,
+                 sigma=ARGUMENT_DEFAULTS.sigma,
+                 base=ARGUMENT_DEFAULTS.base,
+                 multiplier=ARGUMENT_DEFAULTS.multiplier,
+                 minimum=ARGUMENT_DEFAULTS.minimum,
+                 maximum=ARGUMENT_DEFAULTS.maximum):
+        self.mu = mu
+        self.sigma = sigma
+        self.base = base
+        self.multiplier = multiplier
+        self.minimum = minimum
+        self.maximum = maximum
+
+    def as_arguments(self):
+        return self.Arguments(**self.__dict__)
+
+    def random_delay(self):
+        return human_dwell_time(**self.__dict__)
+
+    def __repr__(self):
+        arguments = (f'{k}={v}' for k, v in self.__dict__.items())
+        argument_string = ', '.join(arguments)
+        return f'{self.__class__.__name__}({argument_string})'
