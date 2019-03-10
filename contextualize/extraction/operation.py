@@ -481,10 +481,16 @@ class ExtractionOperation:
         self.field = field or self.UNDEFINED_TAG
         self.source = source or self.UNDEFINED_TAG
         self.extractor = extractor
-        self.web_driver = self.extractor.web_driver
-        self.loop = self.extractor.loop
 
         self.context = f'{self.extractor}'
+
+    @property
+    def web_driver(self):
+        return self.extractor.web_driver
+
+    @property
+    def loop(self):
+        return self.extractor.loop
 
     def __repr__(self):
         class_name = self.__class__.__name__
