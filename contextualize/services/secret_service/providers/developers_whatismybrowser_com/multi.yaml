@@ -1,6 +1,6 @@
 %YAML 1.2
 ---
-page_type: SEARCH
+page_type: MULTI
 is_enabled: True
 extract_sources: False
 wait: 10
