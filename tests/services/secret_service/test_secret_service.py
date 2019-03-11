@@ -15,7 +15,7 @@ TEST_USER_AGENT_URL = urljoin(TEST_WEB_SERVER_BASE_URL, TEST_USER_AGENT_RELATIVE
 def test_secret_service_core_operations(seed):
     file_path = 'tests/services/secret_service/chrome_agents.csv'
     service = SecretService(browser='chrome', file_path=file_path)
-    agent_data = service._data[service.browser]
+    agent_data = service.data[service.browser]
     assert len(agent_data) == 10
 
     user_agent = service.random
@@ -74,3 +74,7 @@ def test_user_agent_extraction(web_server):
         mock_get_dict.side_effect = mock_get_dict_side_effect
         mock_random_delay.return_value = 0
         service.extract_data()
+
+    extracted = service.data[service.browser]
+    agent_data = service.get_saved_data(service.file_path)
+    assert extracted == agent_data
