@@ -23,7 +23,7 @@ from contextualize.extraction.configuration import (
 from contextualize.extraction.definitions import ExtractionStatus
 from contextualize.extraction.operation import ExtractionOperation
 from contextualize.services.secret_service.agency import SecretService
-from contextualize.utils.async import run_in_executor
+from contextualize.utils.asynchronous import run_in_executor
 from contextualize.utils.cache import FileCache
 from contextualize.utils.debug import debug
 from contextualize.utils.enum import FlexEnum
