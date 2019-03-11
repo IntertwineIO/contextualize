@@ -17,8 +17,6 @@ class FlexEnum(Enum):
     @classmethod
     def cast(cls, identifier):
         """Cast member name (case-insensitive) or value to enum"""
-        if identifier in cls:
-            return identifier
         if isinstance(identifier, int):
             return cls(identifier)
         try:
