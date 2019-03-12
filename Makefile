@@ -34,3 +34,7 @@ requirements.txt: requirements.in
 pip_sync: requirements.txt
 	source $(VENV)/bin/activate; \
 	pip-sync requirements.txt
+
+test:
+	source $(VENV)/bin/activate && \
+	python -m pytest
