@@ -11,7 +11,7 @@ from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait
 
 from contextualize.exceptions import TooManyValuesError
-from contextualize.utils.async import run_in_executor
+from contextualize.utils.asynchronous import run_in_executor
 from contextualize.utils.debug import debug
 from contextualize.utils.enum import FlexEnum
 from contextualize.utils.iterable import one, one_max, one_min
@@ -411,12 +411,12 @@ class ExtractionOperation:
         return method_type, method_args
 
     @classmethod
-    def from_configuration(cls, configuration, field=None, source=None, extractor=None):
+    def from_dict(cls, configuration, field=None, source=None, extractor=None):
         """
-        From configuration
+        From dict
 
-        Construct operation from the given configuration, within the
-        context of a field, source, and extractor.
+        Construct operation from the given configuration dictionary,
+        within the context of a field, source, and extractor.
 
         I/O:
         configuration:   dictionary representation of an operation
@@ -481,10 +481,16 @@ class ExtractionOperation:
         self.field = field or self.UNDEFINED_TAG
         self.source = source or self.UNDEFINED_TAG
         self.extractor = extractor
-        self.web_driver = self.extractor.web_driver
-        self.loop = self.extractor.loop
 
         self.context = f'{self.extractor}'
+
+    @property
+    def web_driver(self):
+        return self.extractor.web_driver
+
+    @property
+    def loop(self):
+        return self.extractor.loop
 
     def __repr__(self):
         class_name = self.__class__.__name__

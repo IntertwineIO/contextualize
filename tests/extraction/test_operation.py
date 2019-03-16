@@ -91,7 +91,7 @@ async def test_get_values(idx, method, arguments, values):
      (5, 'beta.carotene',            AttributeError),
      ])
 def test_get_by_reference(idx, reference, check):
-    """Test _get_by_reference and _get_by_reference_tag)"""
+    """Test _get_by_reference and _get_by_reference_tag"""
     builder = ExtractionOperationBuilder()
     operation = builder.build()
 
@@ -151,9 +151,8 @@ def test_render_references(idx, template, check):
      ])
 def test_select_targets(idx, latest, prior, parent, driver, scope, check):
     """Test ExtractionOperation._select_targets"""
-    builder = ExtractionOperationBuilder()
+    builder = ExtractionOperationBuilder(web_driver=driver)
     operation = builder.build()
-    operation.web_driver = driver
     operation.scope = scope
 
     targets = operation._select_targets(latest, prior, parent)

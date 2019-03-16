@@ -50,7 +50,8 @@ class ExtractionOperationBuilder:
                  parse_method=None, parse_args=None,
                  format_method=None, format_args=None,
                  transform_method=None, transform_args=None,
-                 field=None, source=None, extractor=None):
+                 field=None, source=None, extractor=None,
+                 web_driver=None, loop=None):
 
         self.scope = scope
         self.is_multiple = is_multiple
@@ -73,11 +74,14 @@ class ExtractionOperationBuilder:
 
         self.field = field or 'test_field'
         self.source = source or 'test_source'
-        self.extractor = extractor or self._build_mock_extractor()
+        self.extractor = extractor or self.mock_extractor(web_driver, loop)
 
-    def _build_mock_extractor(self):
+    @classmethod
+    def mock_extractor(cls, web_driver, loop):
         mock_extractor = MagicMock()
         mock_extractor.content_map = CONTENT_MAP
+        mock_extractor.web_driver = web_driver
+        mock_extractor.loop = loop
         return mock_extractor
 
     def build(self):

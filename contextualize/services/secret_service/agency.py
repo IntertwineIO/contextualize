@@ -59,7 +59,7 @@ class SecretService:
     FILE_TYPE = 'csv'
     CSV_FORMAT = dict(delimiter='|', quotechar='"')
 
-    _data = {}
+    data = {}
 
     @property
     def random(self):
@@ -69,7 +69,7 @@ class SecretService:
     @property
     def random_agent(self):
         """Random secret agent instance for the current browser"""
-        user_agents = self._data.get(self.browser)
+        user_agents = self.data.get(self.browser)
 
         try:
             return SecretAgent(*random.choice(user_agents))
@@ -91,11 +91,13 @@ class SecretService:
 
         loop = asyncio.get_event_loop()
         search_terms = OrderedDict(browser=self.browser.name.lower())
-        extractors = MultiExtractor.provision_extractors(SecretAgent, search_terms, loop=loop)
+        extractors = MultiExtractor.provision_extractors(
+            SecretAgent, search_terms, use_cache=False, loop=loop)
+
         futures = {extractor.extract() for extractor in extractors}
         done, pending = loop.run_until_complete(asyncio.wait(futures))
         agent_dicts = chain(*(task.result().values() for task in done))
-        self._data[self.browser] = [list(d.values()) for d in agent_dicts]
+        self.data[self.browser] = [list(d.values()) for d in agent_dicts]
 
         cache = AsyncCache()
         cache.terminate(loop)
@@ -104,7 +106,7 @@ class SecretService:
     def save_data(self, file_path=None):
         """Save data to the given file path and clear the cache"""
         file_path = file_path or self.file_path
-        data = self._data.get(self.browser)
+        data = self.data.get(self.browser)
         if not data:
             raise ValueError('No data to save')
         with open(file_path, 'w', newline='') as csv_file:
@@ -117,7 +119,7 @@ class SecretService:
         """Load data from the given file and store it on the service"""
         file_path = file_path or self.file_path
         try:
-            self._data[self.browser] = self.get_saved_data(self.file_path)
+            self.data[self.browser] = self.get_saved_data(self.file_path)
         except FileNotFoundError as e:
             PP.pprint(dict(
                 msg='User agent data file missing; use acquire_data()',
@@ -144,5 +146,5 @@ class SecretService:
     def __init__(self, browser=None, file_path=None):
         self.browser = Browser.cast(browser) if browser else self.DEFAULT_BROWSER
         self.file_path = file_path or self._form_file_path(self.browser)
-        if self.browser not in self._data:
+        if self.browser not in self.data:
             self.load_data()

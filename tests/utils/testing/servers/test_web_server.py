@@ -8,7 +8,7 @@ import pytest
 
 from settings import TEST_WEB_SERVER_BASE_URL
 
-TEST_RELATIVE_URL = '/utils/testing/servers/hello_world.html'
+TEST_RELATIVE_URL = 'hello_world.html'
 TEST_URL = urljoin(TEST_WEB_SERVER_BASE_URL, TEST_RELATIVE_URL)
 
 Response = namedtuple('Response', 'text status')

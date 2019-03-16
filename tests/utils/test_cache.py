@@ -11,7 +11,8 @@ from unittest.mock import Mock, patch
 
 from contextualize.utils.cache import CacheKey, FileCache, LyricalCache
 from contextualize.utils.signature import CallSign
-from contextualize.utils.tools import is_instance_method, read_file, write_file, reset_files
+from contextualize.utils.testing.tools import read_file, write_file, reset_files
+from contextualize.utils.tools import is_instance_method
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 A_FILE = 'a_file.txt'

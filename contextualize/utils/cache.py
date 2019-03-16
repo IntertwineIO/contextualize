@@ -14,7 +14,7 @@ import settings
 from contextualize.utils.debug import debug
 from contextualize.utils.signature import CallSign
 from contextualize.utils.singleton import Singleton
-from contextualize.utils.tools import is_instance_method, is_nonstring_sequence
+from contextualize.utils.tools import is_instance_method, is_nonstring_sequence, is_selfish_name
 
 ENCODING_DEFAULT = 'utf-8'
 
@@ -401,14 +401,14 @@ class FileCache:
         self.signature = inspect.signature(func)
         parameters = self.signature.parameters
 
-        if not path_parameter:
-            self.path_parameter_index = 0
-            self.path_parameter = next(iter(parameters.keys()))
-            return
-
         for index, key in enumerate(parameters.keys()):
-            if key == path_parameter:
+            if path_parameter:
+                if key == path_parameter:
+                    self.path_parameter_index = index
+                    break
+            elif not is_selfish_name(key):
                 self.path_parameter_index = index
+                self.path_parameter = key
                 break
         else:
             raise ValueError(f'path parameter not found in decorated signature: {self.signature}')
