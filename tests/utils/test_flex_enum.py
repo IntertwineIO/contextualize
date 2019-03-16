@@ -45,15 +45,15 @@ class Roshambo(FlexEnum):
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    'enum_class, value,   check',
-    [(Fruit,    'APPLE',  Fruit.APPLE),
-     (Fruit,    'banana', Fruit.BANANA),
-     (Fruit,     3,       Fruit.CANTALOUPE),
-     (Roshambo, 'ROCK',   Roshambo.PAPER),  # value trumps name
-     (Roshambo, 'STONE',  ValueError),
-     (Roshambo,  1,       ValueError),
+    'idx, enum_class,    value,   check',
+    [(0,  Fruit,        'APPLE',  Fruit.APPLE),
+     (1,  Fruit,        'banana', Fruit.BANANA),
+     (2,  Fruit,         3,       Fruit.CANTALOUPE),
+     (3,  Roshambo,     'ROCK',   Roshambo.PAPER),  # value trumps name
+     (4,  Roshambo,     'STONE',  ValueError),
+     (5,  Roshambo,      1,       ValueError),
      ])
-def test_flex_enum_cast(enum_class, value, check):
+def test_flex_enum_cast(idx, enum_class, value, check):
     """Test FlexEnum cast"""
     if is_child_class(check, Exception):
         with pytest.raises(check):
@@ -64,21 +64,21 @@ def test_flex_enum_cast(enum_class, value, check):
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    'enum_class, name,         value,       check',
-    [(Fruit,    'APPLE',       1,           Fruit.APPLE),
-     (Fruit,    'BANANA',      2,           Fruit.BANANA),
-     (Fruit,    'CANTALOUPE',  3,           Fruit.CANTALOUPE),
-     (Fruit,    'DRAGONFRUIT', 1,           KeyError),
-     (Fruit,    'DRAGONFRUIT', 4,           KeyError),
-     (Fruit,    'APPLE',       0,           ValueError),
-     (Roshambo, 'ROCK',       'SCISSORS',   Roshambo.ROCK),
-     (Roshambo, 'PAPER',      'ROCK',       Roshambo.PAPER),
-     (Roshambo, 'SCISSORS',   'PAPER',      Roshambo.SCISSORS),
-     (Roshambo, 'STONE',      'SCISSORS',   KeyError),
-     (Roshambo, 'STONE',      'SCISSORZ',   KeyError),
-     (Roshambo, 'ROCK',       'SCISSORZ',   ValueError),
+    'idx, enum_class,    name,         value,       check',
+    [(0,  Fruit,        'APPLE',       1,           Fruit.APPLE),
+     (1,  Fruit,        'BANANA',      2,           Fruit.BANANA),
+     (2,  Fruit,        'CANTALOUPE',  3,           Fruit.CANTALOUPE),
+     (3,  Fruit,        'DRAGONFRUIT', 1,           KeyError),
+     (4,  Fruit,        'DRAGONFRUIT', 4,           KeyError),
+     (5,  Fruit,        'APPLE',       0,           ValueError),
+     (6,  Roshambo,     'ROCK',       'SCISSORS',   Roshambo.ROCK),
+     (7,  Roshambo,     'PAPER',      'ROCK',       Roshambo.PAPER),
+     (8,  Roshambo,     'SCISSORS',   'PAPER',      Roshambo.SCISSORS),
+     (9,  Roshambo,     'STONE',      'SCISSORS',   KeyError),
+     (10, Roshambo,     'STONE',      'SCISSORZ',   KeyError),
+     (11, Roshambo,     'ROCK',       'SCISSORZ',   ValueError),
      ])
-def test_flex_enum_member(enum_class, name, value, check):
+def test_flex_enum_member(idx, enum_class, name, value, check):
     """Confirm FlexEnum member creates enums or raises as expected"""
     if is_child_class(check, Exception):
         with pytest.raises(check):
@@ -159,30 +159,35 @@ def square(x): return x ** 2
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    'enum_class, swap, labels, transform, inverse, enumables, enum_items',
-    [(Fruit, False, False, None, False, [], [('APPLE', 1), ('BANANA', 2), ('CANTALOUPE', 3)]),
-     (Fruit, False, False, str.lower, False, [], [('apple', 1), ('banana', 2), ('cantaloupe', 3)]),
-     (Fruit, False, False, str.lower, True, [], [(1, 'apple'), (2, 'banana'), (3, 'cantaloupe')]),
-     (Fruit, True, False, minus_1, False, [], [(0, 'APPLE'), (1, 'BANANA'), (2, 'CANTALOUPE')]),
-     (Fruit, True, False, minus_1, True, [], [('APPLE', 0), ('BANANA', 1), ('CANTALOUPE', 2)]),
-     (Fruit, False, True, str.lower, False, [],
-         [('apple', 'APPLE'), ('banana', 'BANANA'), ('cantaloupe', 'CANTALOUPE')]),
-     (Fruit, False, True, str.lower, True, [],
-         [('APPLE', 'apple'), ('BANANA', 'banana'), ('CANTALOUPE', 'cantaloupe')]),
-     (Fruit, False, False, str.capitalize, False, [Fruit.CANTALOUPE, 'BANANA', 1],
-         [('Cantaloupe', 3), ('Banana', 2), ('Apple', 1)]),
-     (Fruit, False, True, str.capitalize, False, [Fruit.CANTALOUPE, 'BANANA', 1],
-         [('Cantaloupe', 'CANTALOUPE'), ('Banana', 'BANANA'), ('Apple', 'APPLE')]),
-     (Fruit, False, True, str.capitalize, True, [Fruit.CANTALOUPE, 'BANANA', 1],
-         [('CANTALOUPE', 'Cantaloupe'), ('BANANA', 'Banana'), ('APPLE', 'Apple')]),
-     (Fruit, True, False, square, False, [Fruit.CANTALOUPE, 'BANANA', 1],
-         [(9, 'CANTALOUPE'), (4, 'BANANA'), (1, 'APPLE')]),
-     (Fruit, True, True, square, True, [Fruit.CANTALOUPE, 'BANANA', 1],
-         [('CANTALOUPE', 9), ('BANANA', 4), ('APPLE', 1)]),
-     (Roshambo, True, False, str.capitalize, True, [Roshambo.SCISSORS, 'ROCK'],
-         [('SCISSORS', 'Paper'), ('PAPER', 'Rock')]),
+    'idx, enum_class, swap, labels, transform, inverse, enumables, enum_items',
+    [(0, Fruit, False, False, None, False, [],
+        [('APPLE', 1), ('BANANA', 2), ('CANTALOUPE', 3)]),
+     (1, Fruit, False, False, str.lower, False, [],
+        [('apple', 1), ('banana', 2), ('cantaloupe', 3)]),
+     (2, Fruit, False, False, str.lower, True, [],
+        [(1, 'apple'), (2, 'banana'), (3, 'cantaloupe')]),
+     (3, Fruit, True, False, minus_1, False, [],
+        [(0, 'APPLE'), (1, 'BANANA'), (2, 'CANTALOUPE')]),
+     (4, Fruit, True, False, minus_1, True, [],
+        [('APPLE', 0), ('BANANA', 1), ('CANTALOUPE', 2)]),
+     (5, Fruit, False, True, str.lower, False, [],
+        [('apple', 'APPLE'), ('banana', 'BANANA'), ('cantaloupe', 'CANTALOUPE')]),
+     (6, Fruit, False, True, str.lower, True, [],
+        [('APPLE', 'apple'), ('BANANA', 'banana'), ('CANTALOUPE', 'cantaloupe')]),
+     (7, Fruit, False, False, str.capitalize, False, [Fruit.CANTALOUPE, 'BANANA', 1],
+        [('Cantaloupe', 3), ('Banana', 2), ('Apple', 1)]),
+     (8, Fruit, False, True, str.capitalize, False, [Fruit.CANTALOUPE, 'BANANA', 1],
+        [('Cantaloupe', 'CANTALOUPE'), ('Banana', 'BANANA'), ('Apple', 'APPLE')]),
+     (9, Fruit, False, True, str.capitalize, True, [Fruit.CANTALOUPE, 'BANANA', 1],
+        [('CANTALOUPE', 'Cantaloupe'), ('BANANA', 'Banana'), ('APPLE', 'Apple')]),
+     (10, Fruit, True, False, square, False, [Fruit.CANTALOUPE, 'BANANA', 1],
+        [(9, 'CANTALOUPE'), (4, 'BANANA'), (1, 'APPLE')]),
+     (11, Fruit, True, True, square, True, [Fruit.CANTALOUPE, 'BANANA', 1],
+        [('CANTALOUPE', 9), ('BANANA', 4), ('APPLE', 1)]),
+     (12, Roshambo, True, False, str.capitalize, True, [Roshambo.SCISSORS, 'ROCK'],
+        [('SCISSORS', 'Paper'), ('PAPER', 'Rock')]),
      ])
-def test_flex_enum_items(enum_class, swap, labels, transform, inverse, enumables, enum_items):
+def test_flex_enum_items(idx, enum_class, swap, labels, transform, inverse, enumables, enum_items):
     """Test FlexEnum items, map, and labels"""
     items = enum_class.items(
         *enumables, swap=swap, labels=labels, transform=transform, inverse=inverse)
@@ -260,15 +265,15 @@ class First:
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    'enum_class, qualname',
-    [(First.Fruit, 'First.Fruit'),
-     (First.Roshambo, 'First.Roshambo'),
-     (First.Second.Fruit, 'First.Second.Fruit'),
-     (First.Second.Roshambo, 'First.Second.Roshambo'),
-     (First.Second.Third.Fruit, 'First.Second.Third.Fruit'),
-     (First.Second.Third.Roshambo, 'First.Second.Third.Roshambo'),
+    'idx, enum_class, qualname',
+    [(0,  First.Fruit, 'First.Fruit'),
+     (1,  First.Roshambo, 'First.Roshambo'),
+     (2,  First.Second.Fruit, 'First.Second.Fruit'),
+     (3,  First.Second.Roshambo, 'First.Second.Roshambo'),
+     (4,  First.Second.Third.Fruit, 'First.Second.Third.Fruit'),
+     (5,  First.Second.Third.Roshambo, 'First.Second.Third.Roshambo'),
      ])
-def test_flex_enum_qualname(enum_class, qualname):
+def test_flex_enum_qualname(idx, enum_class, qualname):
     """Confirm FlexEnum qualname is properly set"""
     assert enum_class.__qualname__ == qualname
 
