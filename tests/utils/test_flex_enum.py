@@ -12,10 +12,35 @@ Fruit = FlexEnum('Fruit', 'APPLE BANANA CANTALOUPE')
 
 
 class Roshambo(FlexEnum):
-    """Enum with values that are strings and rotating"""
+    """Roshambo enum for breaking gridlock"""
     ROCK = 'SCISSORS'
     PAPER = 'ROCK'
     SCISSORS = 'PAPER'
+
+    @property
+    def beats(self):
+        return self.__class__[self.value]
+
+    @classmethod
+    def shoot(cls, hand1, hand2):
+        if hand1 is hand2:
+            return (1, 1)
+        if hand1 > hand2:
+            return (1, 0)
+        elif hand1 < hand2:
+            return (0, 1)
+
+    def __gt__(self, other):
+        return self.beats is other
+
+    def __ge__(self, other):
+        return not self < other
+
+    def __lt__(self, other):
+        return other.beats is self
+
+    def __le__(self, other):
+        return not self > other
 
 
 @pytest.mark.unit
@@ -24,7 +49,7 @@ class Roshambo(FlexEnum):
     [(Fruit,    'APPLE',  Fruit.APPLE),
      (Fruit,    'banana', Fruit.BANANA),
      (Fruit,     3,       Fruit.CANTALOUPE),
-     (Roshambo, 'ROCK',   Roshambo.ROCK),  # Name trumps value
+     (Roshambo, 'ROCK',   Roshambo.PAPER),  # value trumps name
      (Roshambo, 'STONE',  ValueError),
      (Roshambo,  1,       ValueError),
      ])
@@ -69,7 +94,7 @@ def test_flex_enum_member(enum_class, name, value, check):
      (Fruit, [], str.lower, ['apple', 'banana', 'cantaloupe']),
      (Fruit, [Fruit.CANTALOUPE], None, ['CANTALOUPE']),
      (Fruit, [Fruit.CANTALOUPE, 'BANANA', 1], str.capitalize, ['Cantaloupe', 'Banana', 'Apple']),
-     (Roshambo, [Roshambo.ROCK, 'ROCK', 'PAPER'], str.capitalize, ['Rock', 'Rock', 'Paper']),
+     (Roshambo, [Roshambo.ROCK, 'ROCK', 'PAPER'], str.capitalize, ['Rock', 'Paper', 'Scissors']),
      ])
 def test_flex_enum_names(enum_class, enumables, transform, enum_names):
     """Test FlexEnum names, list, tuple, and set"""
@@ -108,7 +133,7 @@ def test_flex_enum_names(enum_class, enumables, transform, enum_names):
      (Fruit, [], lambda x: x - 1, [0, 1, 2]),
      (Fruit, [Fruit.CANTALOUPE], None, [3]),
      (Fruit, [Fruit.CANTALOUPE, 'BANANA', 1], lambda x: x ** 2, [9, 4, 1]),
-     (Roshambo, [Roshambo.PAPER, 'PAPER'], str.capitalize, ['Rock', 'Rock']),
+     (Roshambo, [Roshambo.PAPER, 'PAPER'], str.capitalize, ['Rock', 'Paper']),
      ])
 def test_flex_enum_values(enum_class, enumables, transform, enum_values):
     """Test FlexEnum values"""
@@ -155,7 +180,7 @@ def square(x): return x ** 2
      (Fruit, True, True, square, True, [Fruit.CANTALOUPE, 'BANANA', 1],
          [('CANTALOUPE', 9), ('BANANA', 4), ('APPLE', 1)]),
      (Roshambo, True, False, str.capitalize, True, [Roshambo.SCISSORS, 'ROCK'],
-         [('SCISSORS', 'Paper'), ('ROCK', 'Scissors')]),
+         [('SCISSORS', 'Paper'), ('PAPER', 'Rock')]),
      ])
 def test_flex_enum_items(enum_class, swap, labels, transform, inverse, enumables, enum_items):
     """Test FlexEnum items, map, and labels"""

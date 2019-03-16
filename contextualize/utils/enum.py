@@ -16,13 +16,14 @@ class FlexEnum(Enum):
     """
     @classmethod
     def cast(cls, identifier):
-        """Cast member name (case-insensitive) or value to enum"""
-        if isinstance(identifier, int):
-            return cls(identifier)
+        """Cast value or case-insensitive name to enum member, else raise ValueError"""
         try:
-            return cls[identifier.upper()]
-        except (AttributeError, KeyError):
             return cls(identifier)
+        except ValueError:
+            try:
+                return cls[identifier.upper()]
+            except (AttributeError, KeyError) as e:
+                raise ValueError(f'{identifier} is not a valid {cls.__qualname__}') from e
 
     @classmethod
     def member(cls, name, value):
