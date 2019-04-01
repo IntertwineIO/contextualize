@@ -479,7 +479,7 @@ class SourceExtractor(BaseExtractor):
         elapsed_seconds = delta_since_last_fetch.total_seconds()
         remaining_delay = delay - elapsed_seconds if delay > elapsed_seconds else 0
         if remaining_delay:
-            await asyncio.sleep(delay)
+            await asyncio.sleep(remaining_delay)
 
     @classmethod
     @debug
