@@ -83,7 +83,6 @@ class ExtractionOperation:
     TransformMethod = FlexEnum('TransformMethod', 'EXCISE JOIN SPLIT')
     # SetMethod = FlexEnum('SetMethod', 'SET')
 
-    # @debug(context='self.context')
     async def execute(self, target, index=1):
         """
         Execute
@@ -139,7 +138,6 @@ class ExtractionOperation:
 
         return values
 
-    # @debug(context='self.context')
     async def _find_elements(self, element, index=1):
         """
         Find elements
@@ -189,7 +187,6 @@ class ExtractionOperation:
         if not isinstance(value, (type(self.web_driver), WebElement)):
             raise TypeError(f'Expected driver or element. Received: {value}')
 
-    # @debug(context='self.context')
     def _derive_find_method(self, element):
         """Derive find (method, by) from operation and given element"""
         element_tag = self.ELEMENTS_TAG if self.is_multiple else self.ELEMENT_TAG
@@ -199,7 +196,6 @@ class ExtractionOperation:
         find_by = getattr(By, self.find_method.name)
         return find_method, find_by
 
-    # @debug(context='self.context')
     async def _click_elements(self, elements):
         """
         Click elements sequentially
@@ -211,7 +207,6 @@ class ExtractionOperation:
             future_dom = self._execute_in_future(element.click)
             await future_dom
 
-    # @debug(context='self.context')
     async def _extract_values(self, elements):
         """Extract values via the operation's extract method/args"""
         extracted_values = []
@@ -237,7 +232,6 @@ class ExtractionOperation:
 
         return extracted_values
 
-    # @debug(context='self.context')
     async def _get_values(self, values):
         """Get values from another field of the same item"""
         retrieved_values = []
@@ -250,7 +244,6 @@ class ExtractionOperation:
 
         return retrieved_values
 
-    # @debug(context='self.context')
     async def _parse_values(self, values):
         """Parse values via the operation's parse method/args"""
         parsed_values = []
@@ -284,7 +277,6 @@ class ExtractionOperation:
 
         return parsed_values
 
-    # @debug(context='self.context')
     async def _format_values(self, values):
         """Format values via the operation's format method/args"""
         formatted_values = []
@@ -312,7 +304,6 @@ class ExtractionOperation:
 
         return formatted_values
 
-    # @debug(context='self.context')
     async def _transform_values(self, values):
         """Transform values via the operation's transform method/args"""
         transformed_values = []
@@ -411,17 +402,16 @@ class ExtractionOperation:
         return method_type, method_args
 
     @classmethod
-    def from_dict(cls, configuration, field=None, source=None, extractor=None):
+    def from_dict(cls, configuration, field=None, extractor=None):
         """
         From dict
 
-        Construct operation from the given configuration dictionary,
-        within the context of a field, source, and extractor.
+        Construct operation to extract a field based on the given
+        configuration dictionary and extractor.
 
         I/O:
         configuration:   dictionary representation of an operation
         field=None:      content field name being extracted
-        source=None:     unique key for the content being extracted
         extractor=None:  extractor instance performing the operation
         return:          ExtractionOperation instance
         """
@@ -446,7 +436,7 @@ class ExtractionOperation:
                    parse_method=parse_method, parse_args=parse_args,
                    format_method=format_method, format_args=format_args,
                    transform_method=transform_method, transform_args=transform_args,
-                   field=field, source=source, extractor=extractor)
+                   field=field, extractor=extractor)
 
     def __init__(self, scope, is_multiple,
                  find_method, find_args,
@@ -457,7 +447,7 @@ class ExtractionOperation:
                  parse_method, parse_args,
                  format_method, format_args,
                  transform_method, transform_args,
-                 field=None, source=None, extractor=None):
+                 field=None, extractor=None):
 
         self.scope = scope
         self.is_multiple = is_multiple
@@ -479,10 +469,7 @@ class ExtractionOperation:
         self.transform_args = transform_args
 
         self.field = field or self.UNDEFINED_TAG
-        self.source = source or self.UNDEFINED_TAG
         self.extractor = extractor
-
-        self.context = f'{self.extractor}'
 
     @property
     def web_driver(self):
@@ -495,5 +482,5 @@ class ExtractionOperation:
     def __repr__(self):
         class_name = self.__class__.__name__
         field = getattr(self, 'field', None)
-        source = getattr(self, 'source', None)
-        return (f'<{class_name} | {field} | {source}>')
+        extractor = getattr(self, 'extractor', None)
+        return (f'<{class_name} | {field} | {extractor}>')

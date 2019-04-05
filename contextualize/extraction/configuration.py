@@ -16,18 +16,15 @@ from contextualize.utils.tools import PP, xor_constrain
 class BaseConfiguration(DotNotatableOrderedDict):
 
     @classmethod
-    def configure_field(cls, configuration, field, source, extractor):
-        # TODO: utilize contextvars for field/source (py3.7)
+    def configure_field(cls, configuration, field, extractor):
         if isinstance(configuration, dict):
             return ExtractionOperation.from_dict(configuration=configuration,
                                                  field=field,
-                                                 source=source,
                                                  extractor=extractor)
 
         if isinstance(configuration, list):
             return [ExtractionOperation.from_dict(configuration=operation_config,
                                                   field=field,
-                                                  source=source,
                                                   extractor=extractor)
                     for operation_config in configuration]
 
@@ -79,15 +76,14 @@ class ExtractorConfiguration(BaseConfiguration):
         return cls(**init_kwargs)
 
     @classmethod
-    def _derive_init_kwargs(cls, configuration, extractor, source):
+    def _derive_init_kwargs(cls, configuration, extractor):
         return dict(
             is_enabled=configuration.get(cls.IS_ENABLED_TAG, True),
             implicit_wait=configuration.get(cls.IMPLICIT_WAIT_TAG, cls.IMPLICIT_WAIT_DEFAULT),
             delay=DelayConfiguration.from_dict(configuration.get(DelayConfiguration.DELAY_TAG)),
             content=ContentConfiguration.from_dict(
                 configuration[ContentConfiguration.CONTENT_TAG],
-                extractor=extractor,
-                source=source))
+                extractor=extractor))
 
 
 class SourceExtractorConfiguration(ExtractorConfiguration):
@@ -96,9 +92,7 @@ class SourceExtractorConfiguration(ExtractorConfiguration):
 
     @classmethod
     def _derive_init_kwargs(cls, configuration, extractor):
-        return super()._derive_init_kwargs(configuration,
-                                           extractor=extractor,
-                                           source=extractor.page_url)
+        return super()._derive_init_kwargs(configuration, extractor=extractor)
 
 
 class MultiExtractorConfiguration(ExtractorConfiguration):
@@ -140,9 +134,7 @@ class MultiExtractorConfiguration(ExtractorConfiguration):
     def _derive_init_kwargs(cls, configuration, extractor):
         url = URLConstructor.from_dict(configuration[URLConstructor.URL_TAG])
 
-        init_kwargs = super()._derive_init_kwargs(configuration,
-                                                  extractor=extractor,
-                                                  source=url.url_template)
+        init_kwargs = super()._derive_init_kwargs(configuration, extractor=extractor)
 
         init_kwargs.update(
             extract_sources=configuration.get(cls.EXTRACT_SOURCES_TAG, True),
@@ -150,11 +142,9 @@ class MultiExtractorConfiguration(ExtractorConfiguration):
             url=url,
             pagination=PaginationConfiguration.from_dict(
                 configuration=PaginationConfiguration.get_dict(configuration),
-                extractor=extractor,
-                source=url.url_template),
+                extractor=extractor),
             content_items=cls.configure_field(configuration=configuration[cls.CONTENT_ITEMS_TAG],
                                               field=cls.CONTENT_ITEMS_TAG,
-                                              source=url.url_template,
                                               extractor=extractor))
 
         return init_kwargs
@@ -196,12 +186,11 @@ class ContentConfiguration(BaseConfiguration):
     CONTENT_TAG = 'content'
 
     @classmethod
-    def from_dict(cls, configuration, extractor, source):
+    def from_dict(cls, configuration, extractor):
         inst = cls()
         for field, value in configuration.items():
             inst[field] = cls.configure_field(configuration=value,
                                               field=field,
-                                              source=source,
                                               extractor=extractor)
         return inst
 
@@ -226,7 +215,7 @@ class PaginationConfiguration(BaseConfiguration):
         self.next_page_method = next_page_method
 
     @classmethod
-    def from_dict(cls, configuration, extractor, source):
+    def from_dict(cls, configuration, extractor):
         if not configuration:
             return cls()
 
@@ -238,8 +227,7 @@ class PaginationConfiguration(BaseConfiguration):
 
         next_page = cls.configure_field(configuration=next_page_configuration,
                                         field=next_page_field,
-                                        extractor=extractor,
-                                        source=source)
+                                        extractor=extractor)
 
         return cls(pages=configuration.get(cls.PAGES_TAG, cls.PAGES_MAXIMUM_DEFAULT),
                    page_size=configuration[cls.PAGE_SIZE_TAG],

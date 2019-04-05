@@ -28,7 +28,6 @@ class ModelCacheMixin:
     # Cache Keys
     CONTENT_KEY = 'content'
 
-    # @debug(context="getattr(content, 'source_url', None)")
     async def store_content(self, content):
         content_key, content_hash = self._prepare_content(content)
         rv = await self.client.hmset_dict(content_key, content_hash)
@@ -36,9 +35,9 @@ class ModelCacheMixin:
 
     def _prepare_content(self, content):
         """Prepare content for storage by returning key and hash"""
-        unique_field = self.model.UNIQUE_FIELD
+        source_key_field = self.model.SOURCE_KEY_FIELD
         fields = OrderedDict()
-        fields[unique_field] = getattr(content, unique_field)
+        fields[source_key_field] = getattr(content, source_key_field)
         content_key = CacheKey(self.CONTENT_KEY, **fields).key
         content_hash = content.to_hash()
         return content_key, content_hash
@@ -57,13 +56,11 @@ class SearchCacheMixin:
     STATUS_KEY = 'status'
     LAST_EXTRACTED_KEY = 'last_extracted'
 
-    # @debug(context="getattr(self, 'search_data', None)")
     async def retrieve_extraction_info(self):
         """Retrieve cached extraction info or None"""
         redis = self.client
         return await redis.hgetall(self.info_key)
 
-    # @debug(context="getattr(self, 'search_data', None)")
     async def retrieve_status(self):
         """Retrieve cached extraction status enum or None"""
         redis = self.client
@@ -72,7 +69,6 @@ class SearchCacheMixin:
             status_name = status_info[self.status_key]
             return ExtractionStatus[status_name]
 
-    # @debug(context="getattr(self, 'search_data', None)")
     async def retrieve_search_results(self):
         """Retrieve all cached content for the search data"""
         redis = self.client
@@ -111,7 +107,7 @@ class SearchCacheMixin:
 
 class DirectoryCacheMixin(SearchCacheMixin, ModelCacheMixin):
 
-    @debug(context="getattr(content, 'source_url', None)")
+    @debug
     async def store_search_result(self, content, rank):
         """Cache search result scored by rank and associated content"""
         content_key, content_hash = self._prepare_content(content)
@@ -125,7 +121,6 @@ class DirectoryCacheMixin(SearchCacheMixin, ModelCacheMixin):
         rv = await asyncio.gather(cache_content, cache_search_result, cache_extractor_result)
         return rv
 
-    # @debug
     async def store_extraction_status(self, extractor_status, overall_status, has_changed):
         """
         Store extraction status
@@ -154,7 +149,6 @@ class DirectoryCacheMixin(SearchCacheMixin, ModelCacheMixin):
         rv = await self.client.hmset_dict(self.info_key, info_hash)
         return rv
 
-    # @debug(context="getattr(self, 'search_data', None)")
     async def retrieve_extractor_status(self):
         """Retrieve cached extractor status enum or None"""
         redis = self.client
@@ -164,7 +158,6 @@ class DirectoryCacheMixin(SearchCacheMixin, ModelCacheMixin):
             status_name = info_hash[self.extractor_status_key]
             return ExtractionStatus[status_name]
 
-    # @debug(context="getattr(self, 'search_data', None)")
     async def retrieve_extractor_info(self):
         """Retrieve cached extractor status enum and last extracted"""
         redis = self.client
@@ -187,7 +180,6 @@ class DirectoryCacheMixin(SearchCacheMixin, ModelCacheMixin):
 
         return status, last_extracted
 
-    # @debug(context="getattr(self, 'search_data', None)")
     async def retrieve_extractor_results(self):
         """Retrieve all cached content for extractor and search data"""
         redis = self.client

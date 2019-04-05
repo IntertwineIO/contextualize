@@ -6,6 +6,7 @@ import inspect
 import wrapt
 from pprint import PrettyPrinter
 
+from contextualize.utils.context import FlexContext
 from contextualize.utils.decor import factory_direct
 from contextualize.utils.tools import WIDTH
 
@@ -42,13 +43,13 @@ def derive_offset_space(offset=None, indent=4):
     return ' ' * new_offset * indent
 
 
-def evaluate_context(self, context, func, *args, **kwargs):
-    """Evaluate context, which may reference self/func/args/kwargs"""
+def evaluate_extra(self, extra, func, *args, **kwargs):
+    """Evaluate extra, which may reference self/func/args/kwargs"""
     try:
-        evaluated_context = str(eval(context))
+        evaluated_extra = str(eval(extra))
     except Exception as e:
-        evaluated_context = f'Exception encountered in evaluating context: {e}'
-    return evaluated_context
+        evaluated_extra = f'Exception encountered in evaluating extra: {e}'
+    return evaluated_extra
 
 
 def loop_repr(loop):
@@ -58,15 +59,18 @@ def loop_repr(loop):
     return f'<{module}.{class_name} object at {hex_id} {running} {closed} {debug}>'
 
 
-def print_enter_info(func, context, instance, args, kwargs,
+def print_enter_info(func, extra, instance, args, kwargs,
                      printer, offset_space, loop=None, is_async=False):
     """Print enter info for function to be called/awaited"""
     print(SEPARATOR)
     async_ = 'async ' if is_async else ''
     print(f'{offset_space}Entering {async_}{func.__qualname__} ({func.__module__})')
-    if context is not None:
-        context_text = evaluate_context(instance, context, func, *args, **kwargs)
-        format_text('context', context_text, offset_space)
+    context = FlexContext.get_context()
+    if context:
+        format_text('context', printer.pformat(context), offset_space)
+    if extra is not None:
+        extra_text = evaluate_extra(instance, extra, func, *args, **kwargs)
+        format_text('extra', extra_text, offset_space)
     if instance is not None:
         format_text('instance', repr(instance), offset_space)
     format_text('args', printer.pformat(args), offset_space)
@@ -78,16 +82,19 @@ def print_enter_info(func, context, instance, args, kwargs,
     print(SEPARATOR)
 
 
-def print_exit_info(func, context, instance, args, kwargs,
+def print_exit_info(func, extra, instance, args, kwargs,
                     result, end_time, elapsed_time,
                     printer, offset_space, loop=None, is_async=False):
     """Print exit info for function upon its return"""
     print(SEPARATOR)
     async_ = 'async ' if is_async else ''
     print(f'{offset_space}Returning from {async_}{func.__qualname__} ({func.__module__})')
-    if context is not None:
-        context_text = evaluate_context(instance, context, func, *args, **kwargs)
-        format_text('context', context_text, offset_space)
+    context = FlexContext.get_context()
+    if context:
+        format_text('context', printer.pformat(context), offset_space)
+    if extra is not None:
+        extra_text = evaluate_extra(instance, extra, func, *args, **kwargs)
+        format_text('extra', extra_text, offset_space)
     if instance is not None:
         format_text('instance', repr(instance), offset_space)
     format_text('args', printer.pformat(args), offset_space)
@@ -100,7 +107,7 @@ def print_exit_info(func, context, instance, args, kwargs,
     print(SEPARATOR)
 
 
-def debug(*args, offset=None, indent=4, context=None):
+def debug(*args, offset=None, indent=4, extra=None):
     """
     Debug
 
@@ -123,7 +130,7 @@ def debug(*args, offset=None, indent=4, context=None):
                     allows it to be overridden
     indent=4:       Integer specifying the number of spaces to be used
                     for each level of offset
-    context=None:   String to be evaluated & printed as enter/exit info;
+    extra=None:     String to be evaluated & printed as enter/exit info;
                     May reference `self`, `func`, `args`, or `kwargs`.
     """
     def debug_decorator(func):
@@ -135,7 +142,7 @@ def debug(*args, offset=None, indent=4, context=None):
                 offset_space = derive_offset_space(offset, indent)
                 printer = PrettyPrinter(indent=indent, width=WIDTH - len(offset_space))
 
-                print_enter_info(func, context, instance, args, kwargs,
+                print_enter_info(func, extra, instance, args, kwargs,
                                  printer, offset_space, loop, is_async=True)
 
                 true_start_time = loop.time()
@@ -143,7 +150,7 @@ def debug(*args, offset=None, indent=4, context=None):
                 end_time = loop.time()
                 elapsed_time = end_time - true_start_time
 
-                print_exit_info(func, context, instance, args, kwargs,
+                print_exit_info(func, extra, instance, args, kwargs,
                                 result, end_time, elapsed_time,
                                 printer, offset_space, loop, is_async=True)
                 return result
@@ -156,7 +163,7 @@ def debug(*args, offset=None, indent=4, context=None):
             offset_space = derive_offset_space(offset, indent)
             printer = PrettyPrinter(indent=indent, width=WIDTH - len(offset_space))
 
-            print_enter_info(func, context, instance, args, kwargs,
+            print_enter_info(func, extra, instance, args, kwargs,
                              printer, offset_space, loop)
 
             true_start_time = loop.time()
@@ -164,7 +171,7 @@ def debug(*args, offset=None, indent=4, context=None):
             end_time = loop.time()
             elapsed_time = end_time - true_start_time
 
-            print_exit_info(func, context, instance, args, kwargs,
+            print_exit_info(func, extra, instance, args, kwargs,
                             result, end_time, elapsed_time,
                             printer, offset_space, loop)
             return result

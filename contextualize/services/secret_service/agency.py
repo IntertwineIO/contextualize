@@ -21,7 +21,7 @@ Browser = FlexEnum('Browser', 'CHROME FIREFOX')
 class SecretAgent(Extractable):
     """SecretAgent, a user agent class"""
     PROVIDER_DIRECTORY = f'{BASE_DIRECTORY}/providers'
-    # UNIQUE_FIELD = 'user_agent'
+    # SOURCE_KEY_FIELD = 'user_agent'
 
     @classmethod
     def default(cls):

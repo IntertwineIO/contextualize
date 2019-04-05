@@ -25,6 +25,7 @@ from contextualize.extraction.operation import ExtractionOperation
 from contextualize.services.secret_service.agency import SecretService
 from contextualize.utils.asynchronous import run_in_executor
 from contextualize.utils.cache import FileCache
+from contextualize.utils.context import FlexContext
 from contextualize.utils.debug import debug
 from contextualize.utils.enum import FlexEnum
 from contextualize.utils.iterable import one
@@ -140,38 +141,52 @@ class BaseExtractor:
         index=1:        Index of given element within a series
         return:         Instance of content model (e.g. ResearchArticle)
         """
-        content_configuration = self.configuration.content
         self.content_map = content_map = OrderedDict(kwds)
+        source_key_field = self.model.SOURCE_KEY_FIELD
+        source_key = content_map.get(source_key_field)
+        if not source_key:
+            source_key = await self._extract_content_field(field=source_key_field,
+                                                           element=element,
+                                                           index=index)
         # Allow field to be otherwise set without overwriting
         fields_to_extract = (field for field in self.model.fields() if field not in content_map)
 
-        for field in fields_to_extract:
-            try:
-                field_configuration = content_configuration[field]
-
-            except KeyError as e:
-                field_configuration = None
-                PP.pprint(dict(
-                    msg='Extract field configuration missing',
-                    type='extract_field_configuration_missing',
-                    error=e, field=field, content_map=content_map, extractor=repr(self)))
-
-            try:
-                content_map[field] = await self._extract_field(field=field,
-                                                               element=element,
-                                                               configuration=field_configuration,
-                                                               index=index)
-
-            except Exception as e:  # e.g. NoSuchElementException
-                PP.pprint(dict(
-                    msg='Extract field failure', type='extract_field_failure',
-                    error=e, field=field, content_map=content_map, extractor=repr(self)))
+        with FlexContext(source_key=source_key):
+            for field in fields_to_extract:
+                await self._extract_content_field(field=field, element=element, index=index)
 
         self.content_map = None
         instance = self.model(**content_map)
         return instance
 
-    # @debug(context="self.content_map.get('source_url')")
+    @debug()
+    async def _extract_content_field(self, field, element, index=1):
+        content_configuration = self.configuration.content
+        try:
+            field_configuration = content_configuration[field]
+
+        except KeyError as e:
+            self.content_map[field] = None
+            PP.pprint(dict(
+                msg='Extract field configuration missing',
+                type='extract_field_configuration_missing',
+                error=e, field=field, content_map=self.content_map, extractor=repr(self)))
+        else:
+            try:
+                field_value = await self._extract_field(field=field,
+                                                        element=element,
+                                                        configuration=field_configuration,
+                                                        index=index)
+                self.content_map[field] = field_value
+                return field_value
+
+            except Exception as e:  # e.g. NoSuchElementException
+                PP.pprint(dict(
+                    msg='Extract field failure', type='extract_field_failure',
+                    error=e, field=field, content_map=self.content_map, extractor=repr(self)))
+                # TODO: re-raise if required field
+
+    @debug
     async def _extract_field(self, field, element, configuration, index=1):
         """
         Extract field
@@ -187,29 +202,26 @@ class BaseExtractor:
         index=1:        Index of given element within a series
         return:         Extracted field value
         """
-        source = self.content_map.get(self.model.UNIQUE_FIELD) if self.content_map else None
         if isinstance(configuration, ExtractionOperation):
             return await configuration.execute(target=element, index=index)
         if isinstance(configuration, list):
             return await self._execute_operation_series(
-                field, source, element, configuration, index)
+                target=element, configuration=configuration, index=index)
         return configuration
 
     # @debug
-    async def _execute_operation_series(self, field, source, target, configuration, index=1):
+    async def _execute_operation_series(self, target, configuration, index=1):
         """
         Execute operation series
 
-        Execute series of operations to extract the specified field of
-        the given content source based on the target and configuration.
+        Execute series of operations to extract a value based on the
+        target and configuration.
 
         I/O:
-        field:          Name of field within content
-        source:         Unique field for content item (e.g. source_url)
         target:         Selenium web driver or element
         configuration:  A list of operation dictionaries
         index=1:        Index of given content element within a series
-        return:         Extracted field value
+        return:         Extracted value
         """
         latest = prior = parent = target
         for operation in configuration:
@@ -226,7 +238,6 @@ class BaseExtractor:
         """Load cached content"""
         return False
 
-    # @debug(context="self.content_map.get('source_url')")
     async def _update_status(self, status):
         """Update status in memory only"""
         if status is self.status:
@@ -234,7 +245,6 @@ class BaseExtractor:
         self.status = ExtractionStatus(status)
         return True
 
-    # @debug(context="self.content_map.get('source_url')")
     def _execute_in_future(self, func, *args, **kwds):
         """Run in executor with kwds support & default loop/executor"""
         return run_in_executor(self.loop, None, func, *args, **kwds)
@@ -331,6 +341,11 @@ class SourceExtractor(BaseExtractor):
     DIRECTORY_NAME_DELIMITER = '_'
     PATH_DELIMITER = '/'
     QUERY_STRING_DELIMITER = '?'
+
+    async def extract(self):
+        """Extract within source extractor context"""
+        with FlexContext(provider_directory=self.directory, source_key=self.page_url):
+            return await super().extract()
 
     @debug
     async def _perform_extraction(self, url=None):
@@ -580,22 +595,29 @@ class SourceExtractor(BaseExtractor):
         self.page_url = url_normalize(page_url)
         directory = self._derive_directory(model, page_url)
 
-        super().__init__(model=model,
-                         directory=directory,
-                         web_driver=web_driver,
-                         web_driver_brand=web_driver_brand,
-                         reuse_web_driver=reuse_web_driver,
-                         use_cache=use_cache,
-                         loop=loop)
+        with FlexContext(provider_directory=directory, source_key=self.page_url):
 
-        self.cache = SourceExtractorCache(model=self.model,
-                                          loop=self.loop) if self.use_cache else None
-        self.status = ExtractionStatus.INITIALIZED
+            super().__init__(model=model,
+                             directory=directory,
+                             web_driver=web_driver,
+                             web_driver_brand=web_driver_brand,
+                             reuse_web_driver=reuse_web_driver,
+                             use_cache=use_cache,
+                             loop=loop)
+
+            self.cache = SourceExtractorCache(model=self.model,
+                                              loop=self.loop) if self.use_cache else None
+            self.status = ExtractionStatus.INITIALIZED
 
 
 class MultiExtractor(BaseExtractor):
 
     FILE_NAME = MultiExtractorConfiguration.FILE_NAME
+
+    async def extract(self):
+        """Extract within multi-extractor context"""
+        with FlexContext(provider_directory=self.directory, search_data=self.search_data):
+            return await super().extract()
 
     @debug
     async def _perform_extraction(self, url=None):
@@ -670,7 +692,7 @@ class MultiExtractor(BaseExtractor):
         I/O:
         page=1:  Page number of content search results to be extracted
         """
-        unique_field = self.model.UNIQUE_FIELD
+        source_key_field = self.model.SOURCE_KEY_FIELD
 
         elements = await self._extract_field(field=self.configuration.CONTENT_ITEMS_TAG,
                                              element=self.web_driver,
@@ -687,29 +709,30 @@ class MultiExtractor(BaseExtractor):
             try:
                 content = await self._extract_content(element, index)
 
-                unique_key = getattr(content, unique_field)
-                if not unique_key:
-                    raise ValueError(f"Content missing value for '{unique_field}'")
+                source_key = getattr(content, source_key_field)
+                if not source_key:
+                    raise ValueError(f"Content missing value for '{source_key_field}'")
 
             except Exception as e:
                 PP.pprint(dict(
                     msg='Extract content failure', type='extract_content_failure',
                     error=e, page=page, index=index, rank=rank, extractor=repr(self)))
+                continue
 
-            if unique_key in self.extracted_content:
+            if source_key in self.extracted_content:
                 PP.pprint(dict(
-                    msg='Unique key collision', type='unique_key_collision',
-                    field=unique_field, unique_key=unique_key,
-                    old_content=self.extracted_content[unique_key], new_content=content,
+                    msg='Source key collision', type='source_key_collision',
+                    field=source_key_field, source_key=source_key,
+                    old_content=self.extracted_content[source_key], new_content=content,
                     page=page, index=index, rank=rank, extractor=repr(self)))
 
             # TODO: store all results for a page at once instead of incrementally
             if self.use_cache:
                 await self.cache.store_search_result(content, rank)
-            self.extracted_content[unique_key] = content
+            self.extracted_content[source_key] = content
 
         if self.configuration.extract_sources:
-            if unique_field != self.SOURCE_URL_TAG:
+            if source_key_field != self.SOURCE_URL_TAG:
                 raise ValueError('Unique field must be '
                                  f"'{self.SOURCE_URL_TAG}' to extract sources")
             await self._update_status(ExtractionStatus.PRELIMINARY)
@@ -757,7 +780,7 @@ class MultiExtractor(BaseExtractor):
 
                 setattr(content_result, field, source_value)
 
-    @debug(context="self.page_url")
+    @debug
     async def _load_cached_content(self):
         """Load cached content, returning True if available and fresh"""
         if not self.use_cache:
@@ -767,8 +790,8 @@ class MultiExtractor(BaseExtractor):
 
         if self._should_use_cached_content(status, last_extracted):
             cached_results = await self.cache.retrieve_extractor_results()
-            unique_field = self.model.UNIQUE_FIELD
-            self.extracted_content = {result[unique_field]: Hashable.from_hash(result)
+            source_key_field = self.model.SOURCE_KEY_FIELD
+            self.extracted_content = {result[source_key_field]: Hashable.from_hash(result)
                                       for result in cached_results}
             return True
         return False
@@ -787,7 +810,7 @@ class MultiExtractor(BaseExtractor):
 
         return False
 
-    @debug(context="self.content_map.get('source_url')")
+    @debug
     async def _update_status(self, status):
         """Update extractor/overall status, caching as necessary"""
         if status.value < self.status.value:
@@ -801,7 +824,7 @@ class MultiExtractor(BaseExtractor):
             await self.cache.store_extraction_status(status, overall_status, has_changed)
         return True
 
-    @debug(context="self.content_map.get('source_url')")
+    @debug
     async def _apply_status_change(self, status):
         """Apply status change; return overall status & has_changed"""
         old_overall_status = await self._determine_overall_status()
@@ -813,7 +836,7 @@ class MultiExtractor(BaseExtractor):
         has_changed = new_overall_status is not old_overall_status
         return new_overall_status, has_changed
 
-    @debug(context="self.content_map.get('source_url')")
+    @debug
     async def _determine_overall_status(self):
         """Determine overall extraction status of the cohort"""
         minimum = min(self.cohort_status_values)
@@ -927,24 +950,28 @@ class MultiExtractor(BaseExtractor):
     def __init__(self, model, directory, search_data=None, web_driver=None, web_driver_brand=None,
                  reuse_web_driver=None, use_cache=True, loop=None):
 
-        super().__init__(model=model,
-                         directory=directory,
-                         web_driver=web_driver,
-                         web_driver_brand=web_driver_brand,
-                         reuse_web_driver=reuse_web_driver,
-                         use_cache=use_cache,
-                         loop=loop)
-
         self.search_data = self._prepare_search_data(search_data)
-        self.page_url = self.configuration.url.construct(self.search_data)
-        self.cache = MultiExtractorCache(directory=self.directory,
-                                         search_data=self.search_data,
-                                         model=self.model,
-                                         loop=self.loop) if self.use_cache else None
 
-        self.extracted_content = OrderedDict()
-        self.cohort = None  # Only set after instantiation
-        self.status = ExtractionStatus.INITIALIZED
+        with FlexContext(provider_directory=directory,
+                         search_data=self.search_data):
+
+            super().__init__(model=model,
+                             directory=directory,
+                             web_driver=web_driver,
+                             web_driver_brand=web_driver_brand,
+                             reuse_web_driver=reuse_web_driver,
+                             use_cache=use_cache,
+                             loop=loop)
+
+            self.page_url = self.configuration.url.construct(self.search_data)
+            self.cache = MultiExtractorCache(directory=self.directory,
+                                             search_data=self.search_data,
+                                             model=self.model,
+                                             loop=self.loop) if self.use_cache else None
+
+            self.extracted_content = OrderedDict()
+            self.cohort = None  # Only set after instantiation
+            self.status = ExtractionStatus.INITIALIZED
 
     def __repr__(self):
         class_name = self.__class__.__name__

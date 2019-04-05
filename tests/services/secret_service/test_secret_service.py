@@ -75,6 +75,8 @@ def test_user_agent_extraction(web_server):
         mock_random_delay.return_value = 0
         service.extract_data()
 
-    extracted = service.data[service.browser]
-    agent_data = service.get_saved_data(service.file_path)
-    assert extracted == agent_data
+    extracted_data = service.data[service.browser]
+    agent_data_check = service.get_saved_data(service.file_path)
+    assert len(extracted_data) == len(agent_data_check)
+    for extracted_record, agent_record_check in zip(extracted_data, agent_data_check):
+        assert extracted_record == agent_record_check
