@@ -148,10 +148,10 @@ class BaseExtractor:
             source_key = await self._extract_content_field(field=source_key_field,
                                                            element=element,
                                                            index=index)
-        # Allow field to be otherwise set without overwriting
-        fields_to_extract = (field for field in self.model.fields() if field not in content_map)
 
         with FlexContext(source_key=source_key):
+            # Allow field to be otherwise set without overwriting
+            fields_to_extract = (field for field in self.model.fields() if field not in content_map)
             for field in fields_to_extract:
                 await self._extract_content_field(field=field, element=element, index=index)
 
@@ -277,13 +277,13 @@ class BaseExtractor:
         secret_service = SecretService(web_driver_brand.name)
         user_agent = secret_service.random
         if web_driver_brand is cls.WebDriverBrand.CHROME:
-            chrome_options = webdriver.ChromeOptions()
+            options = webdriver.ChromeOptions()
             # Waits for js loads on click are unreliable when headless
-            # chrome_options.add_argument('--headless')
-            chrome_options.add_argument('--disable-extensions')
-            chrome_options.add_argument('--disable-infobars')
-            chrome_options.add_argument(f'user-agent={user_agent}')
-            return dict(chrome_options=chrome_options)
+            # options.add_argument('--headless')
+            options.add_argument('--disable-extensions')
+            options.add_argument('--disable-infobars')
+            options.add_argument(f'user-agent={user_agent}')
+            return dict(options=options)
         elif web_driver_brand is cls.WebDriverBrand.FIREFOX:
             raise NotImplementedError('Firefox not yet supported')
 
