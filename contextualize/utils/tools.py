@@ -407,6 +407,23 @@ def numify(text, default=object):
         return default
 
 
+def represent(instance, *args, **kwargs):
+    """
+    Represent
+
+    Create an instance repr constructed from the given args/kwargs.
+    The caller is responsible for passing valid values.
+
+    re: join(list comp vs. genexp) https://stackoverflow.com/a/9061024/4182210
+    """
+    arguments = []
+    if args:
+        arguments.append(', '.join([f'{v!r}' for v in args]))
+    if kwargs:
+        arguments.append(', '.join([f'{k}={v!r}' for k, v in kwargs.items()]))
+    return f"{instance.__class__.__name__}({', '.join(arguments)})"
+
+
 def logical_xor(a, b):
     """Logical xor of a and b, returning bool"""
     return bool(a) ^ bool(b)

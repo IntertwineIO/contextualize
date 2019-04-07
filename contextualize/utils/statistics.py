@@ -5,6 +5,7 @@ import random
 from collections import namedtuple
 
 from contextualize.utils.structures import DotNotatableOrderedDict
+from contextualize.utils.tools import represent
 
 
 # https://searchenginewatch.com/sew/study/2276184/no-1-position-in-google-gets-33-of-search-traffic-study
@@ -139,6 +140,4 @@ class HumanDwellTime:
         return human_dwell_time(**self.__dict__)
 
     def __repr__(self):
-        arguments = (f'{k}={v}' for k, v in self.__dict__.items())
-        argument_string = ', '.join(arguments)
-        return f'{self.__class__.__name__}({argument_string})'
+        return represent(self, **self.__dict__)

@@ -50,7 +50,7 @@ class ExtractionOperationBuilder:
                  parse_method=None, parse_args=None,
                  format_method=None, format_args=None,
                  transform_method=None, transform_args=None,
-                 field=None, source=None, extractor=None,
+                 field=None, extractor=None,
                  web_driver=None, loop=None):
 
         self.scope = scope
@@ -73,7 +73,6 @@ class ExtractionOperationBuilder:
         self.transform_args = transform_args
 
         self.field = field or 'test_field'
-        self.source = source or 'test_source'
         self.extractor = extractor or self.mock_extractor(web_driver, loop)
 
     @classmethod
@@ -88,4 +87,4 @@ class ExtractionOperationBuilder:
         return ExtractionOperation(**self.to_dict())
 
     def to_dict(self):
-        return self.__dict__
+        return self.__dict__.copy()

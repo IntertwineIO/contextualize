@@ -137,7 +137,7 @@ class Hashable(FieldMixin):
 # TODO: Convert to Py3.7 Data Class and generalize unique field
 class Extractable(Hashable):
     """Extractable mixin to allow class to be extracted from websites"""
-    UNIQUE_FIELD = 'source_url'
+    SOURCE_KEY_FIELD = 'source_url'
 
     def __init__(self, source_url=None, *args, **kwds):
         super().__init__(*args, **kwds)
