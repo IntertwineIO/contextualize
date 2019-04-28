@@ -347,7 +347,14 @@ class CallSign:
 
 
 def normalize(*args, enhance_sort=False):
-    """Normalize decorator (factory) for standardizing call arguments"""
+    """
+    Normalize
+
+    Decorator (factory) for standardizing call arguments
+
+    May be used on functions and methods. For class methods, @normalize
+    must be the outer wrapper.
+    """
     def normalize_decorator(func):
         # Cache call_sign as CallSign's getfullargspec is expensive
         call_sign = CallSign(func, enhance_sort=enhance_sort)

@@ -63,8 +63,8 @@ class ExtractorConfiguration(BaseConfiguration):
         else:
             raise ValueError(f'Invalid file path: {file_path}')
 
-    @classmethod
     @file_cache
+    @classmethod
     def _marshal_from_file(cls, file_path):
         """Marshall configuration dictionary from file, given a path"""
         with open(file_path) as stream:
