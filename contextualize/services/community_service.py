@@ -57,4 +57,3 @@ class CommunityService(ExtractionService):
 
     def __init__(self, search_data, loop=None):
         super().__init__(search_data, loop)
-        self.cache = ContentCache(self.search_data, self.loop)

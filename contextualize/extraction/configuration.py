@@ -34,15 +34,22 @@ class BaseConfiguration(DotNotatableOrderedDict):
 class ExtractorConfiguration(BaseConfiguration):
 
     IS_ENABLED_TAG = 'is_enabled'
-    IMPLICIT_WAIT_TAG = 'wait'
+    CACHE_VERSION_TAG = 'cache_version'
 
+    FRESHNESS_THRESHOLD_TAG = 'freshness_threshold'
+    FRESHNESS_THRESHOLD_DEFAULT = float('inf')  # days
+
+    IMPLICIT_WAIT_TAG = 'wait'
     IMPLICIT_WAIT_DEFAULT = 3  # seconds
 
     file_cache = FileCache(maxsize=None)
 
-    def __init__(self, is_enabled, implicit_wait, delay, content):
+    def __init__(self, is_enabled, cache_version, freshness_threshold, implicit_wait, delay,
+                 content):
 
         self.is_enabled = is_enabled
+        self.cache_version = cache_version
+        self.freshness_threshold = freshness_threshold
         self.implicit_wait = implicit_wait
         self.delay = delay
         self.content = content
@@ -79,6 +86,9 @@ class ExtractorConfiguration(BaseConfiguration):
     def _derive_init_kwargs(cls, configuration, extractor):
         return dict(
             is_enabled=configuration.get(cls.IS_ENABLED_TAG, True),
+            cache_version=configuration.get(cls.CACHE_VERSION_TAG),
+            freshness_threshold=configuration.get(cls.FRESHNESS_THRESHOLD_TAG,
+                                                  cls.FRESHNESS_THRESHOLD_DEFAULT),
             implicit_wait=configuration.get(cls.IMPLICIT_WAIT_TAG, cls.IMPLICIT_WAIT_DEFAULT),
             delay=DelayConfiguration.from_dict(configuration.get(DelayConfiguration.DELAY_TAG)),
             content=ContentConfiguration.from_dict(
@@ -90,6 +100,8 @@ class SourceExtractorConfiguration(ExtractorConfiguration):
     """SourceExtractorConfiguration is currently a subset of Multi..."""
     FILE_NAME = 'source.yaml'
 
+    FRESHNESS_THRESHOLD_DEFAULT = 365  # days
+
     @classmethod
     def _derive_init_kwargs(cls, configuration, extractor):
         return super()._derive_init_kwargs(configuration, extractor=extractor)
@@ -100,12 +112,12 @@ class MultiExtractorConfiguration(ExtractorConfiguration):
     FILE_NAME = 'multi.yaml'
     CONTENT_ITEMS_TAG = 'items'
     EXTRACT_SOURCES_TAG = 'extract_sources'
-    FRESHNESS_THRESHOLD_TAG = 'freshness_threshold'
 
     FRESHNESS_THRESHOLD_DEFAULT = 30  # days
 
     def __init__(self,
                  is_enabled,
+                 cache_version,
                  implicit_wait,
                  extract_sources,
                  freshness_threshold,
@@ -116,12 +128,13 @@ class MultiExtractorConfiguration(ExtractorConfiguration):
                  content_items):
 
         super().__init__(is_enabled=is_enabled,
+                         cache_version=cache_version,
+                         freshness_threshold=freshness_threshold,
                          implicit_wait=implicit_wait,
                          delay=delay,
                          content=content)
 
         self.extract_sources = extract_sources
-        self.freshness_threshold = freshness_threshold
         self.url = url
         self.pagination = pagination
         self.content_items = content_items
@@ -138,7 +151,6 @@ class MultiExtractorConfiguration(ExtractorConfiguration):
 
         init_kwargs.update(
             extract_sources=configuration.get(cls.EXTRACT_SOURCES_TAG, True),
-            freshness_threshold=cls._derive_freshness_threshold(configuration),
             url=url,
             pagination=PaginationConfiguration.from_dict(
                 configuration=PaginationConfiguration.get_dict(configuration),
@@ -148,12 +160,6 @@ class MultiExtractorConfiguration(ExtractorConfiguration):
                                               extractor=extractor))
 
         return init_kwargs
-
-    @classmethod
-    def _derive_freshness_threshold(cls, configuration):
-        freshness_threshold = configuration.get(cls.FRESHNESS_THRESHOLD_TAG,
-                                                cls.FRESHNESS_THRESHOLD_DEFAULT)
-        return datetime.timedelta(days=freshness_threshold)
 
 
 class DelayConfiguration(HumanDwellTime, BaseConfiguration):

@@ -2,6 +2,8 @@
 ---
 page_type: MULTI
 is_enabled: False
+cache_version: 2019-04-17-02
+freshness_threshold: 30
 extract_sources: False
 wait: 0
 
