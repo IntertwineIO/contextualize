@@ -299,31 +299,32 @@ class Color(FlexEnum):
             return cls.BROWN
 
     @classmethod
-    def low(cls, color1, color2):
-        if not cls.in_rainbow(color1) and not cls.in_rainbow(color2):
-            return None
-        if not cls.in_rainbow(color1):
-            return color2
-        if not cls.in_rainbow(color2):
+    def _default_compare(cls, color1, color2):
+        """Default compare value if at least one non-rainbow color"""
+        if cls.in_rainbow(color1):
             return color1
-        return color1 if color1.value < color2.value else color2
+        if cls.in_rainbow(color2):
+            return color2
+        return None
+
+    @classmethod
+    def low(cls, color1, color2):
+        if cls.in_rainbow(color1) and cls.in_rainbow(color2):
+            return color1 if color1.value < color2.value else color2
+        return cls._default_compare(color1, color2)
 
     @classmethod
     def high(cls, color1, color2):
-        if not cls.in_rainbow(color1) and not cls.in_rainbow(color2):
-            return None
-        if not cls.in_rainbow(color1):
-            return color2
-        if not cls.in_rainbow(color2):
-            return color1
-        return color1 if color1.value > color2.value else color2
+        if cls.in_rainbow(color1) and cls.in_rainbow(color2):
+            return color1 if color1.value > color2.value else color2
+        return cls._default_compare(color1, color2)
 
 
 def longest(x, y):
     len_x, len_y = len(x), len(y)
-    if len_x == len_y:  # tie-breaker
-        return x if x > y else y
-    return x if len_x > len_y else y
+    if len_x != len_y:
+        return x if len_x > len_y else y
+    return x if x > y else y  # tie-breaker
 
 
 @pytest.mark.unit
@@ -338,35 +339,36 @@ def longest(x, y):
      (5,  Color,  Color.mix,  False, False,  False,    None,        Color.browns(),  Color.BROWN),
      (6,  Color,  Color.mix,  False, False,  False,    None,        Color.grays(),   Color.GRAY),
 
-     (7,  Color,  Color.low,  False, False,  False,    None,        Color,           Color.RED),
-     (8,  Color,  Color.low,  False, False,  False,    None,        Color.rainbow(), Color.RED),
-     (9,  Color,  Color.low,  False, False,  False,    None,        Color.oranges(), Color.RED),
-     (10, Color,  Color.low,  False, False,  False,    None,        Color.greens(),  Color.YELLOW),
-     (11, Color,  Color.low,  False, False,  False,    None,        Color.violets(), Color.RED),
-     (12, Color,  Color.low,  False, False,  False,    None,        Color.browns(),  Color.BROWN),
-     (13, Color,  Color.low,  False, False,  False,    None,        Color.grays(),   ValueError),
-     (14, Color,  Color.low,  False, False,  False,    ValueError,  Color.grays(),   None),
-     (15, Color,  Color.low,  False, False,  True,     None,        Color.grays(),   None),
-
-     (16, Color,  Color.high, False, False,  False,    None,        Color,           Color.VIOLET),
-     (17, Color,  Color.high, False, False,  False,    None,        Color.rainbow(), Color.VIOLET),
-     (18, Color,  Color.high, False, False,  False,    None,        Color.oranges(), Color.YELLOW),
-     (19, Color,  Color.high, False, False,  False,    None,        Color.greens(),  Color.BLUE),
-     (20, Color,  Color.high, False, False,  False,    None,        Color.violets(), Color.VIOLET),
-     (21, Color,  Color.high, False, False,  False,    None,        Color.browns(),  Color.BROWN),
-     (22, Color,  Color.high, False, False,  False,    None,        Color.grays(),   ValueError),
-     (23, Color,  Color.high, False, False,  False,    ValueError,  Color.grays(),   None),
-     (24, Color,  Color.high, False, False,  True,     None,        Color.grays(),   None),
+     (7,  Color,  longest,    True,  False,  False,    None,        Color,           Color.YELLOW),
+     (8,  Color,  longest,    True,  False,  False,    None,        Color.rainbow(), Color.YELLOW),
+     (9,  Color,  longest,    True,  False,  False,    None,        Color.oranges(), Color.YELLOW),
+     (10, Color,  longest,    True,  False,  False,    None,        Color.greens(),  Color.YELLOW),
+     (11, Color,  longest,    True,  False,  False,    None,        Color.violets(), Color.VIOLET),
+     (12, Color,  longest,    True,  False,  False,    None,        Color.browns(),  Color.BROWN),
+     (13, Color,  longest,    True,  False,  False,    None,        Color.grays(),   Color.WHITE),
 
     # idx, cls,   func,       names, values, nullable, swallow,     enumables,       check',
-     (25, Color,  longest,    True,  False,  False,    None,        Color,           Color.YELLOW),
-     (26, Color,  longest,    True,  False,  False,    None,        Color.rainbow(), Color.YELLOW),
-     (27, Color,  longest,    True,  False,  False,    None,        Color.oranges(), Color.YELLOW),
-     (28, Color,  longest,    True,  False,  False,    None,        Color.greens(),  Color.YELLOW),
-     (29, Color,  longest,    True,  False,  False,    None,        Color.violets(), Color.VIOLET),
-     (30, Color,  longest,    True,  False,  False,    None,        Color.browns(),  Color.BROWN),
-     (31, Color,  longest,    True,  False,  False,    None,        Color.grays(),   Color.WHITE),
+     (14, Color,  Color.low,  False, False,  False,    None,        Color,           Color.RED),
+     (15, Color,  Color.low,  False, False,  False,    None,        Color.rainbow(), Color.RED),
+     (16, Color,  Color.low,  False, False,  False,    None,        Color.oranges(), Color.RED),
+     (17, Color,  Color.low,  False, False,  False,    None,        Color.greens(),  Color.YELLOW),
+     (18, Color,  Color.low,  False, False,  False,    None,        Color.violets(), Color.RED),
+     (19, Color,  Color.low,  False, False,  False,    None,        Color.browns(),  Color.BROWN),
+     (20, Color,  Color.low,  False, False,  False,    None,        Color.grays(),   ValueError),
+     (21, Color,  Color.low,  False, False,  False,    ValueError,  Color.grays(),   None),
+     (22, Color,  Color.low,  False, False,  True,     None,        Color.grays(),   None),
 
+     (23, Color,  Color.high, False, False,  False,    None,        Color,           Color.VIOLET),
+     (24, Color,  Color.high, False, False,  False,    None,        Color.rainbow(), Color.VIOLET),
+     (25, Color,  Color.high, False, False,  False,    None,        Color.oranges(), Color.YELLOW),
+     (26, Color,  Color.high, False, False,  False,    None,        Color.greens(),  Color.BLUE),
+     (27, Color,  Color.high, False, False,  False,    None,        Color.violets(), Color.VIOLET),
+     (28, Color,  Color.high, False, False,  False,    None,        Color.browns(),  Color.BROWN),
+     (29, Color,  Color.high, False, False,  False,    None,        Color.grays(),   ValueError),
+     (30, Color,  Color.high, False, False,  False,    ValueError,  Color.grays(),   None),
+     (31, Color,  Color.high, False, False,  True,     None,        Color.grays(),   None),
+
+    # idx, cls,   func,       names, values, nullable, swallow,     enumables,       check',
      (32, Color,  min,        True,  False,  False,    None,        Color,           Color.BLACK),
      (33, Color,  min,        True,  False,  False,    None,        Color.rainbow(), Color.BLUE),
      (34, Color,  min,        True,  False,  False,    None,        Color.oranges(), Color.ORANGE),
