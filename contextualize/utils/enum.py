@@ -97,16 +97,16 @@ class FlexEnum(Enum):
 
     @classmethod
     @lru_cache(maxsize=None)
-    def as_frozenset(cls, *enumables, names=False, values=False, nullable=False, transform=None,
-                     **kwds):
+    def as_frozenset(cls, *enumables,
+                     names=False, values=False, nullable=False, transform=None, **kwds):
         """Frozen set of given enumables, optionally transformed; cached"""
         return cls.contain(
             frozenset, *enumables,
             names=names, values=values, nullable=nullable, transform=transform, **kwds)
 
     @classmethod
-    def items(cls, *enumables, swap=False, labels=False, nullable=False, transform=None,
-              inverse=False):
+    def items(cls, *enumables,
+              swap=False, labels=False, nullable=False, transform=None, inverse=False):
         """
         Generator of enum pair 2-tuples, (name, value) by default
 
