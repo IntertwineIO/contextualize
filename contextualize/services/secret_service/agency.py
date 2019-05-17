@@ -21,7 +21,6 @@ Browser = FlexEnum('Browser', 'CHROME FIREFOX')
 class SecretAgent(Extractable):
     """SecretAgent, a user agent class"""
     PROVIDER_DIRECTORY = f'{BASE_DIRECTORY}/providers'
-    # SOURCE_KEY_FIELD = 'user_agent'
 
     @classmethod
     def default(cls):
@@ -97,7 +96,7 @@ class SecretService:
         futures = {extractor.extract() for extractor in extractors}
         done, pending = loop.run_until_complete(asyncio.wait(futures))
         agent_dicts = chain(*(task.result().values() for task in done))
-        self.data[self.browser] = [list(d.values()) for d in agent_dicts]
+        self.data[self.browser] = [list(d.field_values()) for d in agent_dicts]
 
         cache = AsyncCache()
         cache.terminate(loop)

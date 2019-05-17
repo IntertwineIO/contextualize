@@ -3,7 +3,7 @@
 import pytest
 from collections import OrderedDict
 
-from contextualize.utils.enum import FlexEnum
+from contextualize.utils.enum import FlexEnum, IncreasingEnum, DecreasingEnum
 from contextualize.utils.tools import is_child_class, is_iterator
 
 
@@ -238,6 +238,192 @@ def test_flex_enum_mutable_container_not_cached(enum_class, enumables, transform
     assert enum_as_map2 == enum_dict
 
 
+class Color(FlexEnum):
+    WHITE = -4
+    GRAY = -3
+    BLACK = -2
+    BROWN = -1
+    RED = 1
+    ORANGE = 2
+    YELLOW = 3
+    GREEN = 4
+    BLUE = 5
+    INDIGO = 6
+    VIOLET = 7
+
+    @classmethod
+    def grays(cls):
+        return frozenset({cls.WHITE, cls.GRAY, cls.BLACK})
+
+    @classmethod
+    def browns(cls):
+        return frozenset({cls.BROWN})
+
+    @classmethod
+    def oranges(cls):
+        return frozenset({cls.RED, cls.ORANGE, cls.YELLOW})
+
+    @classmethod
+    def greens(cls):
+        return frozenset({cls.YELLOW, cls.GREEN, cls.BLUE})
+
+    @classmethod
+    def violets(cls):
+        return frozenset({cls.BLUE, cls.INDIGO, cls.VIOLET, cls.RED})
+
+    @classmethod
+    def rainbow(cls):
+        return tuple(color for color in Color if color.value > 0)
+
+    @classmethod
+    def in_rainbow(cls, color):
+        return color is not None and color.value > 0
+
+    @classmethod
+    def mix(cls, color1, color2):
+        if color1 is color2:
+            return color1
+        if color1 in cls.grays() and color2 in cls.grays():
+            return cls.GRAY
+        if color1 is None or color1 in cls.grays():
+            return color2
+        if color2 is None or color2 in cls.grays():
+            return color1
+        if color1 in cls.oranges() and color2 in cls.oranges():
+            return cls.ORANGE
+        if color1 in cls.greens() and color2 in cls.greens():
+            return cls.GREEN
+        if color1 in cls.violets() and color2 in cls.violets():
+            return cls.VIOLET
+        else:
+            return cls.BROWN
+
+    @classmethod
+    def _default_compare(cls, color1, color2):
+        """Default compare value if at least one non-rainbow color"""
+        if cls.in_rainbow(color1):
+            return color1
+        if cls.in_rainbow(color2):
+            return color2
+        return None
+
+    @classmethod
+    def low(cls, color1, color2):
+        if cls.in_rainbow(color1) and cls.in_rainbow(color2):
+            return color1 if color1.value < color2.value else color2
+        return cls._default_compare(color1, color2)
+
+    @classmethod
+    def high(cls, color1, color2):
+        if cls.in_rainbow(color1) and cls.in_rainbow(color2):
+            return color1 if color1.value > color2.value else color2
+        return cls._default_compare(color1, color2)
+
+
+def longest(x, y):
+    len_x, len_y = len(x), len(y)
+    if len_x != len_y:
+        return x if len_x > len_y else y
+    return x if x > y else y  # tie-breaker
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    'idx, cls,   func,        names, values, nullable, swallow,     enumables,       check',
+    [
+     (0,  Color,  Color.mix,  False, False,  False,    None,        Color,           Color.BROWN),
+     (1,  Color,  Color.mix,  False, False,  False,    None,        Color.rainbow(), Color.BROWN),
+     (2,  Color,  Color.mix,  False, False,  False,    None,        Color.oranges(), Color.ORANGE),
+     (3,  Color,  Color.mix,  False, False,  False,    None,        Color.greens(),  Color.GREEN),
+     (4,  Color,  Color.mix,  False, False,  False,    None,        Color.violets(), Color.VIOLET),
+     (5,  Color,  Color.mix,  False, False,  False,    None,        Color.browns(),  Color.BROWN),
+     (6,  Color,  Color.mix,  False, False,  False,    None,        Color.grays(),   Color.GRAY),
+
+     (7,  Color,  longest,    True,  False,  False,    None,        Color,           Color.YELLOW),
+     (8,  Color,  longest,    True,  False,  False,    None,        Color.rainbow(), Color.YELLOW),
+     (9,  Color,  longest,    True,  False,  False,    None,        Color.oranges(), Color.YELLOW),
+     (10, Color,  longest,    True,  False,  False,    None,        Color.greens(),  Color.YELLOW),
+     (11, Color,  longest,    True,  False,  False,    None,        Color.violets(), Color.VIOLET),
+     (12, Color,  longest,    True,  False,  False,    None,        Color.browns(),  Color.BROWN),
+     (13, Color,  longest,    True,  False,  False,    None,        Color.grays(),   Color.WHITE),
+
+    # idx, cls,   func,       names, values, nullable, swallow,     enumables,       check',
+     (14, Color,  Color.low,  False, False,  False,    None,        Color,           Color.RED),
+     (15, Color,  Color.low,  False, False,  False,    None,        Color.rainbow(), Color.RED),
+     (16, Color,  Color.low,  False, False,  False,    None,        Color.oranges(), Color.RED),
+     (17, Color,  Color.low,  False, False,  False,    None,        Color.greens(),  Color.YELLOW),
+     (18, Color,  Color.low,  False, False,  False,    None,        Color.violets(), Color.RED),
+     (19, Color,  Color.low,  False, False,  False,    None,        Color.browns(),  Color.BROWN),
+     (20, Color,  Color.low,  False, False,  False,    None,        Color.grays(),   ValueError),
+     (21, Color,  Color.low,  False, False,  False,    ValueError,  Color.grays(),   None),
+     (22, Color,  Color.low,  False, False,  True,     None,        Color.grays(),   None),
+
+     (23, Color,  Color.high, False, False,  False,    None,        Color,           Color.VIOLET),
+     (24, Color,  Color.high, False, False,  False,    None,        Color.rainbow(), Color.VIOLET),
+     (25, Color,  Color.high, False, False,  False,    None,        Color.oranges(), Color.YELLOW),
+     (26, Color,  Color.high, False, False,  False,    None,        Color.greens(),  Color.BLUE),
+     (27, Color,  Color.high, False, False,  False,    None,        Color.violets(), Color.VIOLET),
+     (28, Color,  Color.high, False, False,  False,    None,        Color.browns(),  Color.BROWN),
+     (29, Color,  Color.high, False, False,  False,    None,        Color.grays(),   ValueError),
+     (30, Color,  Color.high, False, False,  False,    ValueError,  Color.grays(),   None),
+     (31, Color,  Color.high, False, False,  True,     None,        Color.grays(),   None),
+
+    # idx, cls,   func,       names, values, nullable, swallow,     enumables,       check',
+     (32, Color,  min,        True,  False,  False,    None,        Color,           Color.BLACK),
+     (33, Color,  min,        True,  False,  False,    None,        Color.rainbow(), Color.BLUE),
+     (34, Color,  min,        True,  False,  False,    None,        Color.oranges(), Color.ORANGE),
+     (35, Color,  min,        True,  False,  False,    None,        Color.greens(),  Color.BLUE),
+     (36, Color,  min,        True,  False,  False,    None,        Color.violets(), Color.BLUE),
+     (37, Color,  min,        True,  False,  False,    None,        Color.browns(),  Color.BROWN),
+     (38, Color,  min,        True,  False,  False,    None,        Color.grays(),   Color.BLACK),
+
+     (39, Color,  max,        True,  False,  False,    None,        Color,           Color.YELLOW),
+     (40, Color,  max,        True,  False,  False,    None,        Color.rainbow(), Color.YELLOW),
+     (41, Color,  max,        True,  False,  False,    None,        Color.oranges(), Color.YELLOW),
+     (42, Color,  max,        True,  False,  False,    None,        Color.greens(),  Color.YELLOW),
+     (43, Color,  max,        True,  False,  False,    None,        Color.violets(), Color.VIOLET),
+     (44, Color,  max,        True,  False,  False,    None,        Color.browns(),  Color.BROWN),
+     (45, Color,  max,        True,  False,  False,    None,        Color.grays(),   Color.WHITE),
+
+    # idx, cls,   func,       names, values, nullable, swallow,     enumables,       check',
+     (46, Color,  min,        False, True,   False,    None,        Color,           Color.WHITE),
+     (47, Color,  min,        False, True,   False,    None,        Color.rainbow(), Color.RED),
+     (48, Color,  min,        False, True,   False,    None,        Color.oranges(), Color.RED),
+     (49, Color,  min,        False, True,   False,    None,        Color.greens(),  Color.YELLOW),
+     (50, Color,  min,        False, True,   False,    None,        Color.violets(), Color.RED),
+     (51, Color,  min,        False, True,   False,    None,        Color.browns(),  Color.BROWN),
+     (52, Color,  min,        False, True,   False,    None,        Color.grays(),   Color.WHITE),
+
+     (53, Color,  max,        False, True,   False,    None,        Color,           Color.VIOLET),
+     (54, Color,  max,        False, True,   False,    None,        Color.rainbow(), Color.VIOLET),
+     (55, Color,  max,        False, True,   False,    None,        Color.oranges(), Color.YELLOW),
+     (56, Color,  max,        False, True,   False,    None,        Color.greens(),  Color.BLUE),
+     (57, Color,  max,        False, True,   False,    None,        Color.violets(), Color.VIOLET),
+     (58, Color,  max,        False, True,   False,    None,        Color.browns(),  Color.BROWN),
+     (59, Color,  max,        False, True,   False,    None,        Color.grays(),   Color.BLACK),
+
+     (60, Color,  max,        True,  True,   False,    None,        Color,           ValueError),
+     ])
+def test_flex_enum_consolidate(
+        idx, cls, func, names, values, nullable, swallow, enumables, check):
+    """Test FlexEnum consolidate"""
+    kwargs = {}
+    if names:
+        kwargs['names'] = True
+    if values:
+        kwargs['values'] = True
+    if nullable:
+        kwargs['nullable'] = True
+    if swallow:
+        kwargs['swallow'] = swallow
+
+    if is_child_class(check, Exception):
+        with pytest.raises(check):
+            cls.consolidate(func, *enumables, **kwargs)
+    else:
+        assert cls.consolidate(func, *enumables, **kwargs) is check
+
+
 class First:
     Fruit = FlexEnum('Fruit', 'APPLE BANANA CANTALOUPE')
 
@@ -320,3 +506,173 @@ def test_flex_enum_str(enum_member):
     member_str = str(enum_member)
     assert enum_member.__class__.__qualname__ in member_str
     assert enum_member.name in member_str
+
+
+class Grade(IncreasingEnum):
+    A = 4
+    B = 3
+    C = 2
+    D = 1
+    E = 0
+    F = 0
+
+
+class Place(DecreasingEnum):
+    FIRST = 1
+    SECOND = 2
+    THIRD = 3
+    FOURTH = 4
+    FIFTH = 5
+    LAST = 5
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    'idx, cls,   nullable, swallow,     enumables,          check',
+    [
+     (0,  Grade, False,    None,        Grade,              (Grade.F, Grade.A)),
+     (1,  Grade, False,    None,        ['B', 'A', 'C'],    (Grade.C, Grade.A)),
+     (2,  Grade, False,    None,        ['C', 'C', 'C'],    (Grade.C, Grade.C)),
+     (3,  Grade, False,    None,        [None, 'A', 'F'],   ValueError),
+     (4,  Grade, False,    ValueError,  [None, 'A', 'F'],   (None, None)),
+     (5,  Grade, True,     None,        [None, 'A', 'F'],   (Grade.F, Grade.A)),
+     (6,  Grade, False,    None,        [None],             ValueError),
+     (7,  Grade, False,    ValueError,  [None],             (None, None)),
+     (8,  Grade, True,     None,        [None],             (None, None)),
+     (9,  Grade, False,    None,        [],                 TypeError),
+     (10, Grade, False,    TypeError,   [],                 (None, None)),
+     (11, Grade, True,     None,        [],                 (None, None)),
+
+     (12, Place, False,    None,        Place,              (Place.FIFTH, Place.FIRST)),
+     (13, Place, False,    None,        [2, 'THIRD', 5],    (Place.FIFTH, Place.SECOND)),
+     (14, Place, False,    None,        [1, 1, 1, 1, 1],    (Place.FIRST, Place.FIRST)),
+     (15, Place, False,    None,        [None, 1, 3],       ValueError),
+     (16, Place, False,    ValueError,  [None, 1, 3],       (None, None)),
+     (17, Place, True,     None,        [None, 1, 3],       (Place.THIRD, Place.FIRST)),
+     (18, Place, False,    None,        [None],             ValueError),
+     (19, Place, False,    ValueError,  [None],             (None, None)),
+     (20, Place, True,     None,        [None],             (None, None)),
+     (21, Place, False,    None,        [],                 TypeError),
+     (22, Place, False,    TypeError,   [],                 (None, None)),
+     (23, Place, True,     None,        [],                 (None, None)),
+     ])
+def test_monotonic_enum_min_max(idx, cls, nullable, swallow, enumables, check):
+    """Test minimum/maximum for IncreasingEnum and DecreasingEnum"""
+    kwargs = {}
+    if nullable:
+        kwargs['nullable'] = True
+    if swallow:
+        kwargs['swallow'] = swallow
+
+    if is_child_class(check, Exception):
+        with pytest.raises(check):
+            cls.minimum(*enumables, **kwargs)
+        with pytest.raises(check):
+            cls.maximum(*enumables, **kwargs)
+    else:
+        min_check, max_check = check
+        assert cls.minimum(*enumables, **kwargs) is min_check
+        assert cls.maximum(*enumables, **kwargs) is max_check
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    'idx, lesser,           greater,            error',
+    [
+     (0,  Grade.B,          Grade.A,            None),
+     (1,  Grade.C,          Grade.A,            None),
+     (2,  Grade.D,          Grade.A,            None),
+     (3,  Grade.F,          Grade.A,            None),
+     (4,  Grade.C,          Grade.B,            None),
+     (5,  Grade.D,          Grade.B,            None),
+     (6,  Grade.F,          Grade.B,            None),
+     (7,  Grade.D,          Grade.C,            None),
+     (8,  Grade.F,          Grade.C,            None),
+     (9,  Grade.F,          Grade.D,            None),
+
+     (10, Place.SECOND,     Place.FIRST,        None),
+     (11, Place.THIRD,      Place.FIRST,        None),
+     (12, Place.FOURTH,     Place.FIRST,        None),
+     (13, Place.FIFTH,      Place.FIRST,        None),
+     (14, Place.THIRD,      Place.SECOND,       None),
+     (15, Place.FOURTH,     Place.SECOND,       None),
+     (16, Place.FIFTH,      Place.SECOND,       None),
+     (17, Place.FOURTH,     Place.THIRD,        None),
+     (18, Place.FIFTH,      Place.THIRD,        None),
+     (19, Place.FIFTH,      Place.FOURTH,       None),
+
+     (20, Place.FIRST,      Grade.A,            TypeError),
+     (21, Grade.A,          Place.FIRST,        TypeError),
+     ])
+def test_monotonic_enum_inequality(idx, lesser, greater, error):
+    """Test inequality for IncreasingEnum and DecreasingEnum"""
+    if error:
+        with pytest.raises(error):
+            lesser < greater
+        with pytest.raises(error):
+            lesser <= greater
+        with pytest.raises(error):
+            greater > lesser
+        with pytest.raises(error):
+            greater >= lesser
+        assert lesser != greater
+        assert greater != lesser
+        assert not lesser == greater
+        assert not greater == lesser
+    else:
+        assert lesser < greater
+        assert lesser <= greater
+        assert greater > lesser
+        assert greater >= lesser
+        assert lesser != greater
+        assert not lesser > greater
+        assert not lesser >= greater
+        assert not greater < lesser
+        assert not greater <= lesser
+        assert not lesser == greater
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    'idx, cls',
+    [
+     (0,  Grade),
+     (1,  Place),
+     ])
+def test_monotonic_enum_equality(idx, cls):
+    """Test equality for IncreasingEnum and DecreasingEnum"""
+    for member in cls:
+        assert member == member
+        assert member >= member
+        assert member <= member
+        assert not member != member
+        assert not member > member
+        assert not member < member
+
+    if cls is Grade:
+        assert Grade.E == Grade.F
+        assert Grade.F == Grade.E
+        assert Grade.E >= Grade.F
+        assert Grade.F >= Grade.E
+        assert Grade.E <= Grade.F
+        assert Grade.F <= Grade.E
+        assert not Grade.E != Grade.F
+        assert not Grade.F != Grade.E
+        assert not Grade.E > Grade.F
+        assert not Grade.F > Grade.E
+        assert not Grade.E < Grade.F
+        assert not Grade.F < Grade.E
+
+    elif cls is Place:
+        assert Place.FIFTH == Place.LAST
+        assert Place.LAST == Place.FIFTH
+        assert Place.FIFTH >= Place.LAST
+        assert Place.LAST >= Place.FIFTH
+        assert Place.FIFTH <= Place.LAST
+        assert Place.LAST <= Place.FIFTH
+        assert not Place.FIFTH != Place.LAST
+        assert not Place.LAST != Place.FIFTH
+        assert not Place.FIFTH > Place.LAST
+        assert not Place.LAST > Place.FIFTH
+        assert not Place.FIFTH < Place.LAST
+        assert not Place.LAST < Place.FIFTH

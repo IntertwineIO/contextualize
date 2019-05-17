@@ -266,6 +266,9 @@ class LyricalCache(OrderedDict):
     Lyrical is an LRU cache supporting individual key invalidation and
     key normalization based on the function call signature.
 
+    May be used on functions and methods. For class methods,
+    LyricalCache must be the outer wrapper.
+
     Inspired by Raymond Hettinger's LRU:
     https://bugs.python.org/issue30153
     """
@@ -337,10 +340,13 @@ class FileCache:
     The FileCache decorator provides least-recently-used (LRU) caching
     with automatic file invalidation upon file modification.
 
-    Each FileCache applies to a single function and must not be reused.
+    Each FileCache applies to a single callable and must not be reused.
     The decorated function must accept the file path as a parameter.
     If the file has been modified since the last call, the cache is
     invalidated for just that file and the file is reloaded.
+
+    May be used on functions and methods. For class methods, FileCache
+    must be the outer wrapper.
 
     Both last modified time and file size are used to determine whether
     a file has been modified. The granularity of last modified time is

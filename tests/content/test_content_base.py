@@ -10,6 +10,8 @@ from contextualize.content.research_article import ResearchArticle
 
 HASHED_CONTENT = {
     '__model__': 'contextualize.content.research_article.ResearchArticle',
+    '_cache_version': '2019-04-01-01',
+    '_last_extracted': '2019-04-22T09:33:31.830490',
     'author_names': 'Erin Roark Murphy; Brittany H Eghaneyan',
     'doi': 'https://doi.org/10.1093/bjsw/bcx163',
     'granularity_published': 'contextualize.utils.time.Granularity.DAY',
@@ -48,17 +50,16 @@ HASHED_CONTENT = {
      ])
 def test_field_mixin(idx, model_class, hashed_content):
     """Test field mixin core methods"""
+    # Required to eval the repr
     from contextualize.utils.time import GranularDateTime, Granularity  # noqa: F401
 
-    hashed_content = hashed_content.copy()
-
     content = model_class.from_hash(hashed_content)
-    del hashed_content['__model__']
+    content_fields = {f for f in content.field_names(include_private=True)
+                      if getattr(content, f) is not None}
+    assert content_fields == set(hashed_content.keys()) - {'__model__'}
 
-    content_fields = {f for f in content.fields() if getattr(content, f) is not None}
-    assert content_fields == set(hashed_content.keys())
-
-    for item, field, value in zip(content.items(), content.fields(), content.values()):
+    for item, field, value in zip(
+            content.field_items(), content.field_names(), content.field_values()):
         assert item == (field, value)
 
     content2 = eval(repr(content))

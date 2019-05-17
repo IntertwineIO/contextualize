@@ -2,8 +2,9 @@
 ---
 page_type: MULTI
 is_enabled: True
-extract_sources: True
+cache_version: 2019-04-27-06
 freshness_threshold: 30
+extract_sources: True
 wait: 0
 
 url:

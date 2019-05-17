@@ -59,25 +59,19 @@ async def contextualize(request):
 
     community_service = CommunityService.from_payload(payload)
     response_value = dict(search_data=community_service.search_data)
-    status = await community_service.cache.retrieve_status()
 
-    # TODO:
-    # - Compare last extraction date to extractor modification date
-    # - Check file modified dates or store in redis?
-    extractors_modified = True
-
-    if not status or extractors_modified:
-        extract_community_content = community_service.extract_content()
-        loop.create_task(extract_community_content)
-        status = (ExtractionStatus.PRELIMINARY if status and status.indicates_results()
-                  else ExtractionStatus.INITIALIZED)
+    status = await community_service.determine_status()
 
     response_value['status'] = status.name
-    # TODO: COMPLETED->SUCCESS; NO_RESULTS; FAILURE
-    if status.indicates_results():
+    # TODO: COMPLETED -> SUCCESS; NO_RESULTS; FAILURE
+    if status >= ExtractionStatus.PRELIMINARY:
         community_content = await community_service.cache.retrieve_search_results()
         if community_content:
             response_value['content'] = community_content
+
+    if status is not ExtractionStatus.COMPLETED:
+        extract_community_content = community_service.extract_content()
+        loop.create_task(extract_community_content)
 
     return response.json(response_value)
 
