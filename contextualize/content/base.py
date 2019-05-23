@@ -2,43 +2,41 @@
 # -*- coding: utf-8 -*-
 import json
 from collections import OrderedDict
+from dataclasses import dataclass, fields as dataclass_fields
+from functools import lru_cache
 from itertools import chain
 
 from contextualize.utils.enum import FlexEnum
 from contextualize.utils.serialization import NULL, serialize_nonstandard, serialize
 from contextualize.utils.time import GranularDateTime
-from contextualize.utils.tools import PP, derive_attributes, load_class, represent
+from contextualize.utils.tools import PP, load_class, represent
 
 
 class FieldMixin:
 
-    _fields = {}
-
     @classmethod
-    def _field_names(cls):
-        """Return list of all fields defined on the class"""
-        try:
-            return cls._fields[cls.__name__]
-        except KeyError:
-            cls._fields[cls.__name__] = derive_attributes(cls)
-            return cls._fields[cls.__name__]
+    @lru_cache(maxsize=None)
+    def fields(cls):
+        """Return tuple of all fields defined on the dataclass"""
+        return dataclass_fields(cls)
 
     @classmethod
     def field_names(cls, include_private=False):
-        """Return generator that emits all values"""
+        """Return generator that emits field names"""
         if include_private:
-            return (f for f in cls._field_names())
-        return (f for f in cls._field_names() if f[0] != '_')
+            return (field.name for field in cls.fields())
+        return (field.name for field in cls.fields() if field.name[0] != '_')
 
     def field_values(self, include_private=False):
-        """Return generator that emits all values"""
-        return (getattr(self, f) for f in self.field_names(include_private))
+        """Return generator that emits field values"""
+        return (getattr(self, name) for name in self.field_names(include_private))
 
     def field_items(self, include_private=False):
-        """Return generator that emits all field name/value tuples"""
-        return ((f, getattr(self, f)) for f in self.field_names(include_private))
+        """Return generator that emits field name/value 2-tuples"""
+        return ((name, getattr(self, name)) for name in self.field_names(include_private))
 
     def as_dict(self, include_private=False):
+        """Return ordered dict field name/value pairs"""
         return OrderedDict(self.field_items(include_private))
 
     def __repr__(self):
@@ -64,6 +62,8 @@ class FieldMixin:
 
 class Hashable(FieldMixin):
     ENCODING_DEFAULT = 'utf-8'
+    MODEL_KEY = '__model__'
+    DESERIALIZE_METHOD_PREFIX = 'deserialize_'
 
     @classmethod
     def from_hash(cls, hashed, encoding=None):
@@ -73,7 +73,7 @@ class Hashable(FieldMixin):
             raise TypeError('Encoding provided, but content not encoded')
         encoding = (encoding or cls.ENCODING_DEFAULT) if is_encoded else None
 
-        model_key = '__model__'.encode(encoding) if is_encoded else '__model__'
+        model_key = cls.MODEL_KEY.encode(encoding) if is_encoded else cls.MODEL_KEY
         try:
             model_specifier = hashed[model_key]
             model_specifier = str(model_specifier, encoding) if is_encoded else model_specifier
@@ -103,7 +103,7 @@ class Hashable(FieldMixin):
                 if value == NULL or value is None:
                     init_kwds[field] = None
                     continue
-                custom_method_name = f'deserialize_{field}'
+                custom_method_name = f'{cls.DESERIALIZE_METHOD_PREFIX}{field}'
                 if hasattr(cls, custom_method_name):
                     custom_method = getattr(cls, custom_method_name)
                     init_kwds[field] = custom_method(value, **field_hash)
@@ -115,7 +115,7 @@ class Hashable(FieldMixin):
     def to_hash(self, encoding=None):
         """Convert to ordered dict, optionally encoding as well"""
         cls = self.__class__
-        model_data = (('__model__', cls.get_specifier()),)
+        model_data = ((self.MODEL_KEY, cls.get_specifier()),)
         field_data = ((k, serialize(v)) for k, v in self.field_items(include_private=True)
                       if v is not None)
         serialized = chain(model_data, field_data)
@@ -136,29 +136,29 @@ class Hashable(FieldMixin):
         return f'{cls.__module__}.{cls.__qualname__}'
 
     @classmethod
-    def deserialize_datetime(cls, dt_string):
+    def datetime_from_string(cls, dt_string):
         return GranularDateTime.deserialize(dt_string)
 
     @classmethod
-    def deserialize_enum(cls, enum_specifier):
+    def enum_from_string(cls, enum_specifier):
         return FlexEnum.deserialize(enum_specifier)
 
     def __str__(self):
         return PP.pformat(self.to_hash())
 
 
-# TODO: Convert to Py3.7 Data Class and generalize unique field
+@dataclass
 class Extractable(Hashable):
     """Extractable mixin to allow class to be extracted from websites"""
 
-    def __init__(self, source_url=None, _cache_version=None, _last_extracted=None, *args, **kwds):
-        super().__init__(*args, **kwds)
-        if not source_url:
-            raise ValueError(f"Content missing unique key: '{source_url}'")
+    source_url: str
+    rank: int = None
+    _cache_version: str = None
+    _last_extracted: str = None
 
-        self.source_url = source_url
-        self._cache_version = _cache_version
-        self._last_extracted = _last_extracted
+    @classmethod
+    def deserialize_rank(cls, rank_string, **field_hash):
+        return int(rank_string)
 
     @property
     def cache_version(self):
@@ -178,4 +178,4 @@ class Extractable(Hashable):
 
     @classmethod
     def deserialize__last_extracted(cls, dt_string, **field_hash):
-        return cls.deserialize_datetime(dt_string)
+        return cls.datetime_from_string(dt_string)

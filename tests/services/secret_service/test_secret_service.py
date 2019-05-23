@@ -44,14 +44,14 @@ def validate_user_agent(user_agent):
 
 
 def validate_random_variation(service, property_name, compare_value):
-    for _ in range(100):
+    for i in range(100):
         random_value = getattr(service, property_name)
         user_agent = random_value if property_name == 'random' else random_value.user_agent
         if user_agent != compare_value:
             validate_user_agent(user_agent)
             break
     else:
-        raise ValueError('Either secret service is not random or a 1 in a googol event occurred')
+        raise ValueError(f'Either not random or a 1 in googol event occurred on index {i}')
 
 
 @pytest.mark.integration
@@ -59,24 +59,28 @@ def test_user_agent_extraction(web_server):
     file_path = 'tests/services/secret_service/chrome_agents.csv'
     service = SecretService(browser='chrome', file_path=file_path)
 
-    def mock_get_dict_side_effect(configuration):
+    def mock_pagination_get_dict_side_effect(configuration):
         pagination_dict = configuration.get(PaginationConfiguration.PAGINATION_TAG)
         pagination_dict['pages'] = 2
         pagination_dict['page_size'] = 5
         return pagination_dict
 
-    base_path = 'contextualize.extraction'
-    with patch(f'{base_path}.url.URLConstructor.construct') as mock_url_construct, \
-         patch(f'{base_path}.configuration.PaginationConfiguration.get_dict') as mock_get_dict, \
-         patch('contextualize.utils.statistics.HumanDwellTime.random_delay') as mock_random_delay:
+    base = 'contextualize'
+    url_construct_path = f'{base}.extraction.url.URLConstructor.construct'
+    pagination_get_dict_path = f'{base}.extraction.configuration.PaginationConfiguration.get_dict'
+    random_delay_path = f'{base}.utils.statistics.HumanDwellTime.random_delay'
+
+    with patch(url_construct_path) as mock_url_construct, \
+         patch(pagination_get_dict_path) as mock_pagination_get_dict, \
+         patch(random_delay_path) as mock_random_delay:
 
         mock_url_construct.return_value = TEST_USER_AGENT_URL
-        mock_get_dict.side_effect = mock_get_dict_side_effect
+        mock_pagination_get_dict.side_effect = mock_pagination_get_dict_side_effect
         mock_random_delay.return_value = 0
         service.extract_data()
 
     extracted_data = service.data[service.browser]
-    agent_data_check = service.get_saved_data(service.file_path)
+    headers, agent_data_check = service.read_data_file(service.file_path)
     assert len(extracted_data) == len(agent_data_check)
     for extracted_record, agent_record_check in zip(extracted_data, agent_data_check):
         assert extracted_record == agent_record_check

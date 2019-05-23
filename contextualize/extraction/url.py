@@ -17,6 +17,8 @@ class BaseURLConstructor(DotNotatableOrderedDict):
     TERM_TAG = 'term'
 
     TOKEN_TEMPLATE = '{{{}}}'
+    TOKEN_START = TOKEN_TEMPLATE[0]
+    TOKEN_END = TOKEN_TEMPLATE[-1]
 
     def _construct_clause(self, template, search_data, topic=None, term=None, index=1):
         """
@@ -77,14 +79,14 @@ class BaseURLConstructor(DotNotatableOrderedDict):
         length = len(template)
         start = end = -1
         while end < length:
-            start = template.find('{', start + 1)
+            start = template.find(self.TOKEN_START, start + 1)
             if start == -1:
                 break
-            end = template.find('}', start + 1)
+            end = template.find(self.TOKEN_END, start + 1)
             if end == -1:
                 break
             # tokens may not contain tokens, so find innermost
-            new_start = template.rfind('{', start + 1, end)
+            new_start = template.rfind(self.TOKEN_START, start + 1, end)
             if new_start > start:
                 start = new_start
             yield template[start + 1:end]
@@ -110,7 +112,7 @@ class URLConstructor(BaseURLConstructor):
 
     @property
     def is_shorthand(self):
-        return not(self.definitions)
+        return not(self.definitions) and self.TOKEN_START not in self.url_template
 
     @classmethod
     def from_dict(cls, configuration):
