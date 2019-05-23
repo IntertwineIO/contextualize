@@ -138,9 +138,10 @@ class BaseExtractor:
         Extract content from the given web element and configuration.
 
         I/O:
-        element:        Selenium web driver or element
-        index=1:        Index of given element within a series
-        return:         Instance of content model (e.g. ResearchArticle)
+        element:    Selenium web driver or element
+        index=1:    Index of given element within a series
+        **kwds:     Additional keyword args passed to content
+        return:     Instance of content model (e.g. ResearchArticle)
         """
         self.content_map = content_map = OrderedDict(kwds)
         source_url = content_map.get(self.SOURCE_URL_TAG)
@@ -387,11 +388,12 @@ class SourceExtractor(BaseExtractor):
         await self._perform_page_extraction()
 
     @debug
-    async def _perform_page_extraction(self, *args, **kwds):
+    async def _perform_page_extraction(self):
         """Perform page extraction for single content source"""
         try:
-            content = await self._extract_content(self.web_driver,
-                                                  source_url=self.page_url)
+            content = await self._extract_content(element=self.web_driver,
+                                                  source_url=self.page_url,
+                                                  rank=None)
         except Exception as e:
             PP.pprint(dict(
                 msg='Extract content failure', type='extract_content_failure',
@@ -733,10 +735,12 @@ class MultiExtractor(BaseExtractor):
                 extractor=repr(self), configuration=self.configuration.content_items))
             return
 
+        extract_sources = self.configuration.extract_sources
+
         for index, element in enumerate(elements, start=1):
             rank = (page - 1) * self.configuration.pagination.page_size + index
             try:
-                content = await self._extract_content(element, index)
+                content = await self._extract_content(element, index, rank=rank)
                 source_url = content.source_url
                 if not source_url:
                     raise ValueError(f"Content missing source_url")
@@ -755,13 +759,12 @@ class MultiExtractor(BaseExtractor):
 
             # TODO: store all page results at once instead of incrementally?
             if self.use_cache:
-                if self.configuration.extract_sources:
-                    await self.cache.store_extraction_result(content, rank)
-                else:
-                    await self.cache.store_extraction_content_result(content, rank)
+                await self.cache.store_extraction_result(
+                    content=content, rank=rank, store_content=not extract_sources)
+
             self.extracted_content[source_url] = content
 
-        if self.configuration.extract_sources:
+        if extract_sources:
             await self._update_status(ExtractionStatus.PRELIMINARY)
             source_results = await self._extract_sources(self.extracted_content)
             await self._combine_results(self.extracted_content, source_results)

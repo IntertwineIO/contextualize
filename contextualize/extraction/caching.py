@@ -16,6 +16,7 @@ ENCODING_DEFAULT = 'utf-8'
 class BaseContentCache:
 
     CONTENT_KEY = 'content'
+    RANK_KEY = 'rank'
 
     @property
     def client(self):
@@ -26,6 +27,8 @@ class BaseContentCache:
         content.cache_version = self.cache_version
         content.last_extracted = datetime.datetime.utcnow()
         content_hash = content.to_hash()
+        # Ranks are sorted set scores as they can vary with each search
+        content_hash.pop(self.RANK_KEY, None)
         return content_hash
 
     def _form_content_key(self, source_url):
@@ -71,10 +74,18 @@ class ContentCache(BaseContentCache):
 
     async def retrieve_search_results(self):
         """Retrieve all cached content hashes for the search data"""
-        content_keys = await self.client.zrange(self.search_results_key)
-        if content_keys:
-            return await self.retrieve_content_hashes(content_keys)
-        return []
+        return await self.retrieve_ranked_content_hashes(self.search_results_key)
+
+    async def retrieve_ranked_content_hashes(self, results_key):
+        """Retrieve list of cached content hashes for given results key"""
+        key_rank_tuples = await self.client.zrange(results_key, withscores=True)
+        if not key_rank_tuples:
+            return []
+        keys, ranks = zip(*key_rank_tuples)
+        content_hashes = await self.retrieve_content_hashes(keys)
+        for content_hash, rank in zip(content_hashes, ranks):
+            content_hash[self.RANK_KEY] = rank
+        return content_hashes
 
     async def retrieve_content_hashes(self, content_keys):
         """Retrieve cached content hashes for given content keys"""
@@ -83,11 +94,11 @@ class ContentCache(BaseContentCache):
         await pipe.execute()
         return await asyncio.gather(*cached_content)
 
-    async def retrieve_content_map(self, content_keys):
-        """Retrieve dictionary of content items keyed by source URL"""
-        content_hashes = await self.retrieve_content_hashes(content_keys)
-        return {content_hash[self.SOURCE_URL_KEY]: Hashable.from_hash(content_hash)
-                for content_hash in content_hashes}
+    async def retrieve_content_map(self, results_key):
+        """Retrieve ordered dict of content items keyed by source URL"""
+        content_hashes = await self.retrieve_ranked_content_hashes(results_key)
+        return OrderedDict((content_hash[self.SOURCE_URL_KEY], Hashable.from_hash(content_hash))
+                           for content_hash in content_hashes)
 
     async def retrieve_extraction_info_map(self, directories):
         """Retrieve map of extraction info by extractor directory"""
@@ -142,37 +153,25 @@ class MultiExtractorCache(ContentCache):
         return ExtractionInfo.from_hash(info_hash)
 
     @debug
-    async def store_extraction_result(self, content, rank):
-        """Cache extraction result scored by rank and associated content"""
-        content_key = self._form_content_key(content.source_url)
-
+    async def store_extraction_result(self, content, rank, store_content):
+        """Cache ranked extraction result and optionally content too"""
         pipe = self.client.pipeline()
+        content_key = self._form_content_key(content.source_url)
         cache_search_result = pipe.zadd(self.search_results_key, rank, content_key)
-        cache_extractor_result = pipe.zadd(self.extraction_results_key, rank, content_key)
+        cache_extraction_result = pipe.zadd(self.extraction_results_key, rank, content_key)
+        cache_futures = [cache_search_result, cache_extraction_result]
+
+        if store_content:
+            content_hash = self._prepare_content(content)
+            cache_content = pipe.hmset_dict(content_key, content_hash)
+            cache_futures.append(cache_content)
 
         await pipe.execute()
-        return await asyncio.gather(cache_search_result, cache_extractor_result)
-
-    @debug
-    async def store_extraction_content_result(self, content, rank):
-        """Cache extraction result scored by rank and associated content"""
-        content_key = self._form_content_key(content.source_url)
-        content_hash = self._prepare_content(content)
-
-        pipe = self.client.pipeline()
-        cache_content = pipe.hmset_dict(content_key, content_hash)
-        cache_search_result = pipe.zadd(self.search_results_key, rank, content_key)
-        cache_extractor_result = pipe.zadd(self.extraction_results_key, rank, content_key)
-
-        await pipe.execute()
-        return await asyncio.gather(cache_content, cache_search_result, cache_extractor_result)
+        return await asyncio.gather(*cache_futures)
 
     async def retrieve_extraction_results(self):
         """Retrieve all cached content for extractor and search data"""
-        content_keys = await self.client.zrange(self.extraction_results_key)
-        if not content_keys:
-            return {}
-        return await self.retrieve_content_map(content_keys)
+        return await self.retrieve_content_map(results_key=self.extraction_results_key)
 
     def _form_extraction_results_key(self, directory, **search_data):
         return CacheKey(self.EXTRACTION_KEY, self.RESULTS_KEY, extractor=directory,

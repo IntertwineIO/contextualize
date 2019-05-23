@@ -5,6 +5,7 @@ import csv
 import os
 import random
 from collections import OrderedDict
+from dataclasses import dataclass, field
 from functools import lru_cache
 from itertools import chain
 
@@ -18,9 +19,17 @@ BASE_DIRECTORY = '/'.join(__name__.split('.')[:-1])
 Browser = FlexEnum('Browser', 'CHROME FIREFOX')
 
 
+@dataclass
 class SecretAgent(Extractable):
     """SecretAgent, a user agent class"""
     PROVIDER_DIRECTORY = f'{BASE_DIRECTORY}/providers'
+
+    user_agent: str = field(default=None, repr=True)
+    browser: str = field(default=None, repr=False)
+    browser_version: str = field(default=None, repr=False)
+    operating_system: str = field(default=None, repr=False)
+    hardware_type: str = field(default=None, repr=False)
+    popularity: str = field(default=None, repr=False)
 
     @classmethod
     def default(cls):
@@ -38,17 +47,6 @@ class SecretAgent(Extractable):
     def __str__(self):
         return self.user_agent
 
-    def __init__(self, source_url=None, user_agent=None, browser=None, browser_version=None,
-                 operating_system=None, hardware_type=None, popularity=None,
-                 *args, **kwds):
-        super().__init__(source_url=source_url, *args, **kwds)
-        self.user_agent = user_agent
-        self.browser = browser
-        self.browser_version = browser_version
-        self.operating_system = operating_system
-        self.hardware_type = hardware_type
-        self.popularity = popularity
-
 
 class SecretService:
     """Secret Service, a service class for managing Secret Agents"""
@@ -57,8 +55,6 @@ class SecretService:
     FILE_IDENTIFIER = 'agents'
     FILE_TYPE = 'csv'
     CSV_FORMAT = dict(delimiter='|', quotechar='"')
-
-    data = {}
 
     @property
     def random(self):
@@ -69,9 +65,10 @@ class SecretService:
     def random_agent(self):
         """Random secret agent instance for the current browser"""
         user_agents = self.data.get(self.browser)
-
+        agent_data = random.choice(user_agents)
+        agent_kwargs = dict(zip(self.headers, agent_data))
         try:
-            return SecretAgent(*random.choice(user_agents))
+            return SecretAgent(**agent_kwargs)
         except Exception as e:
             PP.pprint(dict(
                 msg='Unable to generate random agent; using default',
@@ -96,7 +93,7 @@ class SecretService:
         futures = {extractor.extract() for extractor in extractors}
         done, pending = loop.run_until_complete(asyncio.wait(futures))
         agent_dicts = chain(*(task.result().values() for task in done))
-        self.data[self.browser] = [list(d.field_values()) for d in agent_dicts]
+        self.data[self.browser] = [list(agent_dict.field_values()) for agent_dict in agent_dicts]
 
         cache = AsyncCache()
         cache.terminate(loop)
@@ -106,34 +103,52 @@ class SecretService:
         """Save data to the given file path and clear the cache"""
         file_path = file_path or self.file_path
         data = self.data.get(self.browser)
+        if not self.headers:
+            raise ValueError('Headers are missing')
         if not data:
             raise ValueError('No data to save')
         with open(file_path, 'w', newline='') as csv_file:
             csv_writer = csv.writer(csv_file, **self.CSV_FORMAT)
+            csv_writer.writerow(self.headers)
             csv_writer.writerows(data)
 
-        self.get_saved_data.cache_clear()
+        self.read_data_file.cache_clear()
 
     def load_data(self, file_path=None):
         """Load data from the given file and store it on the service"""
         file_path = file_path or self.file_path
         try:
-            self.data[self.browser] = self.get_saved_data(self.file_path)
+            headers, data = self.read_data_file(self.file_path)
+            self.headers = headers
+            self.data[self.browser] = data
         except FileNotFoundError as e:
+            agent = SecretAgent.default()
+            self.headers = list(agent.field_names())
+            self.data[self.browser] = [list(agent.field_values())]
+            self.read_data_file.cache_clear()
             PP.pprint(dict(
-                msg='User agent data file missing; use acquire_data()',
+                msg='User agent data file missing, so using default; try acquire_data()',
                 type='user_agent_data_file_missing', error=e,
                 file_path=self.file_path, browser=self.browser,
                 secret_service=repr(self)))
 
     @classmethod
     @lru_cache(maxsize=None)
-    def get_saved_data(cls, file_path=None):
+    def read_data_file(cls, file_path=None):
         """Get saved data from the given file and cache it"""
         file_path = file_path or cls._form_file_path(cls.DEFAULT_BROWSER)
         with open(file_path, 'r', newline='') as csv_file:
             csv_reader = csv.reader(csv_file, **cls.CSV_FORMAT)
-            return list(csv_reader)
+            agent_fields = {field.name: field for field in SecretAgent.fields()}
+            headers = [agent_fields[header].name for header in next(csv_reader)]
+            column_types = [(i, agent_fields[header].type) for i, header in enumerate(headers)
+                            if agent_fields[header].type != str]
+            rows = []
+            for row in csv_reader:
+                for column, field_type in column_types:
+                    row[column] = field_type(row[column])
+                rows.append(row)
+            return headers, rows
 
     @classmethod
     def _form_file_path(cls, browser):
@@ -145,5 +160,6 @@ class SecretService:
     def __init__(self, browser=None, file_path=None):
         self.browser = Browser.cast(browser) if browser else self.DEFAULT_BROWSER
         self.file_path = file_path or self._form_file_path(self.browser)
-        if self.browser not in self.data:
-            self.load_data()
+        self.headers = None
+        self.data = {}
+        self.load_data(self.file_path)
