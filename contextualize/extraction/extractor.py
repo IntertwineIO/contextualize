@@ -828,7 +828,7 @@ class MultiExtractor(BaseExtractor):
         status = ExtractionStatus.INITIATED
         if self.use_cache:
             info = await self.cache.retrieve_extraction_info()
-            if info.status >= ExtractionStatus.PRELIMINARY:
+            if not info.status or info.status >= ExtractionStatus.PRELIMINARY:
                 status = ExtractionStatus.PRELIMINARY
         await super()._handle_extraction_start(status)
 
