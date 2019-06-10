@@ -5,11 +5,11 @@ def factory_direct(decorator, *args):
     """
     Factory direct
 
-    Allow a factory decorator sans ()'s to directly decorate a function.
+    Allow a decorator factory sans ()'s to directly decorate a callable.
 
     The factory must accept only optional keyword-only arguments. Hence,
     a single positional argument should only occur when the factory is
-    decorating a function directly.
+    directly decorating a callable, whether a function or class.
 
     Usage:
 
@@ -26,13 +26,13 @@ def factory_direct(decorator, *args):
         return factory_direct(decorator, *args)
     """
     if args:
-        func = args[0]
+        decorated = args[0]
         if len(args) > 1:
             factory_name = get_base_name(decorator)
             raise TypeError(f'{factory_name!r} only accepts keyword arguments as a factory')
-        if not callable(func):
+        if not callable(decorated):
             factory_name = get_base_name(decorator)
-            type_name = type(func).__qualname__
-            raise TypeError(f'{factory_name!r} must decorate a function, not a {type_name}')
-        return decorator(func)
+            type_name = type(decorated).__qualname__
+            raise TypeError(f'{factory_name!r} must decorate a callable, not a {type_name}')
+        return decorator(decorated)
     return decorator
