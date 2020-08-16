@@ -8,7 +8,6 @@ future==0.17.1
 ipython==7.3.0
 nltk==3.4
 parse==1.11.1
-pprint==0.1
 pytest==4.3.0
 pytest-asyncio==0.10.0
 pytest-cov==2.6.1
