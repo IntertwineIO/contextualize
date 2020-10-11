@@ -27,11 +27,11 @@ class PronunciationGuide:
             try:
                 self.provision_dictionary()
             except LookupError:
-                self.update_dictionary()
+                self.refresh_dictionary()
         return self._dictionary
 
-    def update_dictionary(self, corpus_name=None):
-        """Update dictionary corpus by downloading & provisioning it"""
+    def refresh_dictionary(self, corpus_name=None):
+        """Refresh dictionary corpus by downloading & provisioning it"""
         self.download_dictionary(corpus_name)
         self.provision_dictionary(corpus_name)
 
@@ -193,9 +193,9 @@ class FirstSoundGuide(JsonFileMixin, PronunciationGuide):
                 self._write_file(self.VOWEL_SOUNDING_CONSONANT_FILE, pronunciations)
         return self._vowel_sounding_consonant_led_words
 
-    def update_dictionary(self, corpus_name=None):
-        """Update dictionary per given corpus name and clear cache"""
-        super().update_dictionary(corpus_name)
+    def refresh_dictionary(self, corpus_name=None):
+        """Refresh dictionary per given corpus name and clear cache"""
+        super().refresh_dictionary(corpus_name)
         self.clear_cache()
 
     def clear_cache(self):
