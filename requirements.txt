@@ -4,69 +4,145 @@
 #
 #    pip-compile --no-index --output-file=requirements.txt requirements.in
 #
---trusted-host pypi.python.org
---trusted-host pypi.org
---trusted-host files.pythonhosted.org
-
-aiodns==2.0.0             # via -r requirements.in
-aiofiles==0.3.2           # via sanic
-aiohttp==3.5.4            # via -r requirements.in
-aioredis==1.2.0           # via -r requirements.in
-appnope==0.1.0            # via ipython
-async-timeout==3.0.1      # via aiohttp, aioredis
-atomicwrites==1.1.5       # via pytest
-attrs==18.1.0             # via aiohttp, pytest
-backcall==0.1.0           # via ipython
-cchardet==2.1.4           # via -r requirements.in
-cffi==1.12.2              # via pycares
-chardet==3.0.4            # via aiohttp
-coverage==4.5.3           # via -r requirements.in, pytest-cov
-decorator==4.2.1          # via ipython, traitlets
-entrypoints==0.3          # via flake8
-flake8==3.7.7             # via -r requirements.in
-future==0.17.1            # via -r requirements.in
-hiredis==0.2.0            # via aioredis
-httptools==0.0.11         # via sanic
-idna==2.8                 # via yarl
-ipython-genutils==0.2.0   # via traitlets
-ipython==7.3.0            # via -r requirements.in
-jedi==0.11.1              # via ipython
-mccabe==0.6.1             # via flake8
-more-itertools==4.2.0     # via pytest
-multidict==4.5.2          # via aiohttp, sanic, yarl
-nltk==3.4                 # via -r requirements.in
-parse==1.11.1             # via -r requirements.in
-parso==0.1.1              # via jedi
-pexpect==4.4.0            # via ipython
-pickleshare==0.7.4        # via ipython
-pluggy==0.7.1             # via pytest
-prompt-toolkit==2.0.9     # via ipython
-ptyprocess==0.5.2         # via pexpect
-py==1.5.4                 # via pytest
-pycares==3.0.0            # via aiodns
-pycodestyle==2.5.0        # via flake8
-pycparser==2.19           # via cffi
-pyflakes==2.1.1           # via flake8
-pygments==2.2.0           # via ipython
-pytest-asyncio==0.10.0    # via -r requirements.in
-pytest-cov==2.6.1         # via -r requirements.in
-pytest==4.3.0             # via -r requirements.in, pytest-asyncio, pytest-cov
-pytz==2018.7              # via tzlocal
-ruamel.yaml==0.15.89      # via -r requirements.in
-sanic==18.12.0            # via -r requirements.in
-selenium==3.141.0         # via -r requirements.in
-singledispatch==3.4.0.3   # via nltk
-six==1.11.0               # via more-itertools, nltk, prompt-toolkit, pytest, singledispatch, traitlets, url-normalize
-traitlets==4.3.2          # via ipython
-tzlocal==1.5.1            # via -r requirements.in
-ujson==1.35               # via sanic
-url-normalize==1.4.1      # via -r requirements.in
-urllib3==1.25.3           # via -r requirements.in, selenium
-uvloop==0.12.0            # via sanic
-wcwidth==0.1.7            # via prompt-toolkit
-websockets==6.0           # via sanic
-wrapt==1.11.1             # via -r requirements.in
-yarl==1.3.0               # via aiohttp
+aiodns==2.0.0
+    # via -r requirements.in
+aiofiles==0.3.2
+    # via sanic
+aiohttp==3.5.4
+    # via -r requirements.in
+aioredis==1.2.0
+    # via -r requirements.in
+async-timeout==3.0.1
+    # via
+    #   aiohttp
+    #   aioredis
+atomicwrites==1.1.5
+    # via pytest
+attrs==18.1.0
+    # via
+    #   aiohttp
+    #   pytest
+backcall==0.1.0
+    # via ipython
+cchardet==2.1.4
+    # via -r requirements.in
+cffi==1.12.2
+    # via pycares
+chardet==3.0.4
+    # via aiohttp
+coverage==4.5.3
+    # via
+    #   -r requirements.in
+    #   pytest-cov
+decorator==4.2.1
+    # via
+    #   ipython
+    #   traitlets
+entrypoints==0.3
+    # via flake8
+flake8==3.7.7
+    # via -r requirements.in
+future==0.17.1
+    # via -r requirements.in
+hiredis==0.2.0
+    # via aioredis
+httptools==0.0.11
+    # via sanic
+idna==2.8
+    # via yarl
+ipython==7.3.0
+    # via -r requirements.in
+ipython-genutils==0.2.0
+    # via traitlets
+jedi==0.11.1
+    # via ipython
+mccabe==0.6.1
+    # via flake8
+more-itertools==4.2.0
+    # via pytest
+multidict==4.5.2
+    # via
+    #   aiohttp
+    #   sanic
+    #   yarl
+nltk==3.4
+    # via -r requirements.in
+parse==1.11.1
+    # via -r requirements.in
+parso==0.1.1
+    # via jedi
+pexpect==4.4.0
+    # via ipython
+pickleshare==0.7.4
+    # via ipython
+pluggy==0.7.1
+    # via pytest
+prompt-toolkit==2.0.9
+    # via ipython
+ptyprocess==0.5.2
+    # via pexpect
+py==1.5.4
+    # via pytest
+pycares==3.0.0
+    # via aiodns
+pycodestyle==2.5.0
+    # via flake8
+pycparser==2.19
+    # via cffi
+pyflakes==2.1.1
+    # via flake8
+pygments==2.2.0
+    # via ipython
+pytest==4.3.0
+    # via
+    #   -r requirements.in
+    #   pytest-asyncio
+    #   pytest-cov
+pytest-asyncio==0.10.0
+    # via -r requirements.in
+pytest-cov==2.6.1
+    # via -r requirements.in
+pytz==2018.7
+    # via tzlocal
+ruamel-yaml==0.15.89
+    # via -r requirements.in
+sanic==18.12.0
+    # via -r requirements.in
+selenium==3.141.0
+    # via -r requirements.in
+singledispatch==3.4.0.3
+    # via nltk
+six==1.11.0
+    # via
+    #   more-itertools
+    #   nltk
+    #   prompt-toolkit
+    #   pytest
+    #   singledispatch
+    #   traitlets
+    #   url-normalize
+traitlets==4.3.2
+    # via ipython
+tzlocal==1.5.1
+    # via -r requirements.in
+ujson==5.4.0
+    # via sanic
+url-normalize==1.4.1
+    # via -r requirements.in
+urllib3==1.25.3
+    # via
+    #   -r requirements.in
+    #   selenium
+uvloop==0.12.0
+    # via sanic
+wcwidth==0.1.7
+    # via prompt-toolkit
+websockets==6.0
+    # via sanic
+wrapt==1.11.1
+    # via -r requirements.in
+yarl==1.3.0
+    # via aiohttp
 
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools
