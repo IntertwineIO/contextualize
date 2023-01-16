@@ -4,15 +4,10 @@
 #
 #    pip-compile --no-index --output-file=requirements.txt requirements.in
 #
---trusted-host pypi.python.org
---trusted-host pypi.org
---trusted-host files.pythonhosted.org
-
 aiodns==2.0.0             # via -r requirements.in
 aiofiles==0.3.2           # via sanic
 aiohttp==3.5.4            # via -r requirements.in
 aioredis==1.2.0           # via -r requirements.in
-appnope==0.1.0            # via ipython
 async-timeout==3.0.1      # via aiohttp, aioredis
 atomicwrites==1.1.5       # via pytest
 attrs==18.1.0             # via aiohttp, pytest
@@ -34,7 +29,7 @@ jedi==0.11.1              # via ipython
 mccabe==0.6.1             # via flake8
 more-itertools==4.2.0     # via pytest
 multidict==4.5.2          # via aiohttp, sanic, yarl
-nltk==3.4                 # via -r requirements.in
+nltk==3.4.5               # via -r requirements.in
 parse==1.11.1             # via -r requirements.in
 parso==0.1.1              # via jedi
 pexpect==4.4.0            # via ipython
@@ -55,8 +50,7 @@ pytz==2018.7              # via tzlocal
 ruamel.yaml==0.15.89      # via -r requirements.in
 sanic==18.12.0            # via -r requirements.in
 selenium==3.141.0         # via -r requirements.in
-singledispatch==3.4.0.3   # via nltk
-six==1.11.0               # via more-itertools, nltk, prompt-toolkit, pytest, singledispatch, traitlets, url-normalize
+six==1.11.0               # via more-itertools, nltk, prompt-toolkit, pytest, traitlets, url-normalize
 traitlets==4.3.2          # via ipython
 tzlocal==1.5.1            # via -r requirements.in
 ujson==1.35               # via sanic
